@@ -8,17 +8,17 @@
 
 
 // Error handling
-void yyerror(struct v_lex_state *ls, const char *s) {
+void verror(struct vlex *ls, const char *s) {
     assert(false); // TODO: errors: syntax error
 }
 
 // Definitions of keywords
-static int kw_none(var_t *lval, struct v_lex_state *ls) {
+static int kw_none(var_t *lval, struct vlex *ls) {
     (*ls->ref)++;
     return IDENT;
 }
 
-static int kw_fn(var_t *lval, struct v_lex_state *ls) {
+static int kw_fn(var_t *lval, struct vlex *ls) {
     //                       already read 'f'
     if (lval->len == 2 && lval->str[1] == 'n')
         return FN;
@@ -26,7 +26,7 @@ static int kw_fn(var_t *lval, struct v_lex_state *ls) {
         return kw_none(lval, ls);
 }
 
-static int kw_return(var_t *lval, struct v_lex_state *ls) {
+static int kw_return(var_t *lval, struct vlex *ls) {
     //                       already read 'r'
     if (lval->len == 6 && lval->str[1] == 'e'
                        && lval->str[2] == 't'
@@ -39,7 +39,7 @@ static int kw_return(var_t *lval, struct v_lex_state *ls) {
 }
     
 
-static int (* const kw_a[64])(var_t *lval, struct v_lex_state *ls) = {
+static int (* const kw_a[64])(var_t *lval, struct vlex *ls) = {
 /*  @  A  B  C */   kw_none,   kw_none,   kw_none,   kw_none,
 /*  D  E  F  G */   kw_none,   kw_none,   kw_none,   kw_none,
 /*  H  I  J  K */   kw_none,   kw_none,   kw_none,   kw_none,
@@ -60,19 +60,19 @@ static int (* const kw_a[64])(var_t *lval, struct v_lex_state *ls) = {
 
 
 // Definitions of various tokens
-static int lex_num(var_t *lval, struct v_lex_state *ls);
-static int lex_str(var_t *lval, struct v_lex_state *ls);
+static int lex_num(var_t *lval, struct vlex *ls);
+static int lex_str(var_t *lval, struct vlex *ls);
 
-static int lex_bad(var_t *lval, struct v_lex_state *ls) {
+static int lex_bad(var_t *lval, struct vlex *ls) {
     assert(false); //TODO: errors: bad parse
 }
 
-static int lex_ws(var_t *lval, struct v_lex_state *ls) {
+static int lex_ws(var_t *lval, struct vlex *ls) {
     ls->off++;
-    return yylex(lval, ls);
+    return vlex(lval, ls);
 }
 
-static int lex_com(var_t *lval, struct v_lex_state *ls) {
+static int lex_com(var_t *lval, struct vlex *ls) {
     ls->off++;
 
     if (ls->off >= ls->end || *ls->off != '`') {
@@ -100,20 +100,20 @@ static int lex_com(var_t *lval, struct v_lex_state *ls) {
         }
     }
 
-    return yylex(lval, ls);
+    return vlex(lval, ls);
 }   
 
-static int lex_op(var_t *lval, struct v_lex_state *ls) {
+static int lex_op(var_t *lval, struct vlex *ls) {
     ls->off++;
     return OP;
 }
 
 
-static int lex_kw(var_t *lval, struct v_lex_state *ls) {
+static int lex_kw(var_t *lval, struct vlex *ls) {
     str_t *kw = ls->off;
 
     do {
-        void *w = yylex_a[*ls->off++];
+        void *w = vlex_a[*ls->off++];
         if (w != lex_kw && w != lex_num)
             break;
     } while (ls->off < ls->end);
@@ -126,16 +126,16 @@ static int lex_kw(var_t *lval, struct v_lex_state *ls) {
     return kw_a[0x3f & *kw](lval, ls);
 }
 
-static int lex_tok(var_t *lval, struct v_lex_state *ls) {
+static int lex_tok(var_t *lval, struct vlex *ls) {
     return *ls->off++;
 }
 
-static int lex_num(var_t *lval, struct v_lex_state *ls) {
+static int lex_num(var_t *lval, struct vlex *ls) {
     *lval = num_parse(&ls->off, ls->end);
     return NUM;
 }
 
-static int lex_str(var_t *lval, struct v_lex_state *ls) {
+static int lex_str(var_t *lval, struct vlex *ls) {
     *lval = str_parse(&ls->off, ls->end);
     return STR;
 }
@@ -144,7 +144,7 @@ static int lex_str(var_t *lval, struct v_lex_state *ls) {
 
 // Lookup table of lex functions based 
 // only on first character of token
-int (* const yylex_a[256])(var_t *lval, struct v_lex_state *) = {
+int (* const vlex_a[256])(var_t *lval, struct vlex *) = {
 /* 00 01 02 03 */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
 /* 04 05 06 \a */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
 /* \b \t \n \v */   lex_bad,   lex_ws,    lex_tok,   lex_ws,
@@ -213,9 +213,9 @@ int (* const yylex_a[256])(var_t *lval, struct v_lex_state *) = {
 
 // Performs lexical analysis on the passed string
 // Value is stored in lval and its type is returned
-int yylex(var_t *lval, struct v_lex_state *ls) {
+int vlex(var_t *lval, struct vlex *ls) {
     if (ls->off < ls->end)
-        return yylex_a[*ls->off](lval, ls);
+        return vlex_a[*ls->off](lval, ls);
     else
         return 0;
 }

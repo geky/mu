@@ -13,8 +13,9 @@
 
 
 %define api.pure
-%parse-param {struct v_lex_state *ls}
-%lex-param   {struct v_lex_state *ls}
+%name-prefix "v"
+%parse-param {struct vlex *ls}
+%lex-param   {struct vlex *ls}
 
 %token FN RETURN
 %token IDENT

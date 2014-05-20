@@ -10,23 +10,23 @@
 #include "var.h"
 
 
-struct v_lex_state {
+struct vlex {
     str_t *off;
     str_t *end;
     ref_t *ref;
 };
 
 // Error handling
-void yyerror(struct v_lex_state *ls, const char *s);
+void verror(struct vlex *ls, const char *s);
 
 // Performs lexical analysis on the passed string
 // Value is stored in lval and its type is returned
-int yylex(var_t *lval, struct v_lex_state *ls);
+int vlex(var_t *lval, struct vlex *ls);
 
 
 // Lookup table of lex functions based 
 // only on first character of token
-extern int (* const yylex_a[256])(var_t *lval, struct v_lex_state *);
+extern int (* const vlex_a[256])(var_t *lval, struct vlex *);
 
 
 #endif

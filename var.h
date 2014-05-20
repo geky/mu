@@ -108,6 +108,7 @@ typedef struct var {
 
 #define var_num(v) (((var_t){{(v).bits & ~0x7}}).num)
 #define var_str(v) ((v).str + (v).off)
+#define var_len(v) ((v).len)
 
 
 // definitions of literal vars in c

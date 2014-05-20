@@ -2,14 +2,12 @@ TARGET = v
 
 CC = gcc
 YY = bison
-LL = flex
 
 SRC := var.c num.c str.c main.c vlex.c
-#FLX := v.l
-BSN := v.y
+BSN := vparse.y
 FSC := $(FLX:.l=.lex.c)
 BSC := $(BSN:.y=.tab.c)
-OBJ := $(BSC:.c=.o) $(FSC:.c=.o) $(SRC:.c=.o)
+OBJ := $(BSC:.c=.o) $(SRC:.c=.o)
 ASM := $(OBJ:.o=.s)
 
 #CFLAGS += -O3
@@ -23,7 +21,7 @@ all: $(TARGET)
 
 asm: $(ASM)
 
-v: $(BSC) $(FSC) $(OBJ)
+v: $(OBJ)
 	$(CC) $(OBJ) $(CFLAGS) -o $@
 
 %.output: %.y
@@ -45,5 +43,5 @@ clean:
 	-rm $(TARGET)
 	-rm $(ASM)
 	-rm $(OBJ)
-	-rm $(BSC) $(FSC)
+	-rm $(BSC)
 	-rm $(BSN:.y=.tab.h)
