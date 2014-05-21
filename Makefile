@@ -3,15 +3,15 @@ TARGET = v
 CC = gcc
 YY = bison
 
-SRC := var.c num.c str.c mem.c main.c vlex.c
+SRC := var.c num.c str.c tbl.c mem.c main.c vlex.c
 BSN := vparse.y
 FSC := $(FLX:.l=.lex.c)
 BSC := $(BSN:.y=.tab.c)
 OBJ := $(BSC:.c=.o) $(SRC:.c=.o)
 ASM := $(OBJ:.o=.s)
 
-#CFLAGS += -O3
-CFLAGS += -O0 -g3 -gdwarf-2 -ggdb
+CFLAGS += -O3
+#CFLAGS += -O0 -g3 -gdwarf-2 -ggdb
 CFLAGS += -m32
 CFLAGS += -Wall
 CFLAGS += -lm

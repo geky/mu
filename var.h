@@ -5,8 +5,9 @@
 #ifndef V_VAR
 #define V_VAR
 
+#include "mem.h"
+
 #include <stdint.h>
-#include <string.h>
 #include <stdbool.h>
 #include <math.h>
 
@@ -18,24 +19,18 @@ typedef enum type {
     TYPE_NULL = 0x0, // null
 
     TYPE_NUM  = 0x3, // number - 12.3
-    TYPE_STR  = 0x4, // string - 'hello'
+    TYPE_STR  = 0x4, // string - "hello"
 
-    TYPE_TBL  = 0x5, // table - ['a':1, 'b':2, 'c':3]
-    TYPE_MTB  = 0x1, // builtin table
+    TYPE_TBL  = 0x6, // table - ['a':1, 'b':2, 'c':3]
+    TYPE_MTB  = 0x7, // builtin table
 
-    TYPE_FN   = 0x6, // function - fn() {5}
-    TYPE_BFN  = 0x2, // builtin function
-
-    TYPE_ERR  = 0x7  // error - error("oh no")
+    TYPE_FN   = 0x5, // function - fn() {5}
+    TYPE_BFN  = 0x1, // builtin function
 } type_t;
 
 
 // All vars hash to 32 bits 
 typedef uint32_t hash_t;
-
-// Reference type as word type
-// Must be in address which does not use lower 3 bits
-typedef unsigned int ref_t __attribute__((aligned(8)));
 
 // Base types
 typedef const unsigned char str_t;
@@ -103,7 +98,13 @@ typedef struct var {
 
 
 // definitions for accessing components
+#define var_isnull(v) (!(v).meta)
+#define var_isref(v)  ((v).meta & 0x4)
+#define var_istbl(v)  (((v).meta & 0x6) == 0x6)
+#define var_isfn(v)   (((v).meta & 0x3) == 0x1)
+
 #define var_ref(v)  ((ref_t*)((v).meta & ~0x7))
+#define var_type(v) ((v).type)
 
 #define var_num(v) (((var_t){{(v).bits & ~0x7}}).num)
 #define var_str(v) ((v).str + (v).off)
@@ -133,6 +134,10 @@ typedef struct var {
     }});                                        \
 })
 
+
+// Mapping of reference counting functions
+#define var_incref(v) vref_inc((v).ref)
+#define var_decref(v) vref_dec((v).ref)
 
 
 // Returns true if both variables are the

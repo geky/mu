@@ -5,7 +5,11 @@
 #ifndef V_MEM
 #define V_MEM
 
-#include "var.h"
+#include <string.h>
+
+// Reference type as word type
+// Aligned to 8 bytes
+typedef unsigned int ref_t __attribute__((aligned(8)));
 
 
 // Manual memory management
