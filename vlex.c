@@ -40,22 +40,22 @@ static int kw_return(var_t *lval, struct vlex *ls) {
     
 
 static int (* const kw_a[64])(var_t *lval, struct vlex *ls) = {
-/*  @  A  B  C */   kw_none,   kw_none,   kw_none,   kw_none,
+/*  @  A  B  C */         0,   kw_none,   kw_none,   kw_none,
 /*  D  E  F  G */   kw_none,   kw_none,   kw_none,   kw_none,
 /*  H  I  J  K */   kw_none,   kw_none,   kw_none,   kw_none,
 /*  L  M  N  O */   kw_none,   kw_none,   kw_none,   kw_none,
 /*  P  Q  R  S */   kw_none,   kw_none,   kw_none,   kw_none,
 /*  T  U  V  W */   kw_none,   kw_none,   kw_none,   kw_none,
-/*  X  Y  Z  [ */   kw_none,   kw_none,   kw_none,   kw_none,
-/*  \  ]  ^  _ */   kw_none,   kw_none,   kw_none,   kw_none,
-/*  `  a  b  c */   kw_none,   kw_none,   kw_none,   kw_none,  
+/*  X  Y  Z  [ */   kw_none,   kw_none,   kw_none,         0,
+/*  \  ]  ^  _ */         0,         0,         0,   kw_none,
+/*  `  a  b  c */         0,   kw_none,   kw_none,   kw_none,  
 /*  d  e  f  g */   kw_none,   kw_none,   kw_fn,     kw_none,  
 /*  h  i  j  k */   kw_none,   kw_none,   kw_none,   kw_none,  
 /*  l  m  n  o */   kw_none,   kw_none,   kw_none,   kw_none,  
 /*  p  q  r  s */   kw_none,   kw_none,   kw_return, kw_none,  
 /*  t  u  v  w */   kw_none,   kw_none,   kw_none,   kw_none,  
-/*  x  y  z  { */   kw_none,   kw_none,   kw_none,   kw_none,
-/*  |  }  ~ 7f */   kw_none,   kw_none,   kw_none,   kw_none,
+/*  x  y  z  { */   kw_none,   kw_none,   kw_none,         0,
+/*  |  }  ~ 7f */         0,         0,         0,         0,
 };
 
 

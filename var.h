@@ -104,11 +104,9 @@ typedef struct var {
 
 // definitions for accessing components
 #define var_ref(v)  ((ref_t*)((v).meta & ~0x7))
-#define var_type(v) ((v).type)
 
 #define var_num(v) (((var_t){{(v).bits & ~0x7}}).num)
 #define var_str(v) ((v).str + (v).off)
-#define var_len(v) ((v).len)
 
 
 // definitions of literal vars in c
@@ -136,14 +134,6 @@ typedef struct var {
 })
 
 
-
-// Memory management and garbage collection
-// Each block of memory prefixed with ref_t reference
-// count. Deallocated immediately when refs hit zero.
-// It is up to the user to avoid cyclic dependencies
-ref_t *var_alloc(size_t size);
-void var_incref(var_t var);
-void var_decref(var_t var);
 
 // Returns true if both variables are the
 // same type and equivalent.

@@ -1,6 +1,7 @@
 #include "str.h"
 
 #include "num.h"
+#include "mem.h"
 
 #include <assert.h>
 
@@ -98,8 +99,8 @@ var_t str_parse(str_t **off, str_t *end) {
 
 
 load:
-    s.ref = var_alloc(size);
-    out = (unsigned char *)(s.ref + 1);
+    s.ref = vref_alloc(size);
+    out = (unsigned char *)s.str;
 
     str = *off + 1;
     end = str + size;
@@ -149,8 +150,8 @@ load:
 
     *off = str + 1;
     
-    s.len = (uint16_t)size;
     s.off = 0;
+    s.len = size;
     s.type = TYPE_STR;
 
     return s;
@@ -189,8 +190,8 @@ var_t str_repr(var_t v) {
 
     str = var_str(v);
 
-    s.ref = var_alloc(size);
-    out = (unsigned char *)(s.ref + 1);
+    s.ref = vref_alloc(size);
+    out = (unsigned char *)s.str;
 
     *out++ = '"';
 
@@ -224,8 +225,8 @@ var_t str_repr(var_t v) {
     *out++ = '"';
 
 
-    s.len = size;
     s.off = 0;
+    s.len = size;
     s.type = TYPE_STR;
 
     return s;

@@ -8,47 +8,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-// valloc and vdealloc just map to malloc and free
-#define valloc malloc
-#define vdealloc free
-
-
-// Memory management and garbage collection
-// Each block of memory prefixed with ref_t reference
-// count. Deallocated immediately when refs hit zero.
-// It is up to the user to avoid cyclic dependencies
-
-ref_t *var_alloc(size_t size) {
-    ref_t *m = (ref_t *)valloc(sizeof(ref_t) + size);
-
-    assert(m != 0);                     // out of memory
-    assert(sizeof m == 4);              // address width
-    assert((((uint32_t)m) & 0x7) == 0); // alignment
-
-    // start with count of 1
-    *m = 1;
-
-    return m;
-}
-
-void var_incref(var_t var) {
-    if (var_type(var) & 0x4)
-        (*var_ref(var))++;
-}
-
-void var_decref(var_t var) {
-    if (var_type(var) & 0x4) {
-        ref_t *ref = var_ref(var);
-        assert(*ref > 0);
-
-        if (--(*ref) == 0) {
-            // TODO add special cases for vars with more cleanup
-            
-            vdealloc(ref);
-        }
-    }
-}
-
 
 
 // Returns true if both variables are the
@@ -65,10 +24,10 @@ static bool (* const var_equals_a[8])(var_t, var_t) = {
 };
 
 bool var_equals(var_t a, var_t b) {
-    if (var_type(a) != var_type(b))
+    if (a.type != b.type)
         return false;
 
-    return var_equals_a[var_type(a)](a, b);
+    return var_equals_a[a.type](a, b);
 }
 
 
@@ -86,7 +45,7 @@ static hash_t (* const var_hash_a[8])(var_t) = {
 };
 
 hash_t var_hash(var_t v) {
-    return var_hash_a[var_type(v)](v);
+    return var_hash_a[v.type](v);
 }
 
 
@@ -100,7 +59,7 @@ static var_t (* const var_repr_a[8])(var_t) = {
 };
 
 var_t var_repr(var_t v) {
-    return var_repr_a[var_type(v)](v);
+    return var_repr_a[v.type](v);
 }
 
 // Prints variable to stdout for debugging

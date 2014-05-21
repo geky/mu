@@ -1,5 +1,7 @@
 #include "num.h"
 
+#include "mem.h"
+
 
 // Returns true if both variables are equal
 bool num_equals(var_t a, var_t b) {
@@ -178,8 +180,9 @@ var_t num_repr(var_t v) {
         var_t s;
         unsigned char *str;
 
-        s.ref = var_alloc(16);
-        str = (unsigned char *)(s.ref + 1);
+        s.ref = vref_alloc(16);
+        str = (unsigned char*)s.str;
+
 
         if (v.num < 0.0) {
             v.num = -v.num;
@@ -235,8 +238,8 @@ var_t num_repr(var_t v) {
         }
 
 
-        s.len = (uint16_t)(str - s.str - sizeof(ref_t));
         s.off = 0;
+        s.len = (uint16_t)(str - s.str);
         s.type = TYPE_STR;
 
         return s;
