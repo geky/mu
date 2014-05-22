@@ -11,6 +11,7 @@ OBJ := $(BSC:.c=.o) $(SRC:.c=.o)
 ASM := $(OBJ:.o=.s)
 
 CFLAGS += -O2
+#CFLAGS += -O2 -pg
 #CFLAGS += -O0 -g3 -gdwarf-2 -ggdb
 CFLAGS += -m32
 CFLAGS += -Wall -Winline

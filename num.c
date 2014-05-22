@@ -11,20 +11,18 @@ bool num_equals(var_t a, var_t b) {
 
 // Returns a hash for each number
 // For integers this is the number
-// TODO profile for faster hash
 hash_t num_hash(var_t v) {
     v.type = 0;
 
     // take int value as base to keep
     // it linear for integers
-    hash_t hash = (hash_t)v.num;
+    num_t hash = floor(v.num);
 
     // move decimal part around to fit into
     // an int value to add to the hash
     v.num -= hash;
-    v.num += 0x100000;
-
-    return hash ^ v.meta;
+        
+    return (hash_t)hash ^ v.data;
 }
 
 
