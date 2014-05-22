@@ -12,7 +12,7 @@ typedef struct tbl {
     struct tbl *tail; // tail chain of tables
 
     uint16_t nulls; // count of null entries
-    uint16_t count; // count of keys in use
+    uint16_t len;   // count of keys in use
     int32_t mask;   // size of entries - 1
 
     var_t *keys; // array of keys

@@ -10,10 +10,10 @@ BSC := $(BSN:.y=.tab.c)
 OBJ := $(BSC:.c=.o) $(SRC:.c=.o)
 ASM := $(OBJ:.o=.s)
 
-CFLAGS += -O3
+CFLAGS += -O2
 #CFLAGS += -O0 -g3 -gdwarf-2 -ggdb
 CFLAGS += -m32
-CFLAGS += -Wall
+CFLAGS += -Wall -Winline
 CFLAGS += -lm
 
 
