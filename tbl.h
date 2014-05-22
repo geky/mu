@@ -7,6 +7,8 @@
 
 #include "var.h"
 
+#define tbl_maxcap ((1<<16)-1)
+
 
 typedef struct tbl {
     struct tbl *tail; // tail chain of tables

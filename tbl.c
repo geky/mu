@@ -2,6 +2,7 @@
 
 #include "mem.h"
 
+#include <assert.h>
 #include <string.h>
 
 
@@ -238,6 +239,8 @@ void tbl_assign(tbl_t *tbl, var_t key, var_t val) {
             if (!var_isnull(val)) {
                 tbl_put(tbl, &tbl->keys, mi, key);
                 tbl_put(tbl, &tbl->vals, mi, val);
+
+                assert(tbl->len < tbl_maxcap); // TODO add errors
                 tbl->len++;
             }
 
@@ -321,6 +324,8 @@ void tbl_set(tbl_t *tbl, var_t key, var_t val) {
         if (var_isnull(k)) {
             tbl_put(tbl, &tbl->keys, mi, key);
             tbl_put(tbl, &tbl->vals, mi, val);
+
+            assert(tbl->len < tbl_maxcap); // TODO add errors
             tbl->len++;
             return;
         }
