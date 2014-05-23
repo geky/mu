@@ -121,14 +121,14 @@ typedef struct var {
 #define vbfn(v) ((var_t){.type=TYPE_BFN, .bfn=(v)})
 
 #define vstr(n) ({                              \
-    static struct {                             \
+    static const struct {                       \
         ref_t r;                                \
-        const uint8_t s[sizeof(n)-1];           \
-    } _vstr = { 2, {(n)}};                      \
+        uint8_t s[sizeof(n)-1];                 \
+    } _vstr = { 0, {(n)}};                      \
                                                 \
     ((var_t){{                                  \
         TYPE_STR | (~0x7 & ((var_t){            \
-            .ref = &_vstr.r,                    \
+            .ref = (ref_t*)&_vstr.r,            \
             .off = 0,                           \
             .len = sizeof(n)-1                  \
         }).bits)                                \

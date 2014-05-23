@@ -48,8 +48,12 @@ void *vref_alloc(size_t size) {
 void vref_inc(void *m) {
     uint32_t bits = (uint32_t)m;
 
-    if (bits & 0x4)
-        (*(ref_t *)(~0x7 & bits))++;
+    if (bits & 0x4) {
+        ref_t *ref = (ref_t *)(~0x7 & bits);
+
+        if (*ref)
+            (*ref)++;
+    }
 }
 
 void vref_dec(void *m) {
@@ -57,12 +61,15 @@ void vref_dec(void *m) {
 
     if (bits & 0x4) {
         ref_t *ref = (ref_t *)(~0x7 & bits);
-        assert(*ref > 0);
 
-        if (--(*ref) == 0) {
-            // TODO check for special var cases
+        if (*ref) {
+            (*ref)--;
 
-            vdealloc(ref);
+            if (*ref == 0) {
+                // TODO check for special var cases
+
+                vdealloc(ref);
+            }
         }
     }
 }
