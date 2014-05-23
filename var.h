@@ -22,7 +22,7 @@ typedef enum type {
     TYPE_STR  = 0x4, // string - "hello"
 
     TYPE_TBL  = 0x6, // table - ['a':1, 'b':2, 'c':3]
-    TYPE_MTB  = 0x7, // builtin table
+    TYPE_MTBL = 0x7, // builtin table
 
     TYPE_FN   = 0x5, // function - fn() {5}
     TYPE_BFN  = 0x1, // builtin function
@@ -34,12 +34,10 @@ typedef uint32_t hash_t;
 
 // Base types
 typedef const uint8_t str_t;
-
-#ifdef V_USE_FLOAT
-typedef float num_t;
-#else
 typedef double num_t;
-#endif
+typedef struct tbl tbl_t;
+typedef struct fn fn_t;
+typedef struct var bfn_t(struct var);
 
 // Actual var type declariation
 typedef struct var {
@@ -64,10 +62,6 @@ typedef struct var {
                 // data for vars
                 uint32_t data;
 
-#ifdef V_USE_FLOAT
-                // numbers in 32-bit float mode
-                num_t num;
-#endif
                 // string offset and length
                 struct {
                     uint16_t off;
@@ -75,23 +69,18 @@ typedef struct var {
                 };
 
                 // pointer to table representation
-                struct tbl *tbl;
-
-                // pointer to metatable representation
-                struct mtb *mtb;
+                tbl_t *tbl;
 
                 // pointer to function representation
-                struct fn *fn;
+                fn_t *fn;
 
                 // built in function pointer
-                struct var (*bfn)(struct var);
+                bfn_t *bfn;
             };
         };
 
-#ifndef V_USE_FLOAT
-        // numbers in 64-bit float mode
+        // number representation
         num_t num;
-#endif
     };
 } var_t;
 
@@ -115,10 +104,11 @@ typedef struct var {
 #define vnan  vnum(NAN)
 #define vinf  vnum(INFINITY)
 
-#define vnum(v) ((var_t){{TYPE_NUM | (~0x7 & ((var_t){.num=(v)}).bits)}})
-#define vtbl(v) ((var_t){{TYPE_TBL | (~0x7 & ((var_t){.ref=(ref_t*)(v), .tbl=(v)}).bits)}})
-#define vfn(v)  ((var_t){{TYPE_FN | (~0x7 & ((var_t){.ref=(ref_t*)(v), .tbl=(v)}).bits)}})
-#define vbfn(v) ((var_t){.type=TYPE_BFN, .bfn=(v)})
+#define vnum(v)  ((var_t){{TYPE_NUM  | (~0x7 & ((var_t){.num=(v)}).bits)}})
+#define vtbl(v)  ((var_t){{TYPE_TBL  | (~0x7 & ((var_t){.ref=(ref_t*)(v), .tbl=(v)}).bits)}})
+#define vfn(v)   ((var_t){{TYPE_FN   | (~0x7 & ((var_t){.ref=(ref_t*)(v), .fn=(v) }).bits)}})
+#define vmtbl(v) ((var_t){{TYPE_MTBL | (~0x7 & ((var_t){.ref=(ref_t*)(v), .tbl=(v)}).bits)}})
+#define vbfn(v)  ((var_t){.type=TYPE_BFN, .bfn=(v)})
 
 #define vstr(n) ({                              \
     static const struct {                       \
