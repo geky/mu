@@ -331,3 +331,73 @@ void tbl_set(tbl_t *tbl, var_t key, var_t val) {
         }
     }
 }
+
+
+
+// Returns a string representation of the table
+var_t tbl_repr(var_t v) {
+    tbl_t *tbl = v.tbl;
+    unsigned int size = 2;
+    int i, j;
+
+    var_t s;
+    uint8_t *out;
+
+    var_t *key_repr = valloc(tbl->len * sizeof(var_t));
+    var_t *val_repr = valloc(tbl->len * sizeof(var_t));
+
+    for (i=0, j=0; i <= tbl->mask; i++) {
+        var_t k = tbl_at(tbl, tbl->keys, i);
+        var_t v = tbl_at(tbl, tbl->vals, i);
+
+        if (var_isnull(k) || var_isnull(v))
+            continue;
+
+        if (tbl->keys) {
+            key_repr[j] = var_repr(k);
+            size += key_repr[j].len + 2;
+        }
+
+        val_repr[j] = var_repr(v);
+        size += val_repr[j].len + 2;
+
+        j++;
+    }
+
+    s.ref = vref_alloc(size);
+    out = (uint8_t *)s.str;
+
+    *out++ = '[';
+
+    for (i=0; i < tbl->len; i++) {
+        if (tbl->keys) {
+            memcpy(out, var_str(key_repr[i]), key_repr[i].len);
+            out += key_repr[i].len;
+            var_decref(key_repr[i]);
+
+            *out++ = ':';
+            *out++ = ' ';
+        }
+
+        memcpy(out, var_str(val_repr[i]), val_repr[i].len);
+        out += val_repr[i].len;
+        var_decref(val_repr[i]);
+
+        if (i != tbl->len-1) {
+            *out++ = ',';
+            *out++ = ' ';
+        }
+    }
+
+    *out++ = ']';
+
+    vdealloc(key_repr);
+    vdealloc(val_repr);
+
+
+    s.off = 0;
+    s.len = size;
+    s.type = TYPE_STR;
+
+    return s;
+}

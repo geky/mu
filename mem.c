@@ -19,7 +19,7 @@ void *valloc(size_t size) {
 }
 
 void vdealloc(void *m) {
-    return free(m);
+    free(m);
 }
 
 

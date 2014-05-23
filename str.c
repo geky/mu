@@ -34,7 +34,7 @@ var_t str_parse(str_t **off, str_t *end) {
     unsigned int size = 0;
 
     var_t s;
-    unsigned char *out;
+    uint8_t *out;
 
 
     while (str < end) {
@@ -100,7 +100,7 @@ var_t str_parse(str_t **off, str_t *end) {
 
 load:
     s.ref = vref_alloc(size);
-    out = (unsigned char *)s.str;
+    out = (uint8_t *)s.str;
 
     str = *off + 1;
     end = str + size;
@@ -165,7 +165,7 @@ var_t str_repr(var_t v) {
     unsigned int size = 2;
 
     var_t s;
-    unsigned char *out;
+    uint8_t *out;
 
     while (str < end) {
         if (*str < ' ' || *str > '~' || *str == '"') {
@@ -191,7 +191,7 @@ var_t str_repr(var_t v) {
     str = var_str(v);
 
     s.ref = vref_alloc(size);
-    out = (unsigned char *)s.str;
+    out = (uint8_t *)s.str;
 
     *out++ = '"';
 

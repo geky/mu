@@ -2,6 +2,7 @@
 
 #include "num.h"
 #include "str.h"
+#include "tbl.h"
 
 #include <string.h>
 #include <assert.h>
@@ -52,10 +53,11 @@ hash_t var_hash(var_t v) {
 // Returns a string representation of the variable
 
 static var_t null_repr(var_t v) { return vstr("null"); }
+static var_t def_repr(var_t v) { return vstr("unknown type"); }
 
 static var_t (* const var_repr_a[8])(var_t) = {
-    null_repr, 0, 0, num_repr,
-    str_repr, 0, 0, 0
+    null_repr, def_repr, def_repr, num_repr,
+    str_repr, def_repr, tbl_repr, def_repr
 };
 
 var_t var_repr(var_t v) {

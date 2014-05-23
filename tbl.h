@@ -45,4 +45,8 @@ void tbl_set(tbl_t *, var_t key, var_t val);
 void tbl_assign(tbl_t *, var_t key, var_t val);
 
 
+// Returns a string representation of the table
+var_t tbl_repr(var_t v);
+
+
 #endif

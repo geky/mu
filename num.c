@@ -27,7 +27,7 @@ hash_t num_hash(var_t v) {
 
 
 // Parses a string and returns a number
-const unsigned char num_a[256] = {
+const uint8_t num_a[256] = {
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,  '.', 0xff,
@@ -57,10 +57,10 @@ var_t num_parse(str_t **off, str_t *end) {
     struct base {
         num_t radix;
         num_t exp;
-        unsigned char exp_c;
+        uint8_t exp_c;
     } base = { 10.0, 10.0, 0xe };
 
-    register unsigned char w;
+    register uint8_t w;
 
 
     // determine the base
@@ -176,10 +176,10 @@ var_t num_repr(var_t v) {
         return vstr("0");
     } else {
         var_t s;
-        unsigned char *str;
+        uint8_t *str;
 
         s.ref = vref_alloc(16);
-        str = (unsigned char*)s.str;
+        str = (uint8_t*)s.str;
 
 
         if (v.num < 0.0) {

@@ -33,7 +33,7 @@ typedef enum type {
 typedef uint32_t hash_t;
 
 // Base types
-typedef const unsigned char str_t;
+typedef const uint8_t str_t;
 
 #ifdef V_USE_FLOAT
 typedef float num_t;
@@ -115,15 +115,16 @@ typedef struct var {
 #define vnan  vnum(NAN)
 #define vinf  vnum(INFINITY)
 
-#define vnum(n) ((var_t){{TYPE_NUM | (~0x7 & ((var_t){.num=(n)}).bits)}})
-#define vtb(n)  ((var_t){.type=TYPE_BTB, .btb=(n)})
-#define vfn(n)  ((var_t){.type=TYPE_BFN, .bfn=(n)})
+#define vnum(v) ((var_t){{TYPE_NUM | (~0x7 & ((var_t){.num=(v)}).bits)}})
+#define vtbl(v) ((var_t){{TYPE_TBL | (~0x7 & ((var_t){.ref=(ref_t*)(v), .tbl=(v)}).bits)}})
+#define vfn(v)  ((var_t){{TYPE_FN | (~0x7 & ((var_t){.ref=(ref_t*)(v), .tbl=(v)}).bits)}})
+#define vbfn(v) ((var_t){.type=TYPE_BFN, .bfn=(v)})
 
 #define vstr(n) ({                              \
     static struct {                             \
         ref_t r;                                \
-        const unsigned char s[sizeof(n)-1];     \
-    } _vstr = { 1, {(n)}};                      \
+        const uint8_t s[sizeof(n)-1];           \
+    } _vstr = { 2, {(n)}};                      \
                                                 \
     ((var_t){{                                  \
         TYPE_STR | (~0x7 & ((var_t){            \
