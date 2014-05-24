@@ -29,13 +29,14 @@ static inline hash_t tbl_next(hash_t i) {
 // Functions for managing tables
 // Each table is preceeded with a reference count
 // which is used as its handle in a var
-tbl_t *tbl_create(void) {
+tbl_t *tbl_create(uint16_t size) {
     tbl_t *tbl = vref_alloc(sizeof(tbl_t));
+    int32_t cap = tbl_npw2(tbl_ncap(size));
 
     tbl->tail = 0;
     tbl->nulls = 0;
     tbl->len = 0;
-    tbl->mask = -1;
+    tbl->mask = cap - 1;
     tbl->keys = (union tbl_array){0x1};
     tbl->vals = (union tbl_array){0x1};
 
@@ -57,40 +58,6 @@ void tbl_destroy(tbl_t *tbl) {
 
     if (!tbl->keys.range) vdealloc(tbl->keys.array);
     if (!tbl->vals.range) vdealloc(tbl->vals.array);
-}
-
-
-// Creates preallocated table or array
-tbl_t *tbl_alloc_array(uint16_t size) {
-    tbl_t *tbl = vref_alloc(sizeof(tbl_t));
-    int32_t cap = tbl_npw2(tbl_ncap(size));
-
-    tbl->mask = cap - 1;
-    tbl->keys = (union tbl_array){0x1};
-    tbl->vals.array = valloc(cap * sizeof(var_t));
-
-    tbl->tail = 0;
-    tbl->nulls = 0;
-    tbl->len = 0;
-
-    return tbl;
-}
-
-tbl_t *tbl_alloc_table(uint16_t size) {
-    tbl_t *tbl = vref_alloc(sizeof(tbl_t));
-    int32_t cap = tbl_npw2(tbl_ncap(size));
-
-    tbl->mask = cap - 1;
-    tbl->keys.array = valloc(cap * sizeof(var_t));
-    tbl->vals.array = valloc(cap * sizeof(var_t));
-
-    memset(tbl->keys.array, 0, cap * sizeof(var_t));
-
-    tbl->tail = 0;
-    tbl->nulls = 0;
-    tbl->len = 0;
-
-    return tbl;
 }
 
 

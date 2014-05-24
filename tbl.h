@@ -33,12 +33,8 @@ struct tbl {
 // Functions for managing tables
 // Each table is preceeded with a reference count
 // which is used as its handle in a var
-tbl_t *tbl_create(void);
+tbl_t *tbl_create(uint16_t size);
 void tbl_destroy(tbl_t *);
-
-// Creates preallocated table or array
-tbl_t *tbl_alloc_array(uint16_t size);
-tbl_t *tbl_alloc_table(uint16_t size);
 
 // Recursively looks up a key in the table
 // returns either that value or null
