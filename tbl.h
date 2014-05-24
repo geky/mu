@@ -10,16 +10,24 @@
 #define tbl_maxcap ((1<<16)-1)
 
 
-typedef struct tbl {
+union tbl_array {
+    uint32_t bits;
+    unsigned int range : 1;
+
+    struct { uint16_t padd; uint16_t off; };
+    var_t *array;
+};  
+
+struct tbl {
     struct tbl *tail; // tail chain of tables
 
     uint16_t nulls; // count of null entries
     uint16_t len;   // count of keys in use
     int32_t mask;   // size of entries - 1
 
-    var_t *keys; // array of keys
-    var_t *vals; // array of values
-} tbl_t;
+    union tbl_array keys; // array of keys
+    union tbl_array vals; // array of values
+};
 
 
 // Functions for managing tables
@@ -47,6 +55,50 @@ void tbl_assign(tbl_t *, var_t key, var_t val);
 
 // Returns a string representation of the table
 var_t tbl_repr(var_t v);
+
+
+
+// table array accessing functions
+var_t *tbl_realizerange(uint16_t off, uint16_t len, int32_t cap);
+
+static inline var_t tbl_getarray(tbl_t *tbl, uint32_t i, union tbl_array *a) {
+    if (a->range) {
+        if (i-a->off < tbl->len+tbl->nulls)
+            return vnum(i-a->off);
+        else 
+            return vnull;
+    }
+
+    return a->array[i];
+}
+
+static inline void tbl_setarray(tbl_t *tbl, uint32_t i, var_t v, union tbl_array *a) {
+    if (a->range) {
+        if (var_equals(v, vnum(i-a->off)) && i-a->off <= tbl->len+tbl->nulls)
+            return;
+        else
+            a->array = tbl_realizerange(a->off, tbl->len+tbl->nulls, tbl->mask+1);
+    }
+
+    a->array[i] = v;
+    var_incref(v);
+}
+
+static inline var_t tbl_getkey(tbl_t *tbl, uint32_t i) {
+    return tbl_getarray(tbl, i, &tbl->keys);
+}
+
+static inline var_t tbl_getval(tbl_t *tbl, uint32_t i) {
+    return tbl_getarray(tbl, i, &tbl->vals);
+}
+
+static inline void tbl_setkey(tbl_t *tbl, uint32_t i, var_t v) {
+    tbl_setarray(tbl, i, v, &tbl->keys);
+}
+
+static inline void tbl_setval(tbl_t *tbl, uint32_t i, var_t v) {
+    tbl_setarray(tbl, i, v, &tbl->vals);
+}
 
 
 #endif

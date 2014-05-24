@@ -26,32 +26,6 @@ static inline hash_t tbl_next(hash_t i) {
 }
 
 
-static var_t *tbl_realize_range(uint16_t len, int32_t cap);
-
-// looks up a var in a table array
-static inline var_t tbl_at(tbl_t *tbl, var_t *a, uint32_t i) {
-    if (a)
-        return a[i];
-    else if (i < tbl->len + tbl->nulls)
-        return vnum(i);
-    else
-        return vnull;
-}   
-
-// places a var into a table array
-static inline void tbl_put(tbl_t *tbl, var_t **a, uint32_t i, var_t v) {
-    if (!*a) {
-        if (var_equals(v, vnum(i)) && i <= tbl->len + tbl->nulls)
-            return;
-        else
-            *a = tbl_realize_range(tbl->len + tbl->nulls, tbl->mask+1);
-    }
-
-    (*a)[i] = v;
-    var_incref(v);
-}
-
-
 // Functions for managing tables
 // Each table is preceeded with a reference count
 // which is used as its handle in a var
@@ -62,8 +36,8 @@ tbl_t *tbl_create(void) {
     tbl->nulls = 0;
     tbl->len = 0;
     tbl->mask = -1;
-    tbl->keys = 0;
-    tbl->vals = 0;
+    tbl->keys = (union tbl_array){0x1};
+    tbl->vals = (union tbl_array){0x1};
 
     return tbl;
 }
@@ -72,8 +46,8 @@ void tbl_destroy(tbl_t *tbl) {
     int i;
 
     for (i=0; i <= tbl->mask; i++) {
-        var_t k = tbl_at(tbl, tbl->keys, i);
-        var_t v = tbl_at(tbl, tbl->vals, i);
+        var_t k = tbl_getkey(tbl, i);
+        var_t v = tbl_getval(tbl, i);
 
         if (!var_isnull(k)) {
             var_decref(k);
@@ -81,8 +55,8 @@ void tbl_destroy(tbl_t *tbl) {
         }
     }
 
-    vdealloc(tbl->keys);
-    vdealloc(tbl->vals);
+    if (!tbl->keys.range) vdealloc(tbl->keys.array);
+    if (!tbl->vals.range) vdealloc(tbl->vals.array);
 }
 
 
@@ -92,8 +66,8 @@ tbl_t *tbl_alloc_array(uint16_t size) {
     int32_t cap = tbl_npw2(tbl_ncap(size));
 
     tbl->mask = cap - 1;
-    tbl->keys = 0;
-    tbl->vals = valloc(cap * sizeof(var_t));
+    tbl->keys = (union tbl_array){0x1};
+    tbl->vals.array = valloc(cap * sizeof(var_t));
 
     tbl->tail = 0;
     tbl->nulls = 0;
@@ -107,10 +81,10 @@ tbl_t *tbl_alloc_table(uint16_t size) {
     int32_t cap = tbl_npw2(tbl_ncap(size));
 
     tbl->mask = cap - 1;
-    tbl->keys = valloc(cap * sizeof(var_t));
-    tbl->vals = valloc(cap * sizeof(var_t));
+    tbl->keys.array = valloc(cap * sizeof(var_t));
+    tbl->vals.array = valloc(cap * sizeof(var_t));
 
-    memset(tbl->keys, 0, cap * sizeof(var_t));
+    memset(tbl->keys.array, 0, cap * sizeof(var_t));
 
     tbl->tail = 0;
     tbl->nulls = 0;
@@ -134,13 +108,13 @@ var_t tbl_lookup(tbl_t *tbl, var_t key) {
 
         for (i = hash;; i = tbl_next(i)) {
             hash_t mi = i & tbl->mask;
-            var_t k = tbl_at(tbl, tbl->keys, mi);
+            var_t k = tbl_getkey(tbl, mi);
 
             if (var_isnull(k))
                 break;
 
             if (var_equals(key, k)) {
-                var_t v = tbl_at(tbl, tbl->vals, mi);
+                var_t v = tbl_getval(tbl, mi);
 
                 if (var_isnull(v))
                     break;
@@ -154,12 +128,12 @@ var_t tbl_lookup(tbl_t *tbl, var_t key) {
 }
 
 // converts implicit range to actual array of nums on heap
-static var_t *tbl_realize_range(uint16_t len, int32_t cap) {
+var_t *tbl_realizerange(uint16_t off, uint16_t len, int32_t cap) {
     var_t *m = valloc(cap * sizeof(var_t));
     int i;
 
     for (i=0; i < len; i++) {
-        m[i] = vnum(i);
+        m[i] = vnum(i + off);
     }
 
     memset(m+len, 0, (cap-len) * sizeof(var_t));
@@ -177,19 +151,19 @@ static void tbl_resize(tbl_t *tbl, uint16_t size) {
     var_t *keys = 0;
     var_t *vals = 0;
 
-    if (tbl->keys) {
+    if (!tbl->keys.range) {
         keys = valloc(cap * sizeof(var_t));
         memset(keys, 0, cap * sizeof(var_t));
     }
 
-    if (tbl->vals) {
+    if (!tbl->vals.range) {
         vals = valloc(cap * sizeof(var_t));
     }
 
 
     for (j=0; j <= tbl->mask; j++) {
-        var_t k = tbl_at(tbl, tbl->keys, j);
-        var_t v = tbl_at(tbl, tbl->vals, j);
+        var_t k = tbl_getkey(tbl, j);
+        var_t v = tbl_getval(tbl, j);
 
         if (var_isnull(k) || var_isnull(v))
             continue;
@@ -200,8 +174,8 @@ static void tbl_resize(tbl_t *tbl, uint16_t size) {
             hash_t mi = i & mask;
 
             if ((keys && var_isnull(keys[mi])) || mi <= len) {
-                if (keys) keys[mi] = tbl->keys[j];
-                if (vals) vals[mi] = tbl->vals[j];
+                if (keys) keys[mi] = tbl->keys.array[j];
+                if (vals) vals[mi] = tbl->vals.array[j];
 
                 len++;
                 break;
@@ -209,14 +183,20 @@ static void tbl_resize(tbl_t *tbl, uint16_t size) {
         }
     }
 
-    vdealloc(tbl->keys);
-    vdealloc(tbl->vals);
+
+    if (keys) {
+        vdealloc(tbl->keys.array);
+        tbl->keys.array = keys;
+    }
+
+    if (vals) {
+        vdealloc(tbl->vals.array);
+        tbl->vals.array = vals;
+    }
 
     tbl->mask = mask;
     tbl->nulls = 0;
     tbl->len = len;
-    tbl->keys = keys;
-    tbl->vals = vals;
 }
 
 
@@ -233,12 +213,12 @@ void tbl_assign(tbl_t *tbl, var_t key, var_t val) {
 
     for (;; i = tbl_next(i)) {
         hash_t mi = i & tbl->mask;
-        var_t k = tbl_at(tbl, tbl->keys, mi);
+        var_t k = tbl_getkey(tbl, mi);
 
         if (var_isnull(k)) {
             if (!var_isnull(val)) {
-                tbl_put(tbl, &tbl->keys, mi, key);
-                tbl_put(tbl, &tbl->vals, mi, val);
+                tbl_setkey(tbl, mi, key);
+                tbl_setval(tbl, mi, val);
 
                 assert(tbl->len < tbl_maxcap); // TODO add errors
                 tbl->len++;
@@ -248,15 +228,15 @@ void tbl_assign(tbl_t *tbl, var_t key, var_t val) {
         }
 
         if (var_equals(key, k)) {
-            var_t v = tbl_at(tbl, tbl->vals, mi);
+            var_t v = tbl_getval(tbl, mi);
 
             if (var_isnull(v)) {
-                tbl_put(tbl, &tbl->vals, mi, vnull);
+                tbl_setval(tbl, mi, vnull);
                 tbl->nulls--;
                 tbl->len++;
             } else {
                 var_decref(v);
-                tbl_put(tbl, &tbl->vals, mi, val);
+                tbl_setval(tbl, mi, val);
 
                 if (var_isnull(val)) {
                     tbl->nulls++;
@@ -284,19 +264,19 @@ void tbl_set(tbl_t *tbl, var_t key, var_t val) {
 
         for (i = hash;; i = tbl_next(i)) {
             hash_t mi = i & tbl->mask;
-            var_t k = tbl_at(tbl, tbl->keys, mi);
+            var_t k = tbl_getkey(tbl, mi);
 
             if (var_isnull(k)) 
                 break;
 
             if (var_equals(key, k)) {
-                var_t v = tbl_at(tbl, tbl->vals, mi);
+                var_t v = tbl_getval(tbl, mi);
 
                 if (var_isnull(v))
                     break;
 
                 var_decref(v);
-                tbl_put(tbl, &tbl->vals, mi, val);
+                tbl_setval(tbl, mi, val);
 
                 if (var_isnull(val)) {
                     tbl->nulls++;
@@ -319,11 +299,11 @@ void tbl_set(tbl_t *tbl, var_t key, var_t val) {
 
     for (i = hash;; i = tbl_next(i)) {
         hash_t mi = i & tbl->mask;
-        var_t k = tbl_at(tbl, tbl->keys, mi);
+        var_t k = tbl_getkey(tbl, mi);
 
         if (var_isnull(k)) {
-            tbl_put(tbl, &tbl->keys, mi, key);
-            tbl_put(tbl, &tbl->vals, mi, val);
+            tbl_setkey(tbl, mi, key);
+            tbl_setval(tbl, mi, val);
 
             assert(tbl->len < tbl_maxcap); // TODO add errors
             tbl->len++;
@@ -347,13 +327,13 @@ var_t tbl_repr(var_t v) {
     var_t *val_repr = valloc(tbl->len * sizeof(var_t));
 
     for (i=0, j=0; i <= tbl->mask; i++) {
-        var_t k = tbl_at(tbl, tbl->keys, i);
-        var_t v = tbl_at(tbl, tbl->vals, i);
+        var_t k = tbl_getkey(tbl, i);
+        var_t v = tbl_getval(tbl, i);
 
         if (var_isnull(k) || var_isnull(v))
             continue;
 
-        if (tbl->keys) {
+        if (!tbl->keys.range) {
             key_repr[j] = var_repr(k);
             size += key_repr[j].len + 2;
         }
@@ -370,7 +350,7 @@ var_t tbl_repr(var_t v) {
     *out++ = '[';
 
     for (i=0; i < tbl->len; i++) {
-        if (tbl->keys) {
+        if (!tbl->keys.range) {
             memcpy(out, var_str(key_repr[i]), key_repr[i].len);
             out += key_repr[i].len;
             var_decref(key_repr[i]);
