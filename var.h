@@ -85,18 +85,21 @@ typedef struct var {
 } var_t;
 
 
+// properties of variables
+static inline bool var_isnull(var_t v) { return !v.meta; }
+static inline bool var_isref(var_t v)  { return 0x4 & v.meta; }
+static inline bool var_isnum(var_t v)  { return v.type == TYPE_NUM; }
+static inline bool var_isstr(var_t v)  { return v.type == TYPE_STR; }
+static inline bool var_istbl(var_t v)  { return (0x6 & v.meta) == 0x6; }
+static inline bool var_isfn(var_t v)   { return (0x3 & v.meta) == 0x1; }
+static inline bool var_ismtbl(var_t v) { return v.type == TYPE_MTBL; }
 
 // definitions for accessing components
-#define var_isnull(v) (!(v).meta)
-#define var_isref(v)  ((v).meta & 0x4)
-#define var_istbl(v)  (((v).meta & 0x6) == 0x6)
-#define var_isfn(v)   (((v).meta & 0x3) == 0x1)
+static inline ref_t *var_ref(var_t v) { v.type = 0; return v.ref; }
+static inline enum type var_type(var_t v) { return v.type; }
 
-#define var_ref(v)  ((ref_t*)((v).meta & ~0x7))
-#define var_type(v) ((v).type)
-
-#define var_num(v) (((var_t){{(v).bits & ~0x7}}).num)
-#define var_str(v) ((v).str + (v).off)
+static inline num_t var_num(var_t v) { v.type = 0; return v.num; }
+static inline str_t *var_str(var_t v) { return v.str + v.off; }
 
 
 // definitions of literal vars in c
@@ -104,31 +107,55 @@ typedef struct var {
 #define vnan  vnum(NAN)
 #define vinf  vnum(INFINITY)
 
-#define vnum(v)  ((var_t){{TYPE_NUM  | (~0x7 & ((var_t){.num=(v)}).bits)}})
-#define vtbl(v)  ((var_t){{TYPE_TBL  | (~0x7 & ((var_t){.ref=(ref_t*)(v), .tbl=(v)}).bits)}})
-#define vfn(v)   ((var_t){{TYPE_FN   | (~0x7 & ((var_t){.ref=(ref_t*)(v), .fn=(v) }).bits)}})
-#define vmtbl(v) ((var_t){{TYPE_MTBL | (~0x7 & ((var_t){.ref=(ref_t*)(v), .tbl=(v)}).bits)}})
-#define vbfn(v)  ((var_t){.type=TYPE_BFN, .bfn=(v)})
+static inline var_t vnum(num_t n) {
+    var_t v = { .num = n };
+    v.type = TYPE_NUM;
+    return v;
+}
 
-#define vstr(n) ({                              \
-    static const struct {                       \
-        ref_t r;                                \
-        uint8_t s[sizeof(n)-1];                 \
-    } _vstr = { 0, {(n)}};                      \
-                                                \
-    ((var_t){{                                  \
-        TYPE_STR | (~0x7 & ((var_t){            \
-            .ref = (ref_t*)&_vstr.r,            \
-            .off = 0,                           \
-            .len = sizeof(n)-1                  \
-        }).bits)                                \
-    }});                                        \
+static inline var_t vstr(str_t *s, uint16_t off, uint16_t len) {
+    var_t v = { .str=s, .off=off, .len=len };
+    v.type = TYPE_STR;
+    return v;
+}
+
+static inline var_t vtbl(tbl_t *t) {
+    var_t v = { .ref=(ref_t*)t, .tbl=t };
+    v.type = TYPE_TBL;
+    return v;
+}
+
+static inline var_t vfn(fn_t *f) {
+    var_t v = { .ref=(ref_t*)f, .fn=f };
+    v.type = TYPE_FN;
+    return v;
+}
+
+static inline var_t vmtbl(tbl_t *t) {
+    var_t v = { .ref=(ref_t*)t, .tbl=t };
+    v.type = TYPE_MTBL;
+    return v;
+}
+
+static inline var_t vbfn(bfn_t *f) {
+    var_t v = { .bfn=f };
+    v.type = TYPE_BFN;
+    return v;
+}
+
+#define vcstr(c) ({                     \
+    static struct {                     \
+        ref_t r;                        \
+        str_t s[sizeof(c)-1];           \
+    } _vcstr = { 2, {(c)}};             \
+                                        \
+    vstr(_vcstr.s, 0, sizeof(c)-1);     \
 })
 
 
 // Mapping of reference counting functions
-#define var_incref(v) vref_inc((v).ref)
-#define var_decref(v) vref_dec((v).ref)
+static inline void var_incref(var_t v) { vref_inc(v.ref); }
+static inline void var_decref(var_t v) { vref_dec(v.ref); }
 
 
 // Returns true if both variables are the

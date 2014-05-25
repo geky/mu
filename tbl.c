@@ -187,7 +187,7 @@ void tbl_assign(tbl_t *tbl, var_t key, var_t val) {
                 tbl_setkey(tbl, mi, key);
                 tbl_setval(tbl, mi, val);
 
-                assert(tbl->len < tbl_maxcap); // TODO add errors
+                assert(tbl->len < tbl_maxlen); // TODO add errors
                 tbl->len++;
             }
 
@@ -272,7 +272,7 @@ void tbl_set(tbl_t *tbl, var_t key, var_t val) {
             tbl_setkey(tbl, mi, key);
             tbl_setval(tbl, mi, val);
 
-            assert(tbl->len < tbl_maxcap); // TODO add errors
+            assert(tbl->len < tbl_maxlen); // TODO add errors
             tbl->len++;
             return;
         }

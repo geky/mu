@@ -20,7 +20,7 @@ static bool null_equals(var_t a, var_t b) { return true; }
 static bool data_equals(var_t a, var_t b) { return a.data == b.data; }
 
 static bool (* const var_equals_a[8])(var_t, var_t) = {
-    null_equals, data_equals, data_equals, num_equals,
+    null_equals, data_equals, 0, num_equals,
     str_equals, data_equals, data_equals, data_equals
 };
 
@@ -41,7 +41,7 @@ static hash_t null_hash(var_t v) { return 0; }
 static hash_t data_hash(var_t v) { return v.data; }
 
 static hash_t (* const var_hash_a[8])(var_t) = {
-    null_hash, data_hash, data_hash, num_hash,
+    null_hash, data_hash, 0, num_hash,
     str_hash, data_hash, data_hash, data_hash
 };
 
@@ -52,8 +52,8 @@ hash_t var_hash(var_t v) {
 
 // Returns a string representation of the variable
 
-static var_t null_repr(var_t v) { return vstr("null"); }
-static var_t def_repr(var_t v) { return vstr("unknown type"); }
+static var_t null_repr(var_t v) { return vcstr("null"); }
+static var_t def_repr(var_t v) { return vcstr("bad type"); }
 
 static var_t (* const var_repr_a[8])(var_t) = {
     null_repr, def_repr, def_repr, num_repr,

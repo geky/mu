@@ -164,16 +164,16 @@ var_t num_repr(var_t v) {
     v.type = 0;
 
     if (isnan(v.num)) {
-        return vstr("nan");
+        return vcstr("nan");
     } else if (isinf(v.num)) {
-        var_t s = vstr("-inf");
+        var_t s = vcstr("-inf");
 
         if (v.num > 0.0)
             s.off++;
 
         return s;
     } else if (v.num == 0) {
-        return vstr("0");
+        return vcstr("0");
     } else {
         var_t s;
         uint8_t *str;

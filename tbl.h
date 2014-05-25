@@ -6,8 +6,9 @@
 #define V_TBL
 
 #include "var.h"
+#include "num.h"
 
-#define tbl_maxcap ((1<<16)-1)
+#define tbl_maxlen ((1<<16)-1)
 
 
 union tbl_array {
@@ -59,7 +60,7 @@ var_t *tbl_realizerange(uint16_t off, uint16_t len, int32_t cap);
 
 static inline var_t tbl_getarray(tbl_t *tbl, uint32_t i, union tbl_array *a) {
     if (a->range) {
-        if (i-a->off < tbl->len+tbl->nulls)
+        if (i - a->off < tbl->len + tbl->nulls)
             return vnum(i-a->off);
         else 
             return vnull;
@@ -70,10 +71,16 @@ static inline var_t tbl_getarray(tbl_t *tbl, uint32_t i, union tbl_array *a) {
 
 static inline void tbl_setarray(tbl_t *tbl, uint32_t i, var_t v, union tbl_array *a) {
     if (a->range) {
-        if (var_equals(v, vnum(i-a->off)) && i-a->off <= tbl->len+tbl->nulls)
-            return;
-        else
-            a->array = tbl_realizerange(a->off, tbl->len+tbl->nulls, tbl->mask+1);
+        if (v.type == TYPE_NUM && num_equals(v, vnum(i))) {
+            if (i - a->off <= tbl->len + tbl->nulls) {
+                return;
+            } else if (tbl->len + tbl->nulls == 0 && i <= tbl_maxlen) {
+                a->off = i;
+                return;
+            }
+        }
+
+        a->array = tbl_realizerange(a->off, tbl->len+tbl->nulls, tbl->mask+1);
     }
 
     a->array[i] = v;
