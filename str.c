@@ -24,7 +24,7 @@ hash_t str_hash(var_t v) {
         hash = (hash << 5) + hash + str[i];
     }
 
-    return hash - 274863188;
+    return hash;
 }
 
 // Parses a string and returns a string

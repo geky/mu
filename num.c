@@ -12,17 +12,20 @@ bool num_equals(var_t a, var_t b) {
 // Returns a hash for each number
 // For integers this is the number
 hash_t num_hash(var_t v) {
+    var_t i;
     v.type = 0;
 
-    // take int value as base to keep
-    // it linear for integers
-    num_t hash = floor(v.num);
+    // This magic number is the value to puts a number's mantissa 
+    // directly in the integer range. After these operations, 
+    // i.num and v.num will contain the integer and fractional 
+    // components of the original number.
+    i.num = v.num + 6755399441055744.0;
+    v.num = v.num - (i.num - 6755399441055744.0);
 
-    // move decimal part around to fit into
-    // an int value to add to the hash
-    v.num -= hash;
-        
-    return (hash_t)hash ^ v.data;
+    // The int component forms the base of the hash so integers
+    // are linear. The fractional component is also used to distinguish 
+    // between non-integer values.
+    return i.meta ^ v.data;
 }
 
 
