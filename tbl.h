@@ -34,20 +34,25 @@ struct tbl {
 // Functions for managing tables
 // Each table is preceeded with a reference count
 // which is used as its handle in a var
-tbl_t *tbl_create(uint16_t size);
-void tbl_destroy(tbl_t *);
+var_t tbl_create(uint16_t size);
+tbl_t *tblp_create(uint16_t size);
+void tbl_destroy(var_t);
+void tblp_destroy(tbl_t *);
 
 // Recursively looks up a key in the table
 // returns either that value or null
-var_t tbl_lookup(tbl_t *, var_t key);
+var_t tbl_lookup(var_t, var_t key);
+var_t tblp_lookup(tbl_t *, var_t key);
 
 // Sets a value in the table with the given key
 // decends down the tail chain until its found
-void tbl_set(tbl_t *, var_t key, var_t val);
+void tbl_set(var_t, var_t key, var_t val);
+void tblp_set(tbl_t *, var_t key, var_t val);
 
 // Sets a value in the table with the given key
 // without decending down the tail chain
-void tbl_assign(tbl_t *, var_t key, var_t val);
+void tbl_assign(var_t, var_t key, var_t val);
+void tblp_assign(tbl_t *, var_t key, var_t val);
 
 
 // Returns a string representation of the table

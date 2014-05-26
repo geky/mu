@@ -29,7 +29,11 @@ static inline hash_t tbl_next(hash_t i) {
 // Functions for managing tables
 // Each table is preceeded with a reference count
 // which is used as its handle in a var
-tbl_t *tbl_create(uint16_t size) {
+var_t tbl_create(uint16_t size) {
+    return vtbl(tblp_create(size));
+}
+
+tbl_t *tblp_create(uint16_t size) {
     tbl_t *tbl = vref_alloc(sizeof(tbl_t));
     int32_t cap = tbl_npw2(tbl_ncap(size));
 
@@ -43,7 +47,12 @@ tbl_t *tbl_create(uint16_t size) {
     return tbl;
 }
 
-void tbl_destroy(tbl_t *tbl) {
+void tbl_destroy(var_t v) {
+    v.ro = 0;
+    tblp_destroy(v.tbl);
+}
+
+void tblp_destroy(tbl_t *tbl) {
     int i;
 
     for (i=0; i <= tbl->mask; i++) {
@@ -63,7 +72,12 @@ void tbl_destroy(tbl_t *tbl) {
 
 // Recursively looks up a key in the table
 // returns either that value or null
-var_t tbl_lookup(tbl_t *tbl, var_t key) {
+var_t tbl_lookup(var_t v, var_t key) {
+    v.ro = 0;
+    return tblp_lookup(v.tbl, key);
+}
+
+var_t tblp_lookup(tbl_t *tbl, var_t key) {
     if (var_isnull(key))
         return vnull;
 
@@ -93,6 +107,7 @@ var_t tbl_lookup(tbl_t *tbl, var_t key) {
 
     return vnull;
 }
+
 
 // converts implicit range to actual array of nums on heap
 var_t *tbl_realizerange(uint16_t off, uint16_t len, int32_t cap) {
@@ -169,7 +184,12 @@ static void tbl_resize(tbl_t *tbl, uint16_t size) {
 
 // sets a value in the table with the given key
 // without decending down the tail chain
-void tbl_assign(tbl_t *tbl, var_t key, var_t val) {
+void tbl_assign(var_t v, var_t key, var_t val) {
+    assert(!v.ro); // TODO error on const tbl
+    tblp_assign(v.tbl, key, val);
+}
+
+void tblp_assign(tbl_t *tbl, var_t key, var_t val) {
     if (var_isnull(key))
         return;
    
@@ -218,7 +238,12 @@ void tbl_assign(tbl_t *tbl, var_t key, var_t val) {
 
 // sets a value in the table with the given key
 // decends down the tail chain until its found
-void tbl_set(tbl_t *tbl, var_t key, var_t val) {
+void tbl_set(var_t v, var_t key, var_t val) {
+    assert(!v.ro); // TODO error on const tbl
+    tblp_set(v.tbl, key, val);
+}
+
+void tblp_set(tbl_t *tbl, var_t key, var_t val) {
     if (var_isnull(key))
         return;
 

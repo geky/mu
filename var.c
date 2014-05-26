@@ -50,6 +50,19 @@ hash_t var_hash(var_t v) {
 }
 
 
+// Cleans up memory of a variable
+
+static void null_destroy(var_t v) {}
+
+static void (* const var_destroy_a[4])(var_t) = {
+    null_destroy, 0, tbl_destroy, tbl_destroy
+};
+
+void var_destroy(var_t v) {
+    var_destroy_a[v.type & 0x3](v);
+}
+
+
 // Returns a string representation of the variable
 
 static var_t null_repr(var_t v) { return vcstr("null"); }

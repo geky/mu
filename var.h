@@ -61,6 +61,7 @@ typedef struct var {
             union {
                 // data for vars
                 uint32_t data;
+                bool ro: 1;
 
                 // string offset and length
                 struct {
@@ -86,13 +87,14 @@ typedef struct var {
 
 
 // properties of variables
-static inline bool var_isnull(var_t v) { return !v.meta; }
-static inline bool var_isref(var_t v)  { return 0x4 & v.meta; }
-static inline bool var_isnum(var_t v)  { return v.type == TYPE_NUM; }
-static inline bool var_isstr(var_t v)  { return v.type == TYPE_STR; }
-static inline bool var_istbl(var_t v)  { return (0x6 & v.meta) == 0x6; }
-static inline bool var_isfn(var_t v)   { return (0x3 & v.meta) == 0x1; }
-static inline bool var_ismtbl(var_t v) { return v.type == TYPE_MTBL; }
+static inline bool var_isnull(var_t v)  { return !v.meta; }
+static inline bool var_isref(var_t v)   { return 0x4 & v.meta; }
+static inline bool var_isconst(var_t v) { return v.ro; }
+static inline bool var_isnum(var_t v)   { return v.type == TYPE_NUM; }
+static inline bool var_isstr(var_t v)   { return v.type == TYPE_STR; }
+static inline bool var_istbl(var_t v)   { return (0x6 & v.meta) == 0x6; }
+static inline bool var_isfn(var_t v)    { return (0x3 & v.meta) == 0x1; }
+static inline bool var_ismtbl(var_t v)  { return v.type == TYPE_MTBL; }
 
 // definitions for accessing components
 static inline ref_t *var_ref(var_t v) { v.type = 0; return v.ref; }
@@ -164,6 +166,9 @@ bool var_equals(var_t a, var_t b);
 
 // Returns a hash value of the given variable. 
 hash_t var_hash(var_t var);
+
+// Cleans up memory of a variable
+void var_destroy(var_t var);
 
 // Returns a string representation of the variable
 var_t var_repr(var_t v);
