@@ -312,8 +312,7 @@ var_t tbl_repr(var_t v) {
     unsigned int size = 2;
     int i, j;
 
-    var_t s;
-    uint8_t *out;
+    uint8_t *out, *s;
 
     var_t *key_repr = valloc(tbl->len * sizeof(var_t));
     var_t *val_repr = valloc(tbl->len * sizeof(var_t));
@@ -336,40 +335,37 @@ var_t tbl_repr(var_t v) {
         j++;
     }
 
-    s.ref = vref_alloc(size);
-    out = (uint8_t *)s.str;
 
-    *out++ = '[';
+    out = vref_alloc(size);
+    s = out;
+
+    *s++ = '[';
 
     for (i=0; i < tbl->len; i++) {
         if (!tbl->keys.range) {
-            memcpy(out, var_str(key_repr[i]), key_repr[i].len);
-            out += key_repr[i].len;
+            memcpy(s, var_str(key_repr[i]), key_repr[i].len);
+            s += key_repr[i].len;
             var_decref(key_repr[i]);
 
-            *out++ = ':';
-            *out++ = ' ';
+            *s++ = ':';
+            *s++ = ' ';
         }
 
-        memcpy(out, var_str(val_repr[i]), val_repr[i].len);
-        out += val_repr[i].len;
+        memcpy(s, var_str(val_repr[i]), val_repr[i].len);
+        s += val_repr[i].len;
         var_decref(val_repr[i]);
 
         if (i != tbl->len-1) {
-            *out++ = ',';
-            *out++ = ' ';
+            *s++ = ',';
+            *s++ = ' ';
         }
     }
 
-    *out++ = ']';
+    *s++ = ']';
 
     vdealloc(key_repr);
     vdealloc(val_repr);
 
 
-    s.off = 0;
-    s.len = size;
-    s.type = TYPE_STR;
-
-    return s;
+    return vstr(out, 0, size);
 }

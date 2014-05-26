@@ -165,6 +165,7 @@ var_t num_repr(var_t v) {
 
     if (isnan(v.num)) {
         return vcstr("nan");
+
     } else if (isinf(v.num)) {
         var_t s = vcstr("-inf");
 
@@ -172,19 +173,20 @@ var_t num_repr(var_t v) {
             s.off++;
 
         return s;
+
     } else if (v.num == 0) {
         return vcstr("0");
-    } else {
-        var_t s;
-        uint8_t *str;
 
-        s.ref = vref_alloc(16);
-        str = (uint8_t*)s.str;
+    } else {
+        uint8_t *s, *out;
+
+        out = vref_alloc(16);
+        s = out;
 
 
         if (v.num < 0.0) {
             v.num = -v.num;
-            *(str++) = '-';
+            *s++ = '-';
         }
 
 
@@ -207,10 +209,10 @@ var_t num_repr(var_t v) {
                 break;
 
             if (digit < 0.5 && digit > 0.05)
-                *(str++) = '.';
+                *s++ = '.';
 
             int d = floor(v.num / digit);
-            *(str++) = '0' + d;
+            *s++ = '0' + d;
 
             v.num -= d * digit;
             digit /= 10.0;
@@ -218,29 +220,24 @@ var_t num_repr(var_t v) {
 
 
         if (expform) {
-            *(str++) = 'e';
+            *s++ = 'e';
 
             if (exp > 0) {
-                *(str++) = '+';
+                *s++ = '+';
             } else {
-                *(str++) = '-';
+                *s++ = '-';
                 exp = -exp;
             }
 
             if (exp > 100)
-                *(str++) = '0' + (int)(exp / 100);
+                *s++ = '0' + (int)(exp / 100);
 
             // exp will always be greater than 10 here
-            *(str++) = '0' + (int)(exp / 10) % 10;
-            *(str++) = '0' + (int)(exp / 1) % 10;  
+            *s++ = '0' + (int)(exp / 10) % 10;
+            *s++ = '0' + (int)(exp / 1) % 10;  
         }
 
-
-        s.off = 0;
-        s.len = (uint16_t)(str - s.str);
-        s.type = TYPE_STR;
-
-        return s;
+        return vstr(out, 0, s - out);
     }
 }
 

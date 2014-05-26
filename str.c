@@ -33,8 +33,7 @@ var_t str_parse(str_t **off, str_t *end) {
     str_t quote = **off;
     unsigned int size = 0;
 
-    var_t s;
-    uint8_t *out;
+    uint8_t *s, *out;
 
 
     while (str < end) {
@@ -99,8 +98,8 @@ var_t str_parse(str_t **off, str_t *end) {
 
 
 load:
-    s.ref = vref_alloc(size);
-    out = (uint8_t *)s.str;
+    out = vref_alloc(size);
+    s = out;
 
     str = *off + 1;
     end = str + size;
@@ -109,52 +108,48 @@ load:
         if (*str == '\\') {
             switch (str[1]) {
                 case 'o':
-                    *out++ = num_a[str[2]]*7*7 + 
-                             num_a[str[3]]*7 + 
-                             num_a[str[4]]; 
+                    *s++ = num_a[str[2]]*7*7 + 
+                           num_a[str[3]]*7 + 
+                           num_a[str[4]]; 
                     str += 4;
                     break;
 
                 case 'd':
-                    *out++ = num_a[str[2]]*10*10 + 
-                             num_a[str[3]]*10 + 
-                             num_a[str[4]]; 
+                    *s++ = num_a[str[2]]*10*10 + 
+                           num_a[str[3]]*10 + 
+                           num_a[str[4]]; 
                     str += 4;
                     break;
 
                 case 'x':
-                    *out++ = num_a[str[2]]*16 + 
-                             num_a[str[3]]; 
+                    *s++ = num_a[str[2]]*16 + 
+                           num_a[str[3]]; 
                     str += 3;
                     break;
 
                 case '\n': str += 2; break;
-                case '\\': *out++ = '\\'; str += 2; break;
-                case '\'': *out++ = '\''; str += 2; break;
-                case '"':  *out++ = '"';  str += 2; break;
-                case 'a':  *out++ = '\a'; str += 2; break;
-                case 'b':  *out++ = '\b'; str += 2; break;
-                case 'f':  *out++ = '\f'; str += 2; break;
-                case 'n':  *out++ = '\n'; str += 2; break;
-                case 'r':  *out++ = '\r'; str += 2; break;
-                case 't':  *out++ = '\t'; str += 2; break;
-                case 'v':  *out++ = '\v'; str += 2; break;
-                case '0':  *out++ = '\0'; str += 2; break;
-                default:   *out++ = '\\'; str += 1; break;
+                case '\\': *s++ = '\\'; str += 2; break;
+                case '\'': *s++ = '\''; str += 2; break;
+                case '"':  *s++ = '"';  str += 2; break;
+                case 'a':  *s++ = '\a'; str += 2; break;
+                case 'b':  *s++ = '\b'; str += 2; break;
+                case 'f':  *s++ = '\f'; str += 2; break;
+                case 'n':  *s++ = '\n'; str += 2; break;
+                case 'r':  *s++ = '\r'; str += 2; break;
+                case 't':  *s++ = '\t'; str += 2; break;
+                case 'v':  *s++ = '\v'; str += 2; break;
+                case '0':  *s++ = '\0'; str += 2; break;
+                default:   *s++ = '\\'; str += 1; break;
             }
         } else {
-            *out++ = *str++;
+            *s++ = *str++;
         }
     }
 
 
     *off = str + 1;
-    
-    s.off = 0;
-    s.len = size;
-    s.type = TYPE_STR;
 
-    return s;
+    return vstr(out, 0, size);
 }
 
 
@@ -164,8 +159,7 @@ var_t str_repr(var_t v) {
     str_t *end = str + v.len;
     unsigned int size = 2;
 
-    var_t s;
-    uint8_t *out;
+    uint8_t *s, *out;
 
     while (str < end) {
         if (*str < ' ' || *str > '~' || *str == '"') {
@@ -190,46 +184,41 @@ var_t str_repr(var_t v) {
 
     str = var_str(v);
 
-    s.ref = vref_alloc(size);
-    out = (uint8_t *)s.str;
+    out = vref_alloc(size);
+    s = out;
 
-    *out++ = '"';
+    *s++ = '"';
 
     while (str < end) {
         if (*str < ' ' || *str > '~' || *str == '"') {
-            *out++ = '\\';
+            *s++ = '\\';
 
             switch (*str) {
-                case '"':  *out++ = '"'; break;
-                case '\a': *out++ = 'a'; break;
-                case '\b': *out++ = 'b'; break;
-                case '\f': *out++ = 'f'; break;
-                case '\n': *out++ = 'n'; break;
-                case '\r': *out++ = 'r'; break;
-                case '\t': *out++ = 't'; break;
-                case '\v': *out++ = 'v'; break;
-                case '\0': *out++ = '0'; break;
+                case '"':  *s++ = '"'; break;
+                case '\a': *s++ = 'a'; break;
+                case '\b': *s++ = 'b'; break;
+                case '\f': *s++ = 'f'; break;
+                case '\n': *s++ = 'n'; break;
+                case '\r': *s++ = 'r'; break;
+                case '\t': *s++ = 't'; break;
+                case '\v': *s++ = 'v'; break;
+                case '\0': *s++ = '0'; break;
                 default:
-                    *out++ = 'x';
-                    *out++ = (*str/16 < 10) ? ('0' + *str/16) : ('a' + *str/16);
-                    *out++ = (*str%16 < 10) ? ('0' + *str%16) : ('a' + *str%16);
+                    *s++ = 'x';
+                    *s++ = (*str/16 < 10) ? ('0' + *str/16) : ('a' + *str/16);
+                    *s++ = (*str%16 < 10) ? ('0' + *str%16) : ('a' + *str%16);
                     break;
             }
         } else {
-            *out++ = *str;
+            *s++ = *str;
         }
 
         str++;
     }
 
-    *out++ = '"';
+    *s++ = '"';
 
-
-    s.off = 0;
-    s.len = size;
-    s.type = TYPE_STR;
-
-    return s;
+    return vstr(out, 0, size);
 }
 
 
