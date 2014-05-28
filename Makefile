@@ -11,9 +11,10 @@ BSC := $(BSN:.y=.tab.c)
 OBJ := $(BSC:.c=.o) $(SRC:.c=.o)
 ASM := $(OBJ:.o=.s)
 
-#CFLAGS += -O2
+CFLAGS += -O2
 #CFLAGS += -O2 -pg
-CFLAGS += -O0 -g3 -gdwarf-2 -ggdb
+#CFLAGS += -O0 -g3 -gdwarf-2 -ggdb
+CFLAGS += -finline -foptimize-sibling-calls -freg-struct-return
 CFLAGS += -m32
 CFLAGS += -Wall -Winline
 CFLAGS += -lm
@@ -39,7 +40,7 @@ v: $(OBJ)
 	$(CC) -c $(CFLAGS) -o $@ $<
 
 %.s: %.c
-	$(CC) -S $(CFLAGS) -o $@ $<
+	$(CC) -S -fverbose-asm $(CFLAGS) -o $@ $<
 
 clean:
 	-rm $(TARGET)
