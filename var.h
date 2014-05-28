@@ -37,7 +37,7 @@ typedef const uint8_t str_t;
 typedef double num_t;
 typedef struct tbl tbl_t;
 typedef struct fn fn_t;
-typedef struct var bfn_t(struct var);
+typedef struct var bfn_t(tbl_t *);
 
 // Actual var type declariation
 typedef struct var {

@@ -13,7 +13,7 @@ syn keyword vControl if else while for
 syn keyword vBranch break continue return
 syn keyword vLet let
 syn keyword vType num str tbl fn
-syn keyword vReference arguments this global op
+syn keyword vReference args this global op
 syn keyword vValue null nan inf
 
 " Comments

@@ -3,7 +3,8 @@ TARGET = v
 CC = gcc
 YY = bison
 
-SRC := var.c num.c str.c tbl.c mem.c main.c vlex.c
+SRC := var.c num.c str.c tbl.c fn.c
+SRC += mem.c main.c vlex.c
 BSN := vparse.y
 FSC := $(FLX:.l=.lex.c)
 BSC := $(BSN:.y=.tab.c)

@@ -330,7 +330,10 @@ var_t tbl_repr(var_t v) {
         }
 
         val_repr[j] = var_repr(v);
-        size += val_repr[j].len + 2;
+        size += val_repr[j].len;
+
+        if (j != tbl->len-1)
+            size += 2;
 
         j++;
     }
