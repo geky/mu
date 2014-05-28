@@ -8,12 +8,23 @@
 #include "var.h"
 #include "num.h"
 
+#include <assert.h>
+
 #define tbl_maxlen ((1<<16)-1)
 
 
+// Table pointers contain a ro flag
+// can't simply be dereferenced
+union tbl_ptr {
+    tbl_t *tbl;
+    bool ro : 1;
+};
+
+// Each table is composed of two arrays 
+// each can hide as a range with an offset
 union tbl_array {
     uint32_t bits;
-    unsigned int range : 1;
+    bool range : 1;
 
     struct { uint16_t padd; uint16_t off; };
     var_t *array;
@@ -60,7 +71,28 @@ var_t tbl_repr(var_t v);
 
 
 
-// table array accessing functions
+// accessing table pointers with the ro flag
+static inline bool tblp_isro(tbl_t *tbl) {
+    union tbl_ptr tblp = { tbl };
+    return tblp.ro;
+}
+
+static inline tbl_t *tblp_readp(tbl_t *tbl) {
+    union tbl_ptr tblp = { tbl };
+    tblp.ro = 0;
+
+    return tblp.tbl;
+}
+
+static inline tbl_t *tblp_writep(tbl_t *tbl) {
+    union tbl_ptr tblp = { tbl };
+    assert(!tblp.ro); // TODO error on const tbl
+
+    return tblp.tbl;
+}
+
+
+// Table array accessing
 var_t *tbl_realizerange(uint16_t off, uint16_t len, int32_t cap);
 
 static inline var_t tbl_getarray(tbl_t *tbl, uint32_t i, union tbl_array *a) {

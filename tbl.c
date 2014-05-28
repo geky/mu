@@ -48,12 +48,13 @@ tbl_t *tblp_create(uint16_t size) {
 }
 
 void tbl_destroy(var_t v) {
-    v.ro = 0;
     tblp_destroy(v.tbl);
 }
 
 void tblp_destroy(tbl_t *tbl) {
     int i;
+
+    tbl = tblp_readp(tbl);
 
     for (i=0; i <= tbl->mask; i++) {
         var_t k = tbl_getkey(tbl, i);
@@ -73,11 +74,12 @@ void tblp_destroy(tbl_t *tbl) {
 // Recursively looks up a key in the table
 // returns either that value or null
 var_t tbl_lookup(var_t v, var_t key) {
-    v.ro = 0;
     return tblp_lookup(v.tbl, key);
 }
 
 var_t tblp_lookup(tbl_t *tbl, var_t key) {
+    tbl = tblp_readp(tbl);
+
     if (var_isnull(key))
         return vnull;
 
@@ -185,11 +187,12 @@ static void tbl_resize(tbl_t *tbl, uint16_t size) {
 // sets a value in the table with the given key
 // without decending down the tail chain
 void tbl_assign(var_t v, var_t key, var_t val) {
-    assert(!v.ro); // TODO error on const tbl
     tblp_assign(v.tbl, key, val);
 }
 
 void tblp_assign(tbl_t *tbl, var_t key, var_t val) {
+    tbl = tblp_writep(tbl);
+
     if (var_isnull(key))
         return;
    
@@ -251,6 +254,9 @@ void tblp_set(tbl_t *tbl, var_t key, var_t val) {
     hash_t i, hash = var_hash(key);
 
     for (; tbl; tbl = tbl->tail) {
+        if (tblp_isro(tbl))
+            break;
+
         if (tbl->mask == -1)
             continue;
 
@@ -284,7 +290,7 @@ void tblp_set(tbl_t *tbl, var_t key, var_t val) {
         return;
 
 
-    tbl = head;
+    tbl = tblp_writep(head);
 
     if (tbl_ncap(tbl->len + tbl->nulls + 1) > tbl->mask + 1)
         tbl_resize(tbl, tbl->len+1);
