@@ -36,6 +36,7 @@ var_t fnp_call(fn_t *, tbl_t *args);
 
 // Returns a string representation of a function
 var_t fn_repr(var_t v);
+var_t bfn_repr(var_t v);
 
 
 #endif

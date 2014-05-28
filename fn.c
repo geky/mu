@@ -61,6 +61,10 @@ var_t fnp_call(fn_t *f, tbl_t *args) {
 
 
 // Returns a string representation of a function
+var_t bfn_repr(var_t v) {
+    return vcstr("fn() <builtin>");
+}
+
 var_t fn_repr(var_t v) {
     fn_t *f = v.fn;
     unsigned int size = 7 + f->code.len;

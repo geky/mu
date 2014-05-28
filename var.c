@@ -57,8 +57,8 @@ static var_t null_repr(var_t v) { return vcstr("null"); }
 static var_t def_repr(var_t v) { return vcstr("bad type"); }
 
 static var_t (* const var_repr_a[8])(var_t) = {
-    null_repr, def_repr, def_repr, num_repr,
-    str_repr, def_repr, tbl_repr, def_repr
+    null_repr, bfn_repr, def_repr, num_repr,
+    str_repr, fn_repr, tbl_repr, def_repr
 };
 
 var_t var_repr(var_t v) {
