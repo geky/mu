@@ -3,6 +3,7 @@
 #include "num.h"
 #include "str.h"
 #include "tbl.h"
+#include "fn.h"
 
 #include <string.h>
 #include <assert.h>
@@ -50,19 +51,6 @@ hash_t var_hash(var_t v) {
 }
 
 
-// Cleans up memory of a variable
-
-static void null_destroy(var_t v) {}
-
-static void (* const var_destroy_a[4])(var_t) = {
-    null_destroy, 0, tbl_destroy, tbl_destroy
-};
-
-void var_destroy(var_t v) {
-    var_destroy_a[v.type & 0x3](v);
-}
-
-
 // Returns a string representation of the variable
 
 static var_t null_repr(var_t v) { return vcstr("null"); }
@@ -83,3 +71,15 @@ void var_print(var_t v) {
     printf("%.*s", repr.len, var_str(repr));
 }
 
+
+// Cleans up memory of a variable
+
+static void null_destroy(void *m) {}
+
+static void (* const vdestroy_a[4])(void *) = {
+    null_destroy, fn_destroy, tbl_destroy, tbl_destroy
+};
+
+void vdestroy(void *m) {
+    vdestroy_a[0x3 & (uint32_t)m](m);
+}

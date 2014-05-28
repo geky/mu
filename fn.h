@@ -23,8 +23,9 @@ struct fn {
 // Functions for managing functions
 // Each function is preceded with a reference count
 // which is used as its handle in a var
-void fn_destroy(var_t);
-void fnp_destroy(fn_t *);
+
+// Called by garbage collector to clean up
+void fn_destroy(void *);
 
 
 // Call a function. Each function takes a table

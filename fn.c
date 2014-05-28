@@ -8,11 +8,10 @@
 // Functions for managing functions
 // Each function is preceded with a reference count
 // which is used as its handle in a var
-void fn_destroy(var_t v) {
-    fnp_destroy(v.fn);
-}
 
-void fnp_destroy(fn_t *f) {
+// Called by garbage collector to clean up
+void fn_destroy(void *m) {
+    fn_t *f = m;
     int i;
 
     if (f->scope)

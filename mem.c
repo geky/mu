@@ -1,4 +1,5 @@
 #include "mem.h"
+#include "var.h"
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -62,8 +63,7 @@ void vref_dec(void *m) {
         (*ref)--;
 
         if (*ref == 0) {
-            // TODO check for special var cases
-
+            vdestroy(ref + 1);
             vdealloc(ref);
         }
     }

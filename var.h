@@ -167,14 +167,15 @@ bool var_equals(var_t a, var_t b);
 // Returns a hash value of the given variable. 
 hash_t var_hash(var_t var);
 
-// Cleans up memory of a variable
-void var_destroy(var_t var);
-
 // Returns a string representation of the variable
 var_t var_repr(var_t v);
 
 // Prints variable to stdout for debugging
 void var_print(var_t v);
+
+
+// Cleans up memory of a variable
+void vdestroy(void *);
 
 
 #endif

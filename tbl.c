@@ -47,14 +47,10 @@ tbl_t *tblp_create(uint16_t size) {
     return tbl;
 }
 
-void tbl_destroy(var_t v) {
-    tblp_destroy(v.tbl);
-}
-
-void tblp_destroy(tbl_t *tbl) {
+// Called by garbage collector to clean up
+void tbl_destroy(void *m) {
+    tbl_t *tbl = m;
     int i;
-
-    tbl = tblp_readp(tbl);
 
     for (i=0; i <= tbl->mask; i++) {
         var_t k = tbl_getkey(tbl, i);

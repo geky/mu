@@ -47,8 +47,9 @@ struct tbl {
 // which is used as its handle in a var
 var_t tbl_create(uint16_t size);
 tbl_t *tblp_create(uint16_t size);
-void tbl_destroy(var_t);
-void tblp_destroy(tbl_t *);
+
+// Called by garbage collector to clean up
+void tbl_destroy(void *);
 
 // Recursively looks up a key in the table
 // returns either that value or null
