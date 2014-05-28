@@ -70,6 +70,8 @@ void tbl_destroy(void *m) {
 // Recursively looks up a key in the table
 // returns either that value or null
 var_t tbl_lookup(var_t v, var_t key) {
+    assert(var_istbl(v)); // TODO error on non-tables
+
     return tblp_lookup(v.tbl, key);
 }
 
@@ -183,6 +185,8 @@ static void tbl_resize(tbl_t *tbl, uint16_t size) {
 // sets a value in the table with the given key
 // without decending down the tail chain
 void tbl_assign(var_t v, var_t key, var_t val) {
+    assert(var_istbl(v)); // TODO error on non-tables
+
     tblp_assign(v.tbl, key, val);
 }
 
@@ -238,7 +242,8 @@ void tblp_assign(tbl_t *tbl, var_t key, var_t val) {
 // sets a value in the table with the given key
 // decends down the tail chain until its found
 void tbl_set(var_t v, var_t key, var_t val) {
-    assert(!v.ro); // TODO error on const tbl
+    assert(var_istbl(v)); // TODO error on non-tables
+
     tblp_set(v.tbl, key, val);
 }
 
@@ -310,7 +315,7 @@ void tblp_set(tbl_t *tbl, var_t key, var_t val) {
 
 // Returns a string representation of the table
 var_t tbl_repr(var_t v) {
-    tbl_t *tbl = v.tbl;
+    tbl_t *tbl = tblp_readp(v.tbl);
     unsigned int size = 2;
     int i, j;
 
