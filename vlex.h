@@ -8,25 +8,17 @@
 #define V_LEX
 
 #include "var.h"
+#include "vparse.h"
 
-
-struct vlex {
-    str_t *off;
-    str_t *end;
-    ref_t *ref;
-};
-
-// Error handling
-void verror(struct vlex *ls, const char *s);
 
 // Performs lexical analysis on the passed string
-// Value is stored in lval and its type is returned
-int vlex(var_t *lval, struct vlex *ls);
+// Value is stored in val and a token's type is returned
+int vlex(struct vstate *);
 
 
 // Lookup table of lex functions based 
 // only on first character of token
-extern int (* const vlex_a[256])(var_t *lval, struct vlex *);
+extern int (* const vlex_a[256])(struct vstate *);
 
 
 #endif

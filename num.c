@@ -92,7 +92,7 @@ var_t num_parse(str_t **off, str_t *end) {
     v.num = 0;
 
     while (str < end) {
-        w = num_a[*str++];
+        w = num_a[*str];
 
         if (w >= base.radix) {
             if (w == '.')
@@ -103,6 +103,7 @@ var_t num_parse(str_t **off, str_t *end) {
                 goto done;
         }
 
+        str++;
         v.num *= base.radix;
         v.num += w;
     }
@@ -113,7 +114,7 @@ fraction:
     scale = 1.0;
 
     while (str < end) {
-        w = num_a[*str++];
+        w = num_a[*str];
 
         if (w >= base.radix) {
             if (w == base.exp)
@@ -122,6 +123,7 @@ fraction:
                 goto done;
         }
 
+        str++;
         scale /= base.radix;
         v.num += scale * w;
     }
@@ -142,13 +144,14 @@ exp:
     }
 
     while (str < end) {
-        w = num_a[*str++];
+        w = num_a[*str];
 
         if (w >= base.radix) {
             v.num *= pow(base.radix, sign*scale);
             goto done;
         }
 
+        str++;
         scale *= base.radix;
         scale += w;
     }

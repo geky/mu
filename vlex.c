@@ -1,45 +1,40 @@
 #include "vlex.h"
 
-#include "v.tab.h"
+#include "vparse.h"
 #include "num.h"
 #include "str.h"
 
 #include <assert.h>
 
 
-// Error handling
-void verror(struct vlex *ls, const char *s) {
-    assert(false); // TODO: errors: syntax error
-}
-
 // Definitions of keywords
-static int kw_none(var_t *lval, struct vlex *ls) {
-    (*ls->ref)++;
-    return IDENT;
+static int kw_none(struct vstate *vs) {
+    (*vs->ref)++;
+    return VTOK_IDENT;
 }
 
-static int kw_fn(var_t *lval, struct vlex *ls) {
-    //                       already read 'f'
-    if (lval->len == 2 && lval->str[1] == 'n')
-        return FN;
+static int kw_fn(struct vstate *vs) {
+    //                           already read 'f'
+    if (vs->val.len == 2 && vs->val.str[1] == 'n')
+        return VTOK_FN;
     else
-        return kw_none(lval, ls);
+        return kw_none(vs);
 }
 
-static int kw_return(var_t *lval, struct vlex *ls) {
-    //                       already read 'r'
-    if (lval->len == 6 && lval->str[1] == 'e'
-                       && lval->str[2] == 't'
-                       && lval->str[3] == 'u'
-                       && lval->str[4] == 'r'
-                       && lval->str[5] == 'n')
-        return RETURN;
+static int kw_return(struct vstate *vs) {
+    //                           already read 'r'
+    if (vs->val.len == 6 && vs->val.str[1] == 'e'
+                         && vs->val.str[2] == 't'
+                         && vs->val.str[3] == 'u'
+                         && vs->val.str[4] == 'r'
+                         && vs->val.str[5] == 'n')
+        return VTOK_RETURN;
     else
-        return kw_none(lval, ls);
+        return kw_none(vs);
 }
     
 
-static int (* const kw_a[64])(var_t *lval, struct vlex *ls) = {
+static int (* const kw_a[64])(struct vstate *) = {
 /*  @  A  B  C */         0,   kw_none,   kw_none,   kw_none,
 /*  D  E  F  G */   kw_none,   kw_none,   kw_none,   kw_none,
 /*  H  I  J  K */   kw_none,   kw_none,   kw_none,   kw_none,
@@ -60,24 +55,24 @@ static int (* const kw_a[64])(var_t *lval, struct vlex *ls) = {
 
 
 // Definitions of various tokens
-static int lex_num(var_t *lval, struct vlex *ls);
-static int lex_str(var_t *lval, struct vlex *ls);
+static int vl_num(struct vstate *);
+static int vl_str(struct vstate *);
 
-static int lex_bad(var_t *lval, struct vlex *ls) {
+static int vl_bad(struct vstate *vs) {
     assert(false); //TODO: errors: bad parse
 }
 
-static int lex_ws(var_t *lval, struct vlex *ls) {
-    ls->off++;
-    return vlex(lval, ls);
+static int vl_ws(struct vstate *vs) {
+    vs->off++;
+    return vlex(vs);
 }
 
-static int lex_com(var_t *lval, struct vlex *ls) {
-    ls->off++;
+static int vl_com(struct vstate *vs) {
+    vs->off++;
 
-    if (ls->off >= ls->end || *ls->off != '`') {
-        while (ls->off < ls->end) {
-            unsigned char n = *ls->off++;
+    if (vs->off >= vs->end || *vs->off != '`') {
+        while (vs->off < vs->end) {
+            unsigned char n = *vs->off++;
             if (n == '`' || n == '\n')
                 break;
         }
@@ -85,137 +80,136 @@ static int lex_com(var_t *lval, struct vlex *ls) {
         int count = 1;
         int seen = 0;
 
-        while (ls->off < ls->end) {
-            if (*ls->off++ != '`')
+        while (vs->off < vs->end) {
+            if (*vs->off++ != '`')
                 break;
 
             count++;
         }
 
-        while (ls->off < ls->end && seen < count) {
-            if (*ls->off++ == '`')
+        while (vs->off < vs->end && seen < count) {
+            if (*vs->off++ == '`')
                 seen++;
             else
                 seen = 0;
         }
     }
 
-    return vlex(lval, ls);
+    return vlex(vs);
 }   
 
-static int lex_op(var_t *lval, struct vlex *ls) {
-    ls->off++;
-    return OP;
+static int vl_op(struct vstate *vs) {
+    vs->off++;
+    return VTOK_OP;
 }
 
 
-static int lex_kw(var_t *lval, struct vlex *ls) {
-    str_t *kw = ls->off;
+static int vl_kw(struct vstate *vs) {
+    str_t *kw = vs->off;
 
     do {
-        void *w = vlex_a[*ls->off++];
-        if (w != lex_kw && w != lex_num)
+        void *w = vlex_a[*vs->off++];
+        if (w != vl_kw && w != vl_num)
             break;
-    } while (ls->off < ls->end);
+    } while (vs->off < vs->end);
 
-    lval->ref = ls->ref;
-    lval->type = TYPE_STR;
-    lval->off = kw - lval->str;
-    lval->len = ls->off - kw;
+    
+    str_t *str = (str_t*)(vs->ref + 1);
+    vs->val = vstr(str, kw - str, vs->off - kw);
 
-    return kw_a[0x3f & *kw](lval, ls);
+    return kw_a[0x3f & *kw](vs);
 }
 
-static int lex_tok(var_t *lval, struct vlex *ls) {
-    return *ls->off++;
+static int vl_tok(struct vstate *vs) {
+    return *vs->off++;
 }
 
-static int lex_num(var_t *lval, struct vlex *ls) {
-    *lval = num_parse(&ls->off, ls->end);
-    return NUM;
+static int vl_num(struct vstate *vs) {
+    vs->val = num_parse(&vs->off, vs->end);
+    return VTOK_NUM;
 }
 
-static int lex_str(var_t *lval, struct vlex *ls) {
-    *lval = str_parse(&ls->off, ls->end);
-    return STR;
+static int vl_str(struct vstate *vs) {
+    vs->val = str_parse(&vs->off, vs->end);
+    return VTOK_STR;
 }
 
 
 
 // Lookup table of lex functions based 
 // only on first character of token
-int (* const vlex_a[256])(var_t *lval, struct vlex *) = {
-/* 00 01 02 03 */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* 04 05 06 \a */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* \b \t \n \v */   lex_bad,   lex_ws,    lex_tok,   lex_ws,
-/* \f \r 0e 0f */   lex_ws,    lex_ws,    lex_bad,   lex_bad,
-/* 10 11 12 13 */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* 14 15 16 17 */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* 18 19 1a 1b */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* 1c 1d 1e 1f */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/*     !  "  # */   lex_ws,    lex_op,    lex_str,   lex_op,
-/*  $  %  &  ' */   lex_op,    lex_op,    lex_op,    lex_str,
-/*  (  )  *  + */   lex_tok,   lex_tok,   lex_op,    lex_op,
-/*  ,  -  .  / */   lex_tok,   lex_op,    lex_op,    lex_op,
-/*  0  1  2  3 */   lex_num,   lex_num,   lex_num,   lex_num,
-/*  4  5  6  7 */   lex_num,   lex_num,   lex_num,   lex_num,
-/*  8  9  :  ; */   lex_num,   lex_num,   lex_op,    lex_tok,
-/*  <  =  >  ? */   lex_op,    lex_op,    lex_op,    lex_op,
-/*  @  A  B  C */   lex_op,    lex_kw,    lex_kw,    lex_kw,
-/*  D  E  F  G */   lex_kw,    lex_kw,    lex_kw,    lex_kw,
-/*  H  I  J  K */   lex_kw,    lex_kw,    lex_kw,    lex_kw,
-/*  L  M  N  O */   lex_kw,    lex_kw,    lex_kw,    lex_kw,
-/*  P  Q  R  S */   lex_kw,    lex_kw,    lex_kw,    lex_kw,
-/*  T  U  V  W */   lex_kw,    lex_kw,    lex_kw,    lex_kw,
-/*  X  Y  Z  [ */   lex_kw,    lex_kw,    lex_kw,    lex_tok,
-/*  \  ]  ^  _ */   lex_tok,   lex_tok,   lex_op,    lex_kw,
-/*  `  a  b  c */   lex_com,   lex_kw,    lex_kw,    lex_kw,   
-/*  d  e  f  g */   lex_kw,    lex_kw,    lex_kw,    lex_kw,   
-/*  h  i  j  k */   lex_kw,    lex_kw,    lex_kw,    lex_kw,   
-/*  l  m  n  o */   lex_kw,    lex_kw,    lex_kw,    lex_kw,   
-/*  p  q  r  s */   lex_kw,    lex_kw,    lex_kw,    lex_kw,   
-/*  t  u  v  w */   lex_kw,    lex_kw,    lex_kw,    lex_kw,   
-/*  x  y  z  { */   lex_kw,    lex_kw,    lex_kw,    lex_tok,
-/*  |  }  ~ 7f */   lex_op,    lex_tok,   lex_op,    lex_bad,
-/* 80 81 82 83 */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* 84 85 86 87 */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* 88 89 8a 8b */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* 8c 8d 8e 8f */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* 90 91 92 93 */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* 94 95 96 97 */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* 98 99 9a 9b */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* 9c 9d 9e 9f */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* a0 a1 a2 a3 */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* a4 a5 a6 a7 */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* a8 a9 aa ab */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* ac ad ae af */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* b0 b1 b2 b3 */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* b4 b5 b6 b7 */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* b8 b9 ba bb */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* bc bd be bf */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* c0 c1 c2 c3 */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* c4 c5 c6 c7 */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* c8 c9 ca cb */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* cc cd ce cf */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* d0 d1 d2 d3 */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* d4 d5 d6 d7 */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* d8 d9 da db */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* dc dd de df */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* e0 e1 e2 e3 */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* e4 e5 e6 e7 */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* e8 e9 ea eb */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* ec ed ee ef */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* f0 f1 f2 f3 */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* f4 f5 f6 f7 */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* f8 f9 fa fb */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
-/* fc fd fe ff */   lex_bad,   lex_bad,   lex_bad,   lex_bad,
+int (* const vlex_a[256])(struct vstate *) = {
+/* 00 01 02 03 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* 04 05 06 \a */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* \b \t \n \v */   vl_bad,   vl_ws,    vl_tok,   vl_ws,
+/* \f \r 0e 0f */   vl_ws,    vl_ws,    vl_bad,   vl_bad,
+/* 10 11 12 13 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* 14 15 16 17 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* 18 19 1a 1b */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* 1c 1d 1e 1f */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/*     !  "  # */   vl_ws,    vl_op,    vl_str,   vl_op,
+/*  $  %  &  ' */   vl_op,    vl_op,    vl_op,    vl_str,
+/*  (  )  *  + */   vl_tok,   vl_tok,   vl_op,    vl_op,
+/*  ,  -  .  / */   vl_tok,   vl_op,    vl_op,    vl_op,
+/*  0  1  2  3 */   vl_num,   vl_num,   vl_num,   vl_num,
+/*  4  5  6  7 */   vl_num,   vl_num,   vl_num,   vl_num,
+/*  8  9  :  ; */   vl_num,   vl_num,   vl_op,    vl_tok,
+/*  <  =  >  ? */   vl_op,    vl_op,    vl_op,    vl_op,
+/*  @  A  B  C */   vl_op,    vl_kw,    vl_kw,    vl_kw,
+/*  D  E  F  G */   vl_kw,    vl_kw,    vl_kw,    vl_kw,
+/*  H  I  J  K */   vl_kw,    vl_kw,    vl_kw,    vl_kw,
+/*  L  M  N  O */   vl_kw,    vl_kw,    vl_kw,    vl_kw,
+/*  P  Q  R  S */   vl_kw,    vl_kw,    vl_kw,    vl_kw,
+/*  T  U  V  W */   vl_kw,    vl_kw,    vl_kw,    vl_kw,
+/*  X  Y  Z  [ */   vl_kw,    vl_kw,    vl_kw,    vl_tok,
+/*  \  ]  ^  _ */   vl_tok,   vl_tok,   vl_op,    vl_kw,
+/*  `  a  b  c */   vl_com,   vl_kw,    vl_kw,    vl_kw,   
+/*  d  e  f  g */   vl_kw,    vl_kw,    vl_kw,    vl_kw,   
+/*  h  i  j  k */   vl_kw,    vl_kw,    vl_kw,    vl_kw,   
+/*  l  m  n  o */   vl_kw,    vl_kw,    vl_kw,    vl_kw,   
+/*  p  q  r  s */   vl_kw,    vl_kw,    vl_kw,    vl_kw,   
+/*  t  u  v  w */   vl_kw,    vl_kw,    vl_kw,    vl_kw,   
+/*  x  y  z  { */   vl_kw,    vl_kw,    vl_kw,    vl_tok,
+/*  |  }  ~ 7f */   vl_op,    vl_tok,   vl_op,    vl_bad,
+/* 80 81 82 83 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* 84 85 86 87 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* 88 89 8a 8b */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* 8c 8d 8e 8f */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* 90 91 92 93 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* 94 95 96 97 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* 98 99 9a 9b */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* 9c 9d 9e 9f */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* a0 a1 a2 a3 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* a4 a5 a6 a7 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* a8 a9 aa ab */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* ac ad ae af */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* b0 b1 b2 b3 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* b4 b5 b6 b7 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* b8 b9 ba bb */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* bc bd be bf */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* c0 c1 c2 c3 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* c4 c5 c6 c7 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* c8 c9 ca cb */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* cc cd ce cf */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* d0 d1 d2 d3 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* d4 d5 d6 d7 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* d8 d9 da db */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* dc dd de df */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* e0 e1 e2 e3 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* e4 e5 e6 e7 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* e8 e9 ea eb */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* ec ed ee ef */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* f0 f1 f2 f3 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* f4 f5 f6 f7 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* f8 f9 fa fb */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
+/* fc fd fe ff */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
 };
 
 // Performs lexical analysis on the passed string
 // Value is stored in lval and its type is returned
-int vlex(var_t *lval, struct vlex *ls) {
-    if (ls->off < ls->end)
-        return vlex_a[*ls->off](lval, ls);
+int vlex(struct vstate *vs) {
+    if (vs->off < vs->end)
+        return vlex_a[*vs->off](vs);
     else
         return 0;
 }

@@ -1,6 +1,7 @@
 #include "fn.h"
 
 #include "mem.h"
+#include "vlex.h"
 
 #include <assert.h>
 
@@ -55,8 +56,13 @@ var_t fnp_call(fn_t *f, tbl_t *args) {
     scope->tail = f->scope;
 
 
-    //return vparse(f->code, scope);
-    return vnull;
+    struct vstate *vs = valloc(sizeof(struct vstate));
+    vs->off = var_str(f->code);
+    vs->end = vs->off + f->code.len;
+    vs->ref = var_ref(f->code);
+    vs->scope = scope;
+
+    return vparse(vs);
 }
 
 
