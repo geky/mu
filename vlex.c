@@ -13,6 +13,7 @@ static int kw_none(struct vstate *vs) {
     return VTOK_IDENT;
 }
 
+// TODO ALL OF THESE ARE BROKEN: vs->val.str[ind] != string ind
 static int kw_fn(struct vstate *vs) {
     //                           already read 'f'
     if (vs->val.len == 2 && vs->val.str[1] == 'n')
@@ -115,7 +116,7 @@ static int vl_kw(struct vstate *vs) {
 
     
     str_t *str = (str_t*)(vs->ref + 1);
-    vs->val = vstr(str, kw - str, vs->off - kw);
+    vs->val = vstr(str, kw-str, vs->off-kw - 1);
 
     return kw_a[0x3f & *kw](vs);
 }

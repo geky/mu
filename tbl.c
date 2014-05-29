@@ -199,7 +199,7 @@ void tblp_assign(tbl_t *tbl, var_t key, var_t val) {
     if (tbl_ncap(tbl->len + tbl->nulls + 1) > tbl->mask + 1)
         tbl_resize(tbl, tbl->len+1);
      
-    hash_t i = var_hash(val);
+    hash_t i = var_hash(key);
 
     for (;; i = tbl_next(i)) {
         hash_t mi = i & tbl->mask;

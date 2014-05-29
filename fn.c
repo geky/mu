@@ -37,7 +37,7 @@ var_t fn_call(var_t v, tbl_t *args) {
 }
 
 var_t fnp_call(fn_t *f, tbl_t *args) {
-    tbl_t *scope = tblp_create(f->alen);
+    tbl_t *scope = tblp_create(f->alen + 2);
     var_t param;
     int i;
 
