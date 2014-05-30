@@ -33,44 +33,23 @@ static void vexpect(struct vstate *vs, vtok_t tok) {
 // A recursive descent parser implementation of
 // V's grammar. Each nonterminal is represented 
 // by one of the following functions.
-static void vp_primep(struct vstate *vs);
-static void vp_primsp(struct vstate *vs);
 static void vp_primary(struct vstate *vs);
 static void vp_explist(struct vstate *vs);
 static void vp_expression(struct vstate *vs);
 
-static void vp_primep(struct vstate *vs) {
-    switch (vs->tok) {
-        case '\n':      vp_primep(vnext(vs));
-                        return;
-
-        case ')':       return;
-
-        default:        verror(vs);
-    }
-}
-
-static void vp_primsp(struct vstate *vs) {
-    switch (vs->tok) {
-        case '\n':      vp_primsp(vnext(vs));
-                        return;
-
-        default:        vp_primary(vs);
-                        vp_primep(vnext(vs));
-                        return;
-    }
-}
 
 static void vp_primary(struct vstate *vs) {
     switch (vs->tok) {
-        case VTOK_IDENT:
-                        vs->val = tblp_lookup(vs->scope, vs->val);
+        case VT_IDENT:  vs->val = tblp_lookup(vs->scope, vs->val);
                         return;
 
-        case VTOK_NUM:
-        case VTOK_STR:  return;
+        case VT_NUM:
+        case VT_STR:    return;
 
-        case '(':       vp_primsp(vnext(vs));
+        case '(':       vs->paren++;
+                        vp_primary(vnext(vs));
+                        vexpect(vs, ')');
+                        vs->paren--;
                         return;
 
         default:        verror(vs);
@@ -108,7 +87,10 @@ static void vp_expression(struct vstate *vs) {
 
 // Parses V source code and evaluates the result
 var_t vparse(struct vstate *vs) {
-    vp_expression(vnext(vs));
+    vs->paren = 0;
+    vs->tok = vlex(vs);
+
+    vp_expression(vs);
 
     return vs->val;
 }

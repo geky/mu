@@ -14,20 +14,20 @@
 typedef int vtok_t;
 
 enum vtok {
-    VTOK_END = 0,
-    VTOK_FN = 0x80,
-    VTOK_RETURN,
-    VTOK_IDENT,
-    VTOK_NUM,
-    VTOK_STR,
-    VTOK_OP,
-    VTOK_DOT,
-    VTOK_ASSIGN,
-    VTOK_SET,
-    VTOK_AND,
-    VTOK_OR,
-    VTOK_SPACE,
-    VTOK_TERM
+    VT_END = 0,
+    VT_FN = 0x80,
+    VT_RETURN,
+    VT_IDENT,
+    VT_NUM,
+    VT_STR,
+    VT_OP,
+    VT_DOT,
+    VT_ASSIGN,
+    VT_SET,
+    VT_AND,
+    VT_OR,
+    VT_SPACE,
+    VT_TERM
 };
 
 // State of a parse
@@ -37,8 +37,10 @@ struct vstate {
     ref_t *ref;
 
     tbl_t *scope;
-    vtok_t tok;
     var_t val;
+
+    uint8_t paren;
+    vtok_t tok;
 };
 
 

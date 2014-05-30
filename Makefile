@@ -3,7 +3,8 @@ TARGET = v
 CC = gcc
 
 SRC := var.c num.c str.c tbl.c fn.c
-SRC += mem.c main.c vparse.c vlex.c
+SRC += mem.c vparse.c vlex.c
+SRC += main.c
 OBJ := $(SRC:.c=.o)
 ASM := $(OBJ:.o=.s)
 

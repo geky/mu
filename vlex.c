@@ -1,64 +1,18 @@
 #include "vlex.h"
 
 #include "vparse.h"
+#include "var.h"
 #include "num.h"
 #include "str.h"
 
 #include <assert.h>
 
 
-// Definitions of keywords
-static int kw_none(struct vstate *vs) {
-    (*vs->ref)++;
-    return VTOK_IDENT;
-}
-
-// TODO ALL OF THESE ARE BROKEN: vs->val.str[ind] != string ind
-static int kw_fn(struct vstate *vs) {
-    //                           already read 'f'
-    if (vs->val.len == 2 && vs->val.str[1] == 'n')
-        return VTOK_FN;
-    else
-        return kw_none(vs);
-}
-
-static int kw_return(struct vstate *vs) {
-    //                           already read 'r'
-    if (vs->val.len == 6 && vs->val.str[1] == 'e'
-                         && vs->val.str[2] == 't'
-                         && vs->val.str[3] == 'u'
-                         && vs->val.str[4] == 'r'
-                         && vs->val.str[5] == 'n')
-        return VTOK_RETURN;
-    else
-        return kw_none(vs);
-}
-    
-
-static int (* const kw_a[64])(struct vstate *) = {
-/*  @  A  B  C */         0,   kw_none,   kw_none,   kw_none,
-/*  D  E  F  G */   kw_none,   kw_none,   kw_none,   kw_none,
-/*  H  I  J  K */   kw_none,   kw_none,   kw_none,   kw_none,
-/*  L  M  N  O */   kw_none,   kw_none,   kw_none,   kw_none,
-/*  P  Q  R  S */   kw_none,   kw_none,   kw_none,   kw_none,
-/*  T  U  V  W */   kw_none,   kw_none,   kw_none,   kw_none,
-/*  X  Y  Z  [ */   kw_none,   kw_none,   kw_none,         0,
-/*  \  ]  ^  _ */         0,         0,         0,   kw_none,
-/*  `  a  b  c */         0,   kw_none,   kw_none,   kw_none,  
-/*  d  e  f  g */   kw_none,   kw_none,   kw_fn,     kw_none,  
-/*  h  i  j  k */   kw_none,   kw_none,   kw_none,   kw_none,  
-/*  l  m  n  o */   kw_none,   kw_none,   kw_none,   kw_none,  
-/*  p  q  r  s */   kw_none,   kw_none,   kw_return, kw_none,  
-/*  t  u  v  w */   kw_none,   kw_none,   kw_none,   kw_none,  
-/*  x  y  z  { */   kw_none,   kw_none,   kw_none,         0,
-/*  |  }  ~ 7f */         0,         0,         0,         0,
-};
-
-
 // Definitions of various tokens
 static int vl_num(struct vstate *);
 static int vl_str(struct vstate *);
 
+__attribute__((noreturn))
 static int vl_bad(struct vstate *vs) {
     assert(false); //TODO: errors: bad parse
 }
@@ -101,11 +55,11 @@ static int vl_com(struct vstate *vs) {
 
 static int vl_op(struct vstate *vs) {
     vs->off++;
-    return VTOK_OP;
+    return VT_OP;
 }
 
-
 static int vl_kw(struct vstate *vs) {
+    str_t *str = (str_t *)(vs->ref + 1);
     str_t *kw = vs->off;
 
     do {
@@ -114,25 +68,35 @@ static int vl_kw(struct vstate *vs) {
             break;
     } while (vs->off < vs->end);
 
-    
-    str_t *str = (str_t*)(vs->ref + 1);
     vs->val = vstr(str, kw-str, vs->off-kw - 1);
 
-    return kw_a[0x3f & *kw](vs);
+
+    switch (*kw) {
+        case 'f': return str_equals(vs->val,vcstr("fn")) ? VT_FN : VT_IDENT;
+        case 'r': return str_equals(vs->val,vcstr("return")) ? VT_RETURN : VT_IDENT;
+        default: return VT_IDENT;
+    }
 }
 
 static int vl_tok(struct vstate *vs) {
     return *vs->off++;
 }
 
+static int vl_nl(struct vstate *vs) {
+    if (vs->paren)
+        return vl_ws(vs);
+    else
+        return vl_tok(vs);
+}       
+
 static int vl_num(struct vstate *vs) {
     vs->val = num_parse(&vs->off, vs->end);
-    return VTOK_NUM;
+    return VT_NUM;
 }
 
 static int vl_str(struct vstate *vs) {
     vs->val = str_parse(&vs->off, vs->end);
-    return VTOK_STR;
+    return VT_STR;
 }
 
 
@@ -142,7 +106,7 @@ static int vl_str(struct vstate *vs) {
 int (* const vlex_a[256])(struct vstate *) = {
 /* 00 01 02 03 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
 /* 04 05 06 \a */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
-/* \b \t \n \v */   vl_bad,   vl_ws,    vl_tok,   vl_ws,
+/* \b \t \n \v */   vl_bad,   vl_ws,    vl_nl,    vl_ws,
 /* \f \r 0e 0f */   vl_ws,    vl_ws,    vl_bad,   vl_bad,
 /* 10 11 12 13 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
 /* 14 15 16 17 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,

@@ -13,16 +13,9 @@
 #define tbl_maxlen ((1<<16)-1)
 
 
-// Table pointers contain a ro flag
-// can't simply be dereferenced
-union tbl_ptr {
-    tbl_t *tbl;
-    bool ro : 1;
-};
-
 // Each table is composed of two arrays 
 // each can hide as a range with an offset
-union tbl_array {
+union tblarr {
     uint32_t bits;
     bool range : 1;
 
@@ -37,8 +30,8 @@ struct tbl {
     uint16_t len;   // count of keys in use
     int32_t mask;   // size of entries - 1
 
-    union tbl_array keys; // array of keys
-    union tbl_array vals; // array of values
+    union tblarr keys; // array of keys
+    union tblarr vals; // array of values
 };
 
 
@@ -74,29 +67,25 @@ var_t tbl_repr(var_t v);
 
 // accessing table pointers with the ro flag
 static inline bool tblp_isro(tbl_t *tbl) {
-    union tbl_ptr tblp = { tbl };
-    return tblp.ro;
+    return 0x1 & (uint32_t)tbl;
 }
 
 static inline tbl_t *tblp_readp(tbl_t *tbl) {
-    union tbl_ptr tblp = { tbl };
-    tblp.ro = 0;
-
-    return tblp.tbl;
+    uint32_t bits = (uint32_t)tbl;
+    bits &= ~0x1;
+    return (tbl_t *)bits;
 }
 
 static inline tbl_t *tblp_writep(tbl_t *tbl) {
-    union tbl_ptr tblp = { tbl };
-    assert(!tblp.ro); // TODO error on const tbl
-
-    return tblp.tbl;
+    assert(!tblp_isro(tbl)); // TODO error on const tbl
+    return tbl;
 }
 
 
 // Table array accessing
 var_t *tbl_realizerange(uint16_t off, uint16_t len, int32_t cap);
 
-static inline var_t tbl_getarray(tbl_t *tbl, uint32_t i, union tbl_array *a) {
+static inline var_t tbl_getarray(tbl_t *tbl, uint32_t i, union tblarr *a) {
     if (a->range) {
         if (i - a->off < tbl->len + tbl->nulls)
             return vnum(i-a->off);
@@ -107,7 +96,7 @@ static inline var_t tbl_getarray(tbl_t *tbl, uint32_t i, union tbl_array *a) {
     return a->array[i];
 }
 
-static inline void tbl_setarray(tbl_t *tbl, uint32_t i, var_t v, union tbl_array *a) {
+static inline void tbl_setarray(tbl_t *tbl, uint32_t i, var_t v, union tblarr *a) {
     if (a->range) {
         if (v.type == TYPE_NUM && num_equals(v, vnum(i))) {
             if (i - a->off <= tbl->len + tbl->nulls) {

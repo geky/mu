@@ -41,8 +41,8 @@ tbl_t *tblp_create(uint16_t size) {
     tbl->nulls = 0;
     tbl->len = 0;
     tbl->mask = cap - 1;
-    tbl->keys = (union tbl_array){0x1};
-    tbl->vals = (union tbl_array){0x1};
+    tbl->keys = (union tblarr){0x1};
+    tbl->vals = (union tblarr){0x1};
 
     return tbl;
 }
