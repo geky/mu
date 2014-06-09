@@ -11,6 +11,26 @@
 #include "vparse.h"
 
 
+// Token representation in V
+// single character tokens are also used
+// so enum spans lower range of ascii
+typedef int vtok_t;
+
+enum vtok {
+    VT_END      = 0,
+    VT_FN       = 1,
+    VT_RETURN   = 2,
+    VT_IDENT    = 3,
+    VT_NUM      = 4,
+    VT_STR      = 5,
+    VT_OP       = 6,
+    VT_DOT      = 7,
+    VT_SET      = 8,
+    VT_AND      = 9,
+    VT_OR       = 10,
+    VT_SEP      = 11
+};
+
 // Performs lexical analysis on the passed string
 // Value is stored in val and a token's type is returned
 int vlex(struct vstate *);

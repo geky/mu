@@ -37,7 +37,7 @@ typedef const uint8_t str_t;
 typedef double num_t;
 typedef struct tbl tbl_t;
 typedef struct fn fn_t;
-typedef struct var bfn_t(tbl_t *);
+typedef struct var bfn_t(struct var);
 
 // Actual var type declariation
 typedef struct var {
@@ -172,6 +172,15 @@ var_t var_repr(var_t v);
 
 // Prints variable to stdout for debugging
 void var_print(var_t v);
+
+// Table related functions performed on variables
+var_t var_lookup(var_t v, var_t key);
+void var_assign(var_t v, var_t key, var_t val);
+void var_set(var_t v, var_t key, var_t val);
+void var_add(var_t v, var_t val);
+
+// Function calls performed on variables
+var_t var_call(var_t v, var_t args);
 
 
 // Cleans up memory of a variable

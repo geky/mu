@@ -39,25 +39,24 @@ struct tbl {
 // Each table is preceeded with a reference count
 // which is used as its handle in a var
 var_t tbl_create(uint16_t size);
-tbl_t *tblp_create(uint16_t size);
 
 // Called by garbage collector to clean up
 void tbl_destroy(void *);
 
 // Recursively looks up a key in the table
 // returns either that value or null
-var_t tbl_lookup(var_t, var_t key);
-var_t tblp_lookup(tbl_t *, var_t key);
+var_t tbl_lookup(tbl_t *, var_t key);
 
 // Sets a value in the table with the given key
 // decends down the tail chain until its found
-void tbl_set(var_t, var_t key, var_t val);
-void tblp_set(tbl_t *, var_t key, var_t val);
+void tbl_set(tbl_t *, var_t key, var_t val);
 
 // Sets a value in the table with the given key
 // without decending down the tail chain
-void tbl_assign(var_t, var_t key, var_t val);
-void tblp_assign(tbl_t *, var_t key, var_t val);
+void tbl_assign(tbl_t *, var_t key, var_t val);
+
+// Sets the next index in the table with the value
+void tbl_add(tbl_t *, var_t val);
 
 
 // Returns a string representation of the table
@@ -65,7 +64,27 @@ var_t tbl_repr(var_t v);
 
 
 
-// accessing table pointers with the ro flag
+// Macro for iterating through a table in c
+// Assign names for k and v, and pass in the 
+// block to execute for each pair in tbl
+#define tbl_for(k, v, tbl, block) {             \
+    var_t k;                                    \
+    var_t v;                                    \
+    tbl_t *_t = tbl;                            \
+    int _i;                                     \
+                                                \
+    for (_i=0; _i <= _t->mask; _i++) {          \
+        k = tbl_getkey(_t, _i);                 \
+        v = tbl_getval(_t, _i);                 \
+                                                \
+        if (!var_isnull(k) && !var_isnull(v)) { \
+            block                               \
+        }                                       \
+    }                                           \
+}
+
+
+// Accessing table pointers with the ro flag
 static inline bool tblp_isro(tbl_t *tbl) {
     return 0x1 & (uint32_t)tbl;
 }

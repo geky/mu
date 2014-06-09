@@ -205,8 +205,8 @@ var_t str_repr(var_t v) {
                 case '\0': *s++ = '0'; break;
                 default:
                     *s++ = 'x';
-                    *s++ = (*str/16 < 10) ? ('0' + *str/16) : ('a' + *str/16);
-                    *s++ = (*str%16 < 10) ? ('0' + *str%16) : ('a' + *str%16);
+                    *s++ = (*str/16 < 10) ? ('0' + *str/16) : ('a'-10 + *str/16);
+                    *s++ = (*str%16 < 10) ? ('0' + *str%16) : ('a'-10 + *str%16);
                     break;
             }
         } else {

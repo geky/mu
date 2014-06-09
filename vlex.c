@@ -8,14 +8,22 @@
 #include <assert.h>
 
 
-// Definitions of various tokens
-static int vl_num(struct vstate *);
-static int vl_str(struct vstate *);
-
+// Lexer definitions for V's tokens
 __attribute__((noreturn))
 static int vl_bad(struct vstate *vs) {
     assert(false); //TODO: errors: bad parse
 }
+
+static int vl_ws(struct vstate *vs);
+static int vl_com(struct vstate *vs);
+static int vl_op(struct vstate *vs);
+static int vl_kw(struct vstate *vs);
+static int vl_tok(struct vstate *vs);
+static int vl_sep(struct vstate *vs);
+static int vl_nl(struct vstate *vs);
+static int vl_num(struct vstate *vs);
+static int vl_str(struct vstate *vs);
+
 
 static int vl_ws(struct vstate *vs) {
     vs->off++;
@@ -54,39 +62,59 @@ static int vl_com(struct vstate *vs) {
 }   
 
 static int vl_op(struct vstate *vs) {
-    vs->off++;
+    str_t *str = (str_t *)(vs->ref + 1);
+    str_t *op = vs->off++;
+
+    while (vs->off < vs->end) {
+        void *w = vlex_a[*vs->off];
+
+        if (w != vl_op)
+            break;
+
+        vs->off++;
+    }
+
+    vs->val = vstr(str, op-str, vs->off-op);
+
+    if (str_equals(vs->val,vcstr(":"))) return VT_SET;
+    if (str_equals(vs->val,vcstr("="))) return VT_SET;
     return VT_OP;
 }
 
 static int vl_kw(struct vstate *vs) {
     str_t *str = (str_t *)(vs->ref + 1);
-    str_t *kw = vs->off;
+    str_t *kw = vs->off++;
 
-    do {
-        void *w = vlex_a[*vs->off++];
+    while (vs->off < vs->end) {
+        void *w = vlex_a[*vs->off];
+
         if (w != vl_kw && w != vl_num)
             break;
-    } while (vs->off < vs->end);
 
-    vs->val = vstr(str, kw-str, vs->off-kw - 1);
+        vs->off++;
+    };
 
+    vs->val = vstr(str, kw-str, vs->off-kw);
 
-    switch (*kw) {
-        case 'f': return str_equals(vs->val,vcstr("fn")) ? VT_FN : VT_IDENT;
-        case 'r': return str_equals(vs->val,vcstr("return")) ? VT_RETURN : VT_IDENT;
-        default: return VT_IDENT;
-    }
+    if (str_equals(vs->val,vcstr("fn"))) return VT_FN;
+    if (str_equals(vs->val,vcstr("return"))) return VT_RETURN;
+    return VT_IDENT;
 }
 
 static int vl_tok(struct vstate *vs) {
     return *vs->off++;
 }
 
+static int vl_sep(struct vstate *vs) {
+    vs->off++;
+    return VT_SEP;
+}
+
 static int vl_nl(struct vstate *vs) {
     if (vs->paren)
         return vl_ws(vs);
     else
-        return vl_tok(vs);
+        return vl_sep(vs);
 }       
 
 static int vl_num(struct vstate *vs) {
@@ -115,10 +143,10 @@ int (* const vlex_a[256])(struct vstate *) = {
 /*     !  "  # */   vl_ws,    vl_op,    vl_str,   vl_op,
 /*  $  %  &  ' */   vl_op,    vl_op,    vl_op,    vl_str,
 /*  (  )  *  + */   vl_tok,   vl_tok,   vl_op,    vl_op,
-/*  ,  -  .  / */   vl_tok,   vl_op,    vl_op,    vl_op,
+/*  ,  -  .  / */   vl_sep,   vl_op,    vl_op,    vl_op,
 /*  0  1  2  3 */   vl_num,   vl_num,   vl_num,   vl_num,
 /*  4  5  6  7 */   vl_num,   vl_num,   vl_num,   vl_num,
-/*  8  9  :  ; */   vl_num,   vl_num,   vl_op,    vl_tok,
+/*  8  9  :  ; */   vl_num,   vl_num,   vl_op,    vl_sep,
 /*  <  =  >  ? */   vl_op,    vl_op,    vl_op,    vl_op,
 /*  @  A  B  C */   vl_op,    vl_kw,    vl_kw,    vl_kw,
 /*  D  E  F  G */   vl_kw,    vl_kw,    vl_kw,    vl_kw,

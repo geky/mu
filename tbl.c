@@ -30,10 +30,6 @@ static inline hash_t tbl_next(hash_t i) {
 // Each table is preceeded with a reference count
 // which is used as its handle in a var
 var_t tbl_create(uint16_t size) {
-    return vtbl(tblp_create(size));
-}
-
-tbl_t *tblp_create(uint16_t size) {
     tbl_t *tbl = vref_alloc(sizeof(tbl_t));
     int32_t cap = tbl_npw2(tbl_ncap(size));
 
@@ -44,7 +40,7 @@ tbl_t *tblp_create(uint16_t size) {
     tbl->keys = (union tblarr){0x1};
     tbl->vals = (union tblarr){0x1};
 
-    return tbl;
+    return vtbl(tbl);
 }
 
 // Called by garbage collector to clean up
@@ -69,13 +65,7 @@ void tbl_destroy(void *m) {
 
 // Recursively looks up a key in the table
 // returns either that value or null
-var_t tbl_lookup(var_t v, var_t key) {
-    assert(var_istbl(v)); // TODO error on non-tables
-
-    return tblp_lookup(v.tbl, key);
-}
-
-var_t tblp_lookup(tbl_t *tbl, var_t key) {
+var_t tbl_lookup(tbl_t *tbl, var_t key) {
     tbl = tblp_readp(tbl);
 
     if (var_isnull(key))
@@ -184,13 +174,7 @@ static void tbl_resize(tbl_t *tbl, uint16_t size) {
 
 // sets a value in the table with the given key
 // without decending down the tail chain
-void tbl_assign(var_t v, var_t key, var_t val) {
-    assert(var_istbl(v)); // TODO error on non-tables
-
-    tblp_assign(v.tbl, key, val);
-}
-
-void tblp_assign(tbl_t *tbl, var_t key, var_t val) {
+void tbl_assign(tbl_t *tbl, var_t key, var_t val) {
     tbl = tblp_writep(tbl);
 
     if (var_isnull(key))
@@ -239,15 +223,15 @@ void tblp_assign(tbl_t *tbl, var_t key, var_t val) {
     }
 }
 
-// sets a value in the table with the given key
-// decends down the tail chain until its found
-void tbl_set(var_t v, var_t key, var_t val) {
-    assert(var_istbl(v)); // TODO error on non-tables
-
-    tblp_set(v.tbl, key, val);
+// Sets the next index in the table with the value
+void tbl_add(tbl_t *tbl, var_t val) {
+    tbl_assign(tbl, vnum(tbl->len), val);
 }
 
-void tblp_set(tbl_t *tbl, var_t key, var_t val) {
+
+// sets a value in the table with the given key
+// decends down the tail chain until its found
+void tbl_set(tbl_t *tbl, var_t key, var_t val) {
     if (var_isnull(key))
         return;
 
