@@ -14,7 +14,8 @@ CFLAGS += -O2
 CFLAGS += -finline -foptimize-sibling-calls -freg-struct-return
 CFLAGS += -m32
 CFLAGS += -Wall -Winline
-CFLAGS += -lm
+
+LFLAGS += -lm
 
 
 all: $(TARGET)
@@ -22,7 +23,7 @@ all: $(TARGET)
 asm: $(ASM)
 
 v: $(OBJ)
-	$(CC) $(OBJ) $(CFLAGS) -o $@
+	$(CC) $(CFLAGS) $^ $(LFLAGS) -o $@
 
 %.o: %.c
 	$(CC) -c $(CFLAGS) -o $@ $<

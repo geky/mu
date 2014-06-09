@@ -110,37 +110,48 @@ static inline str_t *var_str(var_t v) { return v.str + v.off; }
 #define vinf  vnum(INFINITY)
 
 static inline var_t vnum(num_t n) {
-    var_t v = { .num = n };
+    var_t v;
+    v.num = n;
     v.type = TYPE_NUM;
     return v;
 }
 
 static inline var_t vstr(str_t *s, uint16_t off, uint16_t len) {
-    var_t v = { .str=s, .off=off, .len=len };
+    var_t v;
+    v.str = s;
+    v.off = off;
+    v.len = len;
     v.type = TYPE_STR;
     return v;
 }
 
 static inline var_t vtbl(tbl_t *t) {
-    var_t v = { .ref=(ref_t*)t, .tbl=t };
+    var_t v;
+    v.ref = (ref_t*)t;
+    v.tbl = t;
     v.type = TYPE_TBL;
     return v;
 }
 
 static inline var_t vfn(fn_t *f) {
-    var_t v = { .ref=(ref_t*)f, .fn=f };
+    var_t v;
+    v.ref = (ref_t*)f;
+    v.fn = f;
     v.type = TYPE_FN;
     return v;
 }
 
 static inline var_t vmtbl(tbl_t *t) {
-    var_t v = { .ref=(ref_t*)t, .tbl=t };
+    var_t v;
+    v.ref = (ref_t*)t;
+    v.tbl = t;
     v.type = TYPE_MTBL;
     return v;
 }
 
 static inline var_t vbfn(bfn_t *f) {
-    var_t v = { .bfn=f };
+    var_t v;
+    v.bfn = f;
     v.type = TYPE_BFN;
     return v;
 }

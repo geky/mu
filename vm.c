@@ -14,18 +14,16 @@ static inline uint16_t vc_off(str_t *bcode) {
 }
 
 static inline var_t vc_var(str_t *bcode) {
-    return (var_t){{
-        .bytes = {
-            bcode[0],
-            bcode[1],
-            bcode[2],
-            bcode[3],
-            bcode[4],
-            bcode[5],
-            bcode[6],
-            bcode[7]
-        }
-    }};
+    var_t v;
+    v.bytes[0] = bcode[0];
+    v.bytes[1] = bcode[1];
+    v.bytes[2] = bcode[2];
+    v.bytes[3] = bcode[3];
+    v.bytes[4] = bcode[4];
+    v.bytes[5] = bcode[5];
+    v.bytes[6] = bcode[6];
+    v.bytes[7] = bcode[7];
+    return v;
 }
 
 int vcount(uint8_t *code, enum vop op, void *arg) {
