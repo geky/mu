@@ -13,25 +13,29 @@
 var_t fn_create(var_t argv, var_t code, var_t scope) {
     fn_t *f;
     tbl_t *args;
+    tbl_t *vars;
     int i = 0;
 
     assert(var_istbl(argv) && 
            var_isstr(code) &&
-           (var_istbl(scope) || var_isnull(scope))); // TODO errors
+           (var_istbl(scope) || 
+            var_isnull(scope))); // TODO errors
 
     args = tblp_readp(argv.tbl);
+    vars = tbl_create(args->len + 1).tbl;
     f = vref_alloc(sizeof(fn_t) + args->len);
 
-    tbl_for(k, v, args, {
-        f->args[i++] = v;
-        var_incref(v);
-    })
 
+    tbl_assign(vars, code, vnum(i++));
+
+    tbl_for(k, v, args, {
+        tbl_assign(vars, v, vnum(i++));
+    })
+        
 
     f->acount = args->len;
     f->stack = 25; // TODO make this reasonable
     f->scope = scope.tbl;
-    f->code = code;
 
     struct vstate *vs = valloc(sizeof(struct vstate));
     vs->off = var_str(code);
@@ -39,6 +43,7 @@ var_t fn_create(var_t argv, var_t code, var_t scope) {
     vs->ref = var_ref(code);
 
     vs->bcode = 0;
+    vs->vars = vars;
     vs->encode = vcount;
 
     int ins = vparse(vs);
@@ -52,6 +57,15 @@ var_t fn_create(var_t argv, var_t code, var_t scope) {
     vparse(vs);
 
     f->bcode = vs->bcode;
+    f->vcount = vars->len;
+    f->vars = valloc(sizeof(var_t) * f->vcount);
+
+    tbl_for(k, v, vars, {
+        f->vars[(uint16_t)var_num(v)] = k;
+        var_incref(k);
+    });
+    
+    vref_dec(vars);
     vdealloc(vs);
 
     return vfn(f);
@@ -69,8 +83,8 @@ void fn_destroy(void *m) {
 
     vref_dec((ref_t *)f->bcode);
 
-    for (i=-1; i < f->acount; i++) {
-        var_decref(f->args[i]);
+    for (i=0; i < f->vcount; i++) {
+        var_decref(f->vars[i]);
     }
 }
 
@@ -84,19 +98,19 @@ var_t fn_call(fn_t *f, tbl_t *args) {
     tbl_assign(scope, vcstr("args"), vtbl(args));
     tbl_assign(scope, vcstr("this"), tbl_lookup(args, vcstr("this")));
 
-    for (i=0; i < f->acount; i++) {
+    for (i=1; i <= f->acount; i++) {
         var_t param = tbl_lookup(args, vnum(i));
 
         if (var_isnull(param))
-            param = tbl_lookup(args, f->args[i]);
+            param = tbl_lookup(args, f->vars[i]);
 
-        tbl_assign(scope, f->args[i], param);
+        tbl_assign(scope, f->vars[i], param);
     }
 
     scope->tail = f->scope;
 
-    
-    return vexec(f->bcode, f->stack, scope);
+
+    return vexec(f, vtbl(scope));
 }
 
 
@@ -107,13 +121,13 @@ var_t bfn_repr(var_t v) {
 
 var_t fn_repr(var_t v) {
     fn_t *f = v.fn;
-    unsigned int size = 7 + f->code.len;
+    unsigned int size = 7 + f->vars[0].len;
     int i;
 
     uint8_t *out, *s;
 
-    for (i=0; i < f->acount; i++) {
-        size += f->args[i].len;
+    for (i=1; i <= f->acount; i++) {
+        size += f->vars[i].len;
 
         if (i != f->acount-1)
             size += 2;
@@ -127,9 +141,9 @@ var_t fn_repr(var_t v) {
     *s++ = 'n';
     *s++ = '(';
 
-    for (i=0; i < f->acount; i++) {
-        memcpy(s, var_str(f->args[i]), f->args[i].len);
-        s += f->args[i].len;
+    for (i=1; i <= f->acount; i++) {
+        memcpy(s, var_str(f->vars[i]), f->vars[i].len);
+        s += f->vars[i].len;
 
         if (i++ != f->acount-1) {
             *s++ = ',';
@@ -141,8 +155,8 @@ var_t fn_repr(var_t v) {
     *s++ = ' ';
     *s++ = '{';
 
-    memcpy(s, var_str(f->code), f->code.len);
-    s += f->code.len;
+    memcpy(s, var_str(f->vars[0]), f->vars[0].len);
+    s += f->vars[0].len;
 
     *s++ = '}';
 

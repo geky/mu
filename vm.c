@@ -9,90 +9,57 @@
 // bytecode does not need to be portable, as it 
 // is compiled ad hoc, but it does need to worry 
 // about alignment issues.
-static inline uint16_t vc_off(str_t *bcode) {
-    return bcode[0] | (bcode[1] << 8);
+static inline uint16_t varg(str_t *bcode) {
+    return (bcode[0] << 8) | bcode[1];
 }
 
-static inline var_t vc_var(str_t *bcode) {
-    var_t v;
-    v.bytes[0] = bcode[0];
-    v.bytes[1] = bcode[1];
-    v.bytes[2] = bcode[2];
-    v.bytes[3] = bcode[3];
-    v.bytes[4] = bcode[4];
-    v.bytes[5] = bcode[5];
-    v.bytes[6] = bcode[6];
-    v.bytes[7] = bcode[7];
-    return v;
+static inline int16_t vsarg(str_t *bcode) {
+    return (int16_t)varg(bcode);
 }
 
-int vcount(uint8_t *code, enum vop op, void *arg) {
-    if (0x8 & op)
-        return 9;
-    else if (0x4 & op)
-        return 3;
-    else
-        return 1;
+int vcount(uint8_t *code, enum vop op, uint16_t arg) {
+    return (VARG & op) ? 3 : 1;
 }
 
-int vencode(uint8_t *code, enum vop op, void *arg) {
+int vencode(uint8_t *code, enum vop op, uint16_t arg) {
     *code++ = op;
 
-    if (0x8 & op) {
-        *code++ = ((var_t *)arg)->bytes[0];
-        *code++ = ((var_t *)arg)->bytes[1];
-        *code++ = ((var_t *)arg)->bytes[2];
-        *code++ = ((var_t *)arg)->bytes[3];
-        *code++ = ((var_t *)arg)->bytes[4];
-        *code++ = ((var_t *)arg)->bytes[5];
-        *code++ = ((var_t *)arg)->bytes[6];
-        *code++ = ((var_t *)arg)->bytes[7];
-        return 9;
-    } else if (0x4 & op) {
-        *code++ = (*(uint16_t *)arg) >> 8;
-        *code++ = 0xff & (*(uint16_t *)arg);
+    if (VARG & op) {
+        *code++ = arg >> 8;
+        *code++ = 0xff & arg;
         return 3;
     } else {
         return 1;
     }
 }
 
-var_t vexec(str_t *pc, uint16_t s, tbl_t *scope) {
-    union {
-        struct { var_t v; var_t k; var_t t; var_t f; };
-        var_t a[4];
-    } reg = {{ .t = vtbl(scope) }};
 
-    var_t stack[s]; // TODO check for overflow
+var_t vexec(fn_t *f, var_t scope) {
+    var_t stack[f->stack]; // TODO check for overflow
 
+    str_t *pc = f->bcode;
     var_t *sp = stack;
-    uint8_t op;
 
 
     while (1) {
-        op = *pc++;
-
-        switch (0xf0 & op) {
-            case VLIT:      reg.a[0x3 & op] = vc_var(pc); pc += 8;      break;
-            case VTBL:      reg.a[0x3 & op] = tbl_create(0);            break;
-            case VPUSH:     *sp++ = reg.a[0x3 & op];                    break;
-            case VPOP:      reg.a[0x3 & op] = *--sp;                    break;
-
-            case VJUMP:     pc += vc_off(pc);                           break;
-            case VJEQ:      pc += var_isnull(reg.v) ? vc_off(pc) : 2;   break;
-            case VJNE:      pc += !var_isnull(reg.v) ? vc_off(pc) : 2;  break;
-
-            case VLOOKUP:   reg.a[0x3 & op] = var_lookup(reg.t, reg.k); break;
-            case VASSIGN:   var_assign(reg.t, reg.k, reg.v); 
-                            reg.a[0x3 & op] = reg.t;                    break;
-            case VSET:      var_set(reg.t, reg.k, reg.v);               
-                            reg.a[0x3 & op] = reg.t;                    break;
-            case VADD:      var_add(reg.t, reg.v);                      
-                            reg.a[0x3 & op] = reg.t;                    break;
+        switch (0xf0 & *pc++) {
+            case VCONST:    *++sp = f->vars[varg(pc)]; pc += 2;         break;
+            case VTBL:      *++sp = tbl_create(0);                      break;
+            case VSCOPE:    *++sp = scope;                              break;
             
-            case VCALL:     reg.a[0x3 & op] = var_call(reg.f, reg.t);   break;
-            case VTCALL:    return var_call(reg.f, reg.t);   // TODO make sure this is tail calling
-            case VRET:      return reg.v;
+            case VPUSH:     sp[1] = sp[0]; sp++;                        break;
+            case VPOP:      sp--;                                       break;
+            case VJUMP:     pc += vsarg(pc);                            break;
+            case VJN:       pc += var_isnull(*sp--) ? vsarg(pc) : 2;    break;
+
+            case VLOOKUP:   sp[-1] = var_lookup(sp[-1], sp[0]); sp--;   break;
+            case VASSIGN:   var_assign(sp[-2], sp[-1], sp[0]); sp -= 3; break;
+            case VSET:      var_set(sp[-2], sp[-1], sp[0]); sp -= 3;    break;
+            case VADD:      var_add(sp[-1], sp[0]); sp -= 2;            break;
+            
+            case VCALL:     sp[-1] = var_call(sp[-1], sp[0]); sp--;     break;
+            case VTCALL:    return var_call(sp[-1], sp[0]); sp--; // TODO make sure this is tail calling
+            case VRET:      return *sp;
             case VRETN:     return vnull;
         }
     }

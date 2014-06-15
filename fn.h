@@ -12,12 +12,11 @@
 struct fn {
     tbl_t *scope;
     uint16_t acount;
+    uint16_t vcount;
     uint16_t stack;
 
+    var_t *vars;
     str_t *bcode;
-
-    var_t code;
-    var_t args[0];
 };
 
 // Functions for managing functions

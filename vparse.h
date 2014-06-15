@@ -1,5 +1,5 @@
 /*
- *  Recursive descent parser for V
+ *  Parser for V
  */
 
 #ifndef V_PARSE
@@ -21,12 +21,13 @@ struct vstate {
 
     int ins;
     uint8_t *bcode;
-    int (*encode)(uint8_t *, enum vop, void *);
+    tbl_t *vars;
+    int (*encode)(uint8_t *, enum vop, uint16_t);
 
     union {
         struct {
-            uint8_t op;
-            uint8_t paren;
+            uint8_t op     : 8;
+            uint8_t paren  : 8;
         };
 
         uint32_t state;

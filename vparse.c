@@ -38,29 +38,24 @@ static void venc(struct vstate *vs, enum vop op) {
     vs->ins += vs->encode(&vs->bcode[vs->ins], op, 0);
 }
 
-static void vencoff(struct vstate *vs, enum vop op, int16_t off) {
-    vs->ins += vs->encode(&vs->bcode[vs->ins], op | VARG_OFF, &off);
+static void vencarg(struct vstate *vs, enum vop op, uint16_t arg) {
+    vs->ins += vs->encode(&vs->bcode[vs->ins], op | VARG, arg);
 }
 
-static void vencvar(struct vstate *vs, enum vop op, var_t var) {
-    vs->ins += vs->encode(&vs->bcode[vs->ins], op | VARG_VAR, &var);
+static void venconst(struct vstate *vs) {
+    uint16_t arg;
+    var_t index = tbl_lookup(vs->vars, vs->val);
+
+    if (var_isnull(index)) {
+        arg = vs->vars->len;
+        tbl_assign(vs->vars, vs->val, vnum(arg));
+    } else {
+        arg = (uint16_t)var_num(index);
+    }
+
+    vencarg(vs, VCONST, arg);
 }
 
-// Handlers for defering instructions
-static void vdefer(struct vstate *vs, enum vop op) {
-    vs->op = op;
-}
-
-static void vdefervar(struct vstate *vs, enum vop op) {
-    vs->op = op | VARG_VAR;
-}
-
-static void vencdefed(struct vstate *vs, enum vreg r) {
-    if (vs->op & VARG_VAR) 
-        vencvar(vs, vs->op | r, vs->val);
-    else
-        venc(vs, vs->op | r);
-}
 
 
 // Parser for V's grammar
@@ -69,28 +64,25 @@ static void vp_primary(struct vstate *vs);
 static void vp_table(struct vstate *vs);
 static void vp_exprtarget(struct vstate *vs);
 static void vp_expltarget(struct vstate *vs);
-static void vp_expptarget(struct vstate *vs);
 static void vp_expfollow(struct vstate *vs);
 static void vp_expression(struct vstate *vs);
 
 
 static void vp_value(struct vstate *vs) {
     switch (vs->tok) {
-        case '[':       vencdefed(vs, VREG_T);
-                        vs->paren++;
+        case '[':       vs->paren++;
                         vp_primary(vnext(vs));
                         vexpect(vs, ']');
-                        vencdefed(vs, VREG_K);
-                        vdefer(vs, VLOOKUP);
+                        vs->paren--;
+                        venc(vs, VLOOKUP);
                         return vp_value(vs);
 
-        case '(':       vencdefed(vs, VREG_F);
-                        vs->paren++;
-                        vdefer(vs, VTBL);
+        case '(':       vs->paren++;
+                        venc(vs, VTBL);
                         vp_table(vnext(vs));
                         vexpect(vs, ')');
                         vs->paren--;
-                        vdefer(vs, VCALL);
+                        venc(vs, VCALL);
                         return vp_value(vs);
 
         default:        return;
@@ -99,16 +91,17 @@ static void vp_value(struct vstate *vs) {
 
 static void vp_primary(struct vstate *vs) {
     switch (vs->tok) {
-        case VT_IDENT:  vencvar(vs, VLIT | VREG_K, vs->val);
-                        vdefer(vs, VLOOKUP);
+        case VT_IDENT:  venc(vs, VSCOPE);
+                        venconst(vs);
+                        venc(vs, VLOOKUP);
                         return vp_value(vnext(vs));
 
         case VT_NUM:
-        case VT_STR:    vdefervar(vs, VLIT);
+        case VT_STR:    venconst(vs);
                         return vp_value(vnext(vs));
 
         case '[':       vs->paren++;
-                        vdefer(vs, VTBL);
+                        venc(vs, VTBL);
                         vp_table(vnext(vs));
                         vexpect(vs, ']');
                         vs->paren--;
@@ -145,7 +138,7 @@ static void vp_tabfollow(struct vstate *vs) {
 }*/
 
 static void vp_table(struct vstate *vs) {
-/*    switch (vs->tok) {
+    /*switch (vs->tok) {
         case VT_SEP:    return vp_table(vnext(vs));
 
         case VT_IDENT:  vencdefed(vs, VREG_T);
@@ -162,48 +155,32 @@ static void vp_table(struct vstate *vs) {
 
 static void vp_exprtarget(struct vstate *vs) {
     switch (vs->tok) {
-        case '[':       vencdefed(vs, VREG_T);
-                        vs->paren++;
+        case '[':       vs->paren++;
                         vp_primary(vnext(vs));
-                        vencdefed(vs, VREG_K);
                         vexpect(vs, ']');
                         vs->paren--;
                         return vp_expltarget(vs);
 
-        case '(':       vencdefed(vs, VREG_F);
-                        vs->paren++;
-                        vdefer(vs, VTBL);
+        case '(':       vs->paren++;
+                        venc(vs, VTBL);
                         vp_table(vnext(vs));
                         vexpect(vs, ')');
                         vs->paren--;
-                        vdefer(vs, VCALL);
+                        venc(vs, VCALL);
                         return vp_exprtarget(vs);
 
-        default:        vencdefed(vs, VREG_V);
-                        return;
+        default:        return;
     }
 }
 
 static void vp_expltarget(struct vstate *vs) {
     switch (vs->tok) {
         case VT_SET:    vp_primary(vnext(vs));
-                        vencdefed(vs, VREG_V);
-                        venc(vs, VSET | VREG_T);
+                        venc(vs, VSET);
                         return;
 
-        default:        vdefer(vs, VLOOKUP);
+        default:        venc(vs, VLOOKUP);
                         return vp_exprtarget(vs);
-    }
-}
-
-static void vp_expptarget(struct vstate *vs) {
-    switch (vs->tok) {
-        case '[':       venc(vs, VPUSH | VREG_T);
-                        vp_expltarget(vs);
-                        venc(vs, VPOP | VREG_T);
-                        return;
-
-        default:        return vp_expltarget(vs);
     }
 }
 
@@ -220,12 +197,12 @@ static void vp_expression(struct vstate *vs) {
         case VT_SEP:    return vp_expression(vnext(vs));
                         
         case VT_RETURN: vp_primary(vnext(vs));
-                        vencdefed(vs, VREG_V);
                         venc(vs, VRET);
                         return vp_expfollow(vs);
 
-        case VT_IDENT:  vencvar(vs, VLIT | VREG_K, vs->val);
-                        vp_expptarget(vnext(vs));
+        case VT_IDENT:  venc(vs, VSCOPE);
+                        venconst(vs);
+                        vp_expltarget(vnext(vs));
                         return vp_expfollow(vs);
 
         default:        vp_primary(vs);

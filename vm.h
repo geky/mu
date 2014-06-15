@@ -16,45 +16,40 @@
  * of a general purpose stack and 4 registers with 
  * specific uses.
  *
- * v - [00] - used as accumulator for values
- * k - [01] - used as key for table operations
- * t - [10] - used as table for table operations
- * f - [11] - used to hold function value
- *
  * The following is the encoding for the virtual machine.
  *
- * vlit r v   - [0000 10 rr] [ 64 bit var ]  - stores following var in `r`
- * vtbl r     - [0001 00 rr] - create a new table in `r`
- * vpush r    - [0010 00 rr] - pushes `r` on the stack
- * vpop r     - [0011 00 rr] - pops `r` off the stack
- * 
- * vjeq o     - [0100 01 --] [ 16 bit offset] - jumps if `v` is null
- * vjne o     - [0101 01 --] [ 16 bit offset] - jumps if `v` is not null
- * vjump o    - [0110 01 --] [ 16 bit offset] - adds signed offset to pc
+ * vconst v - [0000 ---1] [ 16 bit var index ] - puts constant on stack
+ * vtbl     - [0010 ---0] - puts new table on stack
+ * vscope   - [0011 ---0] - puts current scope on stack
  *
- * vlookup r  - [1000 00 rr] - looks up `t[k]` and stores into `r`
- * vassign r  - [1001 00 rr] - assigns `t[k]` with `v` nonrecursively
- * vset r     - [1010 00 rr] - sets `t[k]` with `v` recursing down tail chains
- * vadd r     - [1011 00 rr] - adds `v` to last index of `t`
+ * vpush    - [0100 ---0] - pushes s0 onto stack
+ * vpop     - [0101 ---0] - pops from stack
+ * vjump o  - [0110 ---1] [ 16 bit off ] - adds signed offset to pc
+ * vjn o    - [0111 ---1] [ 16 bit off ] - jumps if s0 is null
  * 
- * vcall r    - [1100 00 rr] - calls function `f` args `t` result in `r`
- * vtcall     - [1101 00 --] - returns tail call of function `f` args `t`
- * vret       - [1110 00 --] - returns `v`
- * vretn      - [1111 00 --] - returns null
+ * vlookup  - [1000 ---0] - looks up s1[s0] onto stack
+ * vassign  - [1001 ---0] - assigns s2[s1] with s0 nonrecursively
+ * vset     - [1010 ---0] - sets s2[s1] with s0 recursing down tail chains
+ * vadd     - [1011 ---0] - adds s0 to last index of s1
+ * 
+ * vcall    - [1100 ---0] - calls function s1(s0) onto stack
+ * vtcall   - [1101 ---0] - returns tail call of function s1(s0)
+ * vret     - [1110 ---0] - returns s0
+ * vretn    - [1111 ---0] - returns null
  *
  */
 
 
 // Opcode definitions
 enum vop {
-    VLIT    = 0x00,
-    VTBL    = 0x10,
-    VPUSH   = 0x20,
-    VPOP    = 0x30,
+    VCONST  = 0x00,
+    VTBL    = 0x20,
+    VSCOPE  = 0x30,
 
-    VJEQ    = 0x40,
-    VJNE    = 0x50,
+    VPUSH   = 0x40,
+    VPOP    = 0x50,
     VJUMP   = 0x60,
+    VJN     = 0x70,
 
     VLOOKUP = 0x80,
     VASSIGN = 0x90,
@@ -68,22 +63,14 @@ enum vop {
 };
 
 enum voparg {
-    VARG_OFF = 0x4,
-    VARG_VAR = 0x8
-};
-
-enum vreg {
-    VREG_V = 0x0,
-    VREG_K = 0x1,
-    VREG_T = 0x2,
-    VREG_F = 0x3
+    VARG = 0x01
 };
 
 
-int vcount(uint8_t *code, enum vop op, void *arg);
-int vencode(uint8_t *code, enum vop op, void *arg);
+int vcount(uint8_t *code, enum vop op, uint16_t arg);
+int vencode(uint8_t *code, enum vop op, uint16_t arg);
 
-var_t vexec(str_t *bcode, uint16_t stack, tbl_t *scope);
+var_t vexec(fn_t *f, var_t scope);
 
 
 #endif
