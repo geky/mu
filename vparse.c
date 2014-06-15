@@ -39,7 +39,7 @@ static void venc(struct vstate *vs, enum vop op) {
 }
 
 static void vencarg(struct vstate *vs, enum vop op, uint16_t arg) {
-    vs->ins += vs->encode(&vs->bcode[vs->ins], op | VARG, arg);
+    vs->ins += vs->encode(&vs->bcode[vs->ins], op | VOP_ARG, arg);
 }
 
 static void venconst(struct vstate *vs) {
@@ -117,15 +117,24 @@ static void vp_primary(struct vstate *vs) {
     }
 }
 
-/*static void vp_tabtarget(struct vstate *vs) {
+static void vp_tabrtarget(struct vstate *vs) {
     switch (vs->tok) {
-        case VT_SET:    vencdefed(vs, VREG_K);
-                        vp_primary(vnext(vs));
-                        vencdefed(vs, VREG_V);
-                        venc(vs, VASSIGN | VREG_T);
+        case VT_SET:    vp_primary(vnext(vs));
+                        venc(vs, VASSIGN);
                         return;
 
-        default:        return;
+        default:        venc(vs, VADD);
+                        return;
+    }
+}
+
+static void vp_tabltarget(struct vstate *vs) {
+    switch (vs->tok) {
+        case VT_SET:    return vp_tabrtarget(vs);
+
+        default:        venc(vs, VLOOKUP);
+                        vp_value(vnext(vs));
+                        return vp_tabrtarget(vs);
     }
 }
 
@@ -135,22 +144,25 @@ static void vp_tabfollow(struct vstate *vs) {
 
         default:        return;
     }
-}*/
+}
 
 static void vp_table(struct vstate *vs) {
-    /*switch (vs->tok) {
+    switch (vs->tok) {
         case VT_SEP:    return vp_table(vnext(vs));
 
-        case VT_IDENT:  vencdefed(vs, VREG_T);
-                        vdefervar(vs, VLIT);
-                        vp_tabtarget(vnext(vs));
+        case VT_IDENT:  venconst(vs);
+                        vp_tabltarget(vnext(vs));
                         return vp_tabfollow(vs);
 
-        default:        vencdefed(vs, VREG_T);
-                        vp_primary(vs);
-                        vp_tabtarget(vnext(vs));
+        case VT_NUM:
+        case VT_STR:
+        case '[':     
+        case '(':       vp_primary(vs);
+                        vp_tabrtarget(vs);
                         return vp_tabfollow(vs);
-    }*/
+
+        default:        return;
+    }
 }
 
 static void vp_exprtarget(struct vstate *vs) {

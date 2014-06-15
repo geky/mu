@@ -18,13 +18,13 @@ static inline int16_t vsarg(str_t *bcode) {
 }
 
 int vcount(uint8_t *code, enum vop op, uint16_t arg) {
-    return (VARG & op) ? 3 : 1;
+    return (VOP_ARG & op) ? 3 : 1;
 }
 
 int vencode(uint8_t *code, enum vop op, uint16_t arg) {
     *code++ = op;
 
-    if (VARG & op) {
+    if (VOP_ARG & op) {
         *code++ = arg >> 8;
         *code++ = 0xff & arg;
         return 3;
@@ -37,9 +37,8 @@ int vencode(uint8_t *code, enum vop op, uint16_t arg) {
 var_t vexec(fn_t *f, var_t scope) {
     var_t stack[f->stack]; // TODO check for overflow
 
-    str_t *pc = f->bcode;
-    var_t *sp = stack;
-
+    register str_t *pc = f->bcode;
+    register var_t *sp = stack;
 
     while (1) {
         switch (0xf0 & *pc++) {
@@ -53,13 +52,13 @@ var_t vexec(fn_t *f, var_t scope) {
             case VJN:       pc += var_isnull(*sp--) ? vsarg(pc) : 2;    break;
 
             case VLOOKUP:   sp[-1] = var_lookup(sp[-1], sp[0]); sp--;   break;
-            case VASSIGN:   var_assign(sp[-2], sp[-1], sp[0]); sp -= 3; break;
             case VSET:      var_set(sp[-2], sp[-1], sp[0]); sp -= 3;    break;
-            case VADD:      var_add(sp[-1], sp[0]); sp -= 2;            break;
+            case VASSIGN:   var_assign(sp[-2], sp[-1], sp[0]); sp -= 2; break;
+            case VADD:      var_add(sp[-1], sp[0]); sp -= 1;            break;
             
             case VCALL:     sp[-1] = var_call(sp[-1], sp[0]); sp--;     break;
             case VTCALL:    return var_call(sp[-1], sp[0]); sp--; // TODO make sure this is tail calling
-            case VRET:      return *sp;
+            case VRET:      printf("end: %d\n", sp-stack); return *sp;
             case VRETN:     return vnull;
         }
     }

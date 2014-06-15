@@ -20,7 +20,7 @@
  *
  * vconst v - [0000 ---1] [ 16 bit var index ] - puts constant on stack
  * vtbl     - [0010 ---0] - puts new table on stack
- * vscope   - [0011 ---0] - puts current scope on stack
+ * vscope   - [0011 ---0] - puts scope on stack
  *
  * vpush    - [0100 ---0] - pushes s0 onto stack
  * vpop     - [0101 ---0] - pops from stack
@@ -28,8 +28,8 @@
  * vjn o    - [0111 ---1] [ 16 bit off ] - jumps if s0 is null
  * 
  * vlookup  - [1000 ---0] - looks up s1[s0] onto stack
- * vassign  - [1001 ---0] - assigns s2[s1] with s0 nonrecursively
- * vset     - [1010 ---0] - sets s2[s1] with s0 recursing down tail chains
+ * vset     - [1001 ---0] - sets s2[s1] with s0 recursing down tail chains
+ * vassign  - [1010 ---0] - assigns s2[s1] with s0 nonrecursively
  * vadd     - [1011 ---0] - adds s0 to last index of s1
  * 
  * vcall    - [1100 ---0] - calls function s1(s0) onto stack
@@ -52,8 +52,8 @@ enum vop {
     VJN     = 0x70,
 
     VLOOKUP = 0x80,
-    VASSIGN = 0x90,
-    VSET    = 0xa0,
+    VSET    = 0x90,
+    VASSIGN = 0xa0,
     VADD    = 0xb0,
 
     VCALL   = 0xc0,
@@ -62,8 +62,9 @@ enum vop {
     VRETN   = 0xf0
 };
 
-enum voparg {
-    VARG = 0x01
+enum {
+    VOP_OP  = 0xf0,
+    VOP_ARG = 0x01,
 };
 
 
