@@ -160,8 +160,9 @@ static inline var_t vbfn(bfn_t *f) {
     static struct {                     \
         ref_t r;                        \
         str_t s[sizeof(c)-1];           \
-    } _vcstr = { 2, {(c)}};             \
+    } _vcstr = { 1, {(c)}};             \
                                         \
+    _vcstr.r++;                         \
     vstr(_vcstr.s, 0, sizeof(c)-1);     \
 })
 

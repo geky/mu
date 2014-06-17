@@ -42,7 +42,7 @@ static void vencarg(struct vstate *vs, enum vop op, uint16_t arg) {
     vs->ins += vs->encode(&vs->bcode[vs->ins], op | VOP_ARG, arg);
 }
 
-static void venconst(struct vstate *vs) {
+static void vencvar(struct vstate *vs) {
     uint16_t arg;
     var_t index = tbl_lookup(vs->vars, vs->val);
 
@@ -53,7 +53,7 @@ static void venconst(struct vstate *vs) {
         arg = (uint16_t)var_num(index);
     }
 
-    vencarg(vs, VCONST, arg);
+    vencarg(vs, VVAR, arg);
 }
 
 
@@ -68,8 +68,20 @@ static void vp_expfollow(struct vstate *vs);
 static void vp_expression(struct vstate *vs);
 
 
+static void vp_dot(struct vstate *vs) {
+    switch (vs->tok) {
+        case VT_IDENT:  vencvar(vs);
+                        venc(vs, VLOOKUP);
+                        return vp_value(vnext(vs));
+
+        default:        return;
+    }
+}
+
 static void vp_value(struct vstate *vs) {
     switch (vs->tok) {
+        case '.':       return vp_dot(vnext(vs));
+
         case '[':       vs->paren++;
                         vp_primary(vnext(vs));
                         vexpect(vs, ']');
@@ -92,12 +104,12 @@ static void vp_value(struct vstate *vs) {
 static void vp_primary(struct vstate *vs) {
     switch (vs->tok) {
         case VT_IDENT:  venc(vs, VSCOPE);
-                        venconst(vs);
+                        vencvar(vs);
                         venc(vs, VLOOKUP);
                         return vp_value(vnext(vs));
 
         case VT_NUM:
-        case VT_STR:    venconst(vs);
+        case VT_STR:    vencvar(vs);
                         return vp_value(vnext(vs));
 
         case '[':       vs->paren++;
@@ -150,7 +162,7 @@ static void vp_table(struct vstate *vs) {
     switch (vs->tok) {
         case VT_SEP:    return vp_table(vnext(vs));
 
-        case VT_IDENT:  venconst(vs);
+        case VT_IDENT:  vencvar(vs);
                         vp_tabltarget(vnext(vs));
                         return vp_tabfollow(vs);
 
@@ -165,8 +177,19 @@ static void vp_table(struct vstate *vs) {
     }
 }
 
+static void vp_expdot(struct vstate *vs) {
+    switch (vs->tok) {
+        case VT_IDENT:  vencvar(vs);
+                        return vp_expltarget(vs);
+
+        default:        return;
+    }
+}
+
 static void vp_exprtarget(struct vstate *vs) {
     switch (vs->tok) {
+        case '.':       return vp_expdot(vnext(vs));
+
         case '[':       vs->paren++;
                         vp_primary(vnext(vs));
                         vexpect(vs, ']');
@@ -196,6 +219,7 @@ static void vp_expltarget(struct vstate *vs) {
     }
 }
 
+
 static void vp_expfollow(struct vstate *vs) {
     switch (vs->tok) {
         case VT_SEP:    return vp_expression(vnext(vs));
@@ -207,13 +231,13 @@ static void vp_expfollow(struct vstate *vs) {
 static void vp_expression(struct vstate *vs) {
     switch (vs->tok) {
         case VT_SEP:    return vp_expression(vnext(vs));
-                        
+
         case VT_RETURN: vp_primary(vnext(vs));
                         venc(vs, VRET);
                         return vp_expfollow(vs);
 
         case VT_IDENT:  venc(vs, VSCOPE);
-                        venconst(vs);
+                        vencvar(vs);
                         vp_expltarget(vnext(vs));
                         return vp_expfollow(vs);
 
@@ -235,7 +259,7 @@ int vparse(struct vstate *vs) {
     if (vs->tok != 0)
         vunexpected(vs);
 
-    venc(vs, VRETN | 0x3);
+    venc(vs, VRETN | VOP_END);
     return vs->ins;
 }
 

@@ -128,7 +128,7 @@ static void tbl_resize(tbl_t *tbl, uint16_t size) {
         memset(keys, 0, cap * sizeof(var_t));
     }
 
-    if (!tbl->vals.range) {
+    if (!tbl->vals.range || !tbl->keys.range) { // TODO make this independant?
         vals = valloc(cap * sizeof(var_t));
     }
 
@@ -146,8 +146,8 @@ static void tbl_resize(tbl_t *tbl, uint16_t size) {
             hash_t mi = i & mask;
 
             if ((keys && var_isnull(keys[mi])) || mi <= len) {
-                if (keys) keys[mi] = tbl->keys.array[j];
-                if (vals) vals[mi] = tbl->vals.array[j];
+                if (keys) keys[mi] = k;
+                if (vals) vals[mi] = v;
 
                 len++;
                 break;
@@ -319,7 +319,7 @@ var_t tbl_repr(var_t v) {
             key_repr[j] = var_repr(k);
             size += key_repr[j].len + 2;
         }
-
+        
         val_repr[j] = var_repr(v);
         size += val_repr[j].len;
 
