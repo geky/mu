@@ -78,6 +78,7 @@ static int vl_op(struct vstate *vs) {
 
     if (str_equals(vs->val,vcstr(":"))) return VT_SET;
     if (str_equals(vs->val,vcstr("="))) return VT_SET;
+    if (str_equals(vs->val,vcstr("."))) return '.';
     return VT_OP;
 }
 
@@ -98,6 +99,7 @@ static int vl_kw(struct vstate *vs) {
 
     if (str_equals(vs->val,vcstr("fn"))) return VT_FN;
     if (str_equals(vs->val,vcstr("return"))) return VT_RETURN;
+    if (str_equals(vs->val,vcstr("let"))) return VT_LET;
     return VT_IDENT;
 }
 

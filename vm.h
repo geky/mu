@@ -53,8 +53,8 @@ enum vop {
     VDROP   = 0x15 << 3, // -           -1      -           pops element off the stack
 
     VJUMP   = 0x18 << 3, // offset      -       -           adds signed offset to pc
-    VJFALSE = 0x1a << 3, // offset      -       -           jump if top of stack is null
-    VJTRUE  = 0x1b << 3, // offset      -       -           jump if top of stack is not null
+    VJFALSE = 0x1a << 3, // offset      -1      -           jump if top of stack is null
+    VJTRUE  = 0x1b << 3, // offset      -1      -           jump if top of stack is not null
 
     VLOOKUP = 0x04 << 3, // -           -1      s1[s0]      looks up s1[s0] onto stack
     VSET    = 0x05 << 3, // -           -3      -           sets s2[s1] with s0 recursively

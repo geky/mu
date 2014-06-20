@@ -8,13 +8,21 @@
 #include "var.h"
 #include "vm.h"
 
-
+// Representation of parsing product
+enum vproduct {
+    VP_NONE = 0,
+    VP_REF  = 1,
+    VP_VAL  = 2
+};
 
 // State of a parse
 struct vstate {
     str_t *off;
     str_t *end;
     ref_t *ref;
+
+    uint8_t indirect;
+    uint8_t paren;
 
     int tok;
     var_t val;
@@ -23,15 +31,6 @@ struct vstate {
     uint8_t *bcode;
     tbl_t *vars;
     int (*encode)(uint8_t *, enum vop, uint16_t);
-
-    union {
-        struct {
-            uint8_t op     : 8;
-            uint8_t paren  : 8;
-        };
-
-        uint32_t state;
-    };
 };
 
 

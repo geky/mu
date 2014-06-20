@@ -14,8 +14,6 @@
 // Token representation in V
 // single character tokens are also used
 // so enum spans lower range of ascii
-typedef int vtok_t;
-
 enum vtok {
     VT_END      = 0,
     VT_FN       = 1,
@@ -28,7 +26,8 @@ enum vtok {
     VT_SET      = 8,
     VT_AND      = 9,
     VT_OR       = 10,
-    VT_SEP      = 11
+    VT_LET      = 11,
+    VT_SEP      = 12
 };
 
 // Performs lexical analysis on the passed string
