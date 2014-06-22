@@ -16,7 +16,7 @@
 // three bits of each var
 // Highest bit indicates if reference counted
 typedef enum type {
-    TYPE_NULL = 0x0, // null
+    TYPE_NIL = 0x0, // nil
 
     TYPE_NUM  = 0x3, // number - 12.3
     TYPE_STR  = 0x4, // string - "hello"
@@ -87,9 +87,8 @@ typedef struct var {
 
 
 // properties of variables
-static inline bool var_isnull(var_t v)  { return !v.meta; }
+static inline bool var_isnil(var_t v)   { return !v.meta; }
 static inline bool var_isref(var_t v)   { return 0x4 & v.meta; }
-static inline bool var_isconst(var_t v) { return v.ro; }
 static inline bool var_isnum(var_t v)   { return v.type == TYPE_NUM; }
 static inline bool var_isstr(var_t v)   { return v.type == TYPE_STR; }
 static inline bool var_istbl(var_t v)   { return (0x6 & v.meta) == 0x6; }
@@ -105,9 +104,9 @@ static inline str_t *var_str(var_t v) { return v.str + v.off; }
 
 
 // definitions of literal vars in c
-#define vnull ((var_t){{0}})
-#define vnan  vnum(NAN)
-#define vinf  vnum(INFINITY)
+#define vnil ((var_t){{0}})
+#define vnan vnum(NAN)
+#define vinf vnum(INFINITY)
 
 static inline var_t vnum(num_t n) {
     var_t v;
@@ -188,7 +187,7 @@ void var_print(var_t v);
 // Table related functions performed on variables
 var_t var_lookup(var_t v, var_t key);
 void var_assign(var_t v, var_t key, var_t val);
-void var_set(var_t v, var_t key, var_t val);
+void var_insert(var_t v, var_t key, var_t val);
 void var_add(var_t v, var_t val);
 
 // Function calls performed on variables

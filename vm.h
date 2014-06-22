@@ -53,18 +53,18 @@ enum vop {
     VDROP   = 0x15 << 3, // -           -1      -           pops element off the stack
 
     VJUMP   = 0x18 << 3, // offset      -       -           adds signed offset to pc
-    VJFALSE = 0x1a << 3, // offset      -1      -           jump if top of stack is null
-    VJTRUE  = 0x1b << 3, // offset      -1      -           jump if top of stack is not null
+    VJFALSE = 0x1a << 3, // offset      -1      -           jump if top of stack is nil
+    VJTRUE  = 0x1b << 3, // offset      -1      -           jump if top of stack is not nil
 
     VLOOKUP = 0x04 << 3, // -           -1      s1[s0]      looks up s1[s0] onto stack
-    VSET    = 0x05 << 3, // -           -3      -           sets s2[s1] with s0 recursively
-    VASSIGN = 0x06 << 3, // -           -2      s2          assigns s2[s1] with s0 nonrecursively
+    VASSIGN = 0x05 << 3, // -           -3      -           assigns s2[s1] with s0 recursively
+    VINSERT = 0x06 << 3, // -           -2      s2          inserts s2[s1] with s0 nonrecursively
     VADD    = 0x07 << 3, // -           -1      s1          adds s0 to s1
 
     VCALL   = 0x03 << 3, // -           -1      s1(s0)      calls function s1(s0) onto stack
     VTCALL  = 0x02 << 3, // -           -2      ret s1(s0)  returns tailcall of function s1(s0)   
     VRET    = 0x01 << 3, // -           -1      ret s0      returns s0
-    VRETN   = 0x00 << 3, // -           -       ret null    returns null
+    VRETN   = 0x00 << 3, // -           -       ret nil     returns nil
 };
 
 

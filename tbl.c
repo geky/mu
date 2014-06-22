@@ -34,7 +34,7 @@ var_t tbl_create(uint16_t size) {
     int32_t cap = tbl_npw2(tbl_ncap(size));
 
     tbl->tail = 0;
-    tbl->nulls = 0;
+    tbl->nils = 0;
     tbl->len = 0;
     tbl->mask = cap - 1;
     tbl->keys = (union tblarr){0x1};
@@ -52,7 +52,7 @@ void tbl_destroy(void *m) {
         var_t k = tbl_getkey(tbl, i);
         var_t v = tbl_getval(tbl, i);
 
-        if (!var_isnull(k)) {
+        if (!var_isnil(k)) {
             var_decref(k);
             var_decref(v);
         }
@@ -64,12 +64,12 @@ void tbl_destroy(void *m) {
 
 
 // Recursively looks up a key in the table
-// returns either that value or null
+// returns either that value or nil
 var_t tbl_lookup(tbl_t *tbl, var_t key) {
     tbl = tblp_readp(tbl);
 
-    if (var_isnull(key))
-        return vnull;
+    if (var_isnil(key))
+        return vnil;
 
     hash_t i, hash = var_hash(key);
 
@@ -81,13 +81,13 @@ var_t tbl_lookup(tbl_t *tbl, var_t key) {
             hash_t mi = i & tbl->mask;
             var_t k = tbl_getkey(tbl, mi);
 
-            if (var_isnull(k))
+            if (var_isnil(k))
                 break;
 
             if (var_equals(key, k)) {
                 var_t v = tbl_getval(tbl, mi);
 
-                if (var_isnull(v))
+                if (var_isnil(v))
                     break;
 
                 return v;
@@ -95,7 +95,7 @@ var_t tbl_lookup(tbl_t *tbl, var_t key) {
         }
     }
 
-    return vnull;
+    return vnil;
 }
 
 
@@ -137,7 +137,7 @@ static void tbl_resize(tbl_t *tbl, uint16_t size) {
         var_t k = tbl_getkey(tbl, j);
         var_t v = tbl_getval(tbl, j);
 
-        if (var_isnull(k) || var_isnull(v))
+        if (var_isnil(k) || var_isnil(v))
             continue;
 
         hash_t i = var_hash(k);
@@ -145,7 +145,7 @@ static void tbl_resize(tbl_t *tbl, uint16_t size) {
         for (;; i = tbl_next(i)) {
             hash_t mi = i & mask;
 
-            if ((keys && var_isnull(keys[mi])) || mi <= len) {
+            if ((keys && var_isnil(keys[mi])) || mi <= len) {
                 if (keys) keys[mi] = k;
                 if (vals) vals[mi] = v;
 
@@ -167,20 +167,20 @@ static void tbl_resize(tbl_t *tbl, uint16_t size) {
     }
 
     tbl->mask = mask;
-    tbl->nulls = 0;
+    tbl->nils = 0;
     tbl->len = len;
 }
 
 
-// sets a value in the table with the given key
+// Inserts a value in the table with the given key
 // without decending down the tail chain
-void tbl_assign(tbl_t *tbl, var_t key, var_t val) {
+void tbl_insert(tbl_t *tbl, var_t key, var_t val) {
     tbl = tblp_writep(tbl);
 
-    if (var_isnull(key))
+    if (var_isnil(key))
         return;
    
-    if (tbl_ncap(tbl->len + tbl->nulls + 1) > tbl->mask + 1)
+    if (tbl_ncap(tbl->len + tbl->nils + 1) > tbl->mask + 1)
         tbl_resize(tbl, tbl->len+1);
      
     hash_t i = var_hash(key);
@@ -189,8 +189,8 @@ void tbl_assign(tbl_t *tbl, var_t key, var_t val) {
         hash_t mi = i & tbl->mask;
         var_t k = tbl_getkey(tbl, mi);
 
-        if (var_isnull(k)) {
-            if (!var_isnull(val)) {
+        if (var_isnil(k)) {
+            if (!var_isnil(val)) {
                 tbl_setkey(tbl, mi, key);
                 tbl_setval(tbl, mi, val);
 
@@ -204,16 +204,16 @@ void tbl_assign(tbl_t *tbl, var_t key, var_t val) {
         if (var_equals(key, k)) {
             var_t v = tbl_getval(tbl, mi);
 
-            if (var_isnull(v)) {
-                tbl_setval(tbl, mi, vnull);
-                tbl->nulls--;
+            if (var_isnil(v)) {
+                tbl_setval(tbl, mi, vnil);
+                tbl->nils--;
                 tbl->len++;
             } else {
                 var_decref(v);
                 tbl_setval(tbl, mi, val);
 
-                if (var_isnull(val)) {
-                    tbl->nulls++;
+                if (var_isnil(val)) {
+                    tbl->nils++;
                     tbl->len--;
                 }
             }
@@ -225,14 +225,14 @@ void tbl_assign(tbl_t *tbl, var_t key, var_t val) {
 
 // Sets the next index in the table with the value
 void tbl_add(tbl_t *tbl, var_t val) {
-    tbl_assign(tbl, vnum(tbl->len), val);
+    tbl_insert(tbl, vnum(tbl->len), val);
 }
 
 
-// sets a value in the table with the given key
+// Recursively assigns a value in the table with the given key
 // decends down the tail chain until its found
-void tbl_set(tbl_t *tbl, var_t key, var_t val) {
-    if (var_isnull(key))
+void tbl_assign(tbl_t *tbl, var_t key, var_t val) {
+    if (var_isnil(key))
         return;
 
     tbl_t *head = tbl;
@@ -249,20 +249,20 @@ void tbl_set(tbl_t *tbl, var_t key, var_t val) {
             hash_t mi = i & tbl->mask;
             var_t k = tbl_getkey(tbl, mi);
 
-            if (var_isnull(k)) 
+            if (var_isnil(k)) 
                 break;
 
             if (var_equals(key, k)) {
                 var_t v = tbl_getval(tbl, mi);
 
-                if (var_isnull(v))
+                if (var_isnil(v))
                     break;
 
                 var_decref(v);
                 tbl_setval(tbl, mi, val);
 
-                if (var_isnull(val)) {
-                    tbl->nulls++;
+                if (var_isnil(val)) {
+                    tbl->nils++;
                     tbl->len--;
                 }
 
@@ -271,20 +271,20 @@ void tbl_set(tbl_t *tbl, var_t key, var_t val) {
         }
     }
 
-    if (var_isnull(val))
+    if (var_isnil(val))
         return;
 
 
     tbl = tblp_writep(head);
 
-    if (tbl_ncap(tbl->len + tbl->nulls + 1) > tbl->mask + 1)
+    if (tbl_ncap(tbl->len + tbl->nils + 1) > tbl->mask + 1)
         tbl_resize(tbl, tbl->len+1);
 
     for (i = hash;; i = tbl_next(i)) {
         hash_t mi = i & tbl->mask;
         var_t k = tbl_getkey(tbl, mi);
 
-        if (var_isnull(k)) {
+        if (var_isnil(k)) {
             tbl_setkey(tbl, mi, key);
             tbl_setval(tbl, mi, val);
 
@@ -312,7 +312,7 @@ var_t tbl_repr(var_t v) {
         var_t k = tbl_getkey(tbl, i);
         var_t v = tbl_getval(tbl, i);
 
-        if (var_isnull(k) || var_isnull(v))
+        if (var_isnil(k) || var_isnil(v))
             continue;
 
         if (!tbl->keys.range) {

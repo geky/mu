@@ -14,13 +14,13 @@
 
 // Returns true if both variables are the
 // same type and equivalent.
-// all nulls are equal
-static bool null_equals(var_t a, var_t b) { return true; }
+// all nils are equal
+static bool nil_equals(var_t a, var_t b) { return true; }
 // compare raw data field by default
 static bool data_equals(var_t a, var_t b) { return a.data == b.data; }
 
 static bool (* const var_equals_a[8])(var_t, var_t) = {
-    null_equals, data_equals, 0, num_equals,
+    nil_equals, data_equals, 0, num_equals,
     str_equals, data_equals, data_equals, data_equals
 };
 
@@ -33,14 +33,14 @@ bool var_equals(var_t a, var_t b) {
 
 
 // Returns a hash value of the given variable. 
-// nulls should never be hashed
+// nils should never be hashed
 // however hash could be called directly
-static hash_t null_hash(var_t v) { return 0; }
+static hash_t nil_hash(var_t v) { return 0; }
 // use raw data field by default
 static hash_t data_hash(var_t v) { return v.data; }
 
 static hash_t (* const var_hash_a[8])(var_t) = {
-    null_hash, data_hash, 0, num_hash,
+    nil_hash, data_hash, 0, num_hash,
     str_hash, data_hash, data_hash, data_hash
 };
 
@@ -50,11 +50,11 @@ hash_t var_hash(var_t v) {
 
 
 // Returns a string representation of the variable
-static var_t null_repr(var_t v) { return vcstr("null"); }
+static var_t nil_repr(var_t v) { return vcstr("nil"); }
 static var_t def_repr(var_t v) { return vcstr("bad type"); }
 
 static var_t (* const var_repr_a[8])(var_t) = {
-    null_repr, bfn_repr, def_repr, num_repr,
+    nil_repr, bfn_repr, def_repr, num_repr,
     str_repr, fn_repr, tbl_repr, def_repr
 };
 
@@ -70,12 +70,12 @@ void var_print(var_t v) {
 
 
 // Table related functions performed on variables
-static var_t null_lookup(var_t t, var_t k) { assert(false); } // TODO error
+static var_t nil_lookup(var_t t, var_t k) { assert(false); } // TODO error
 static var_t vtbl_lookup(var_t t, var_t k) { return tbl_lookup(t.tbl, k); }
 
 static var_t (* const var_lookup_a[8])(var_t, var_t) = {
-    null_lookup, null_lookup, null_lookup, null_lookup,
-    null_lookup, null_lookup, vtbl_lookup, null_lookup
+    nil_lookup, nil_lookup, nil_lookup, nil_lookup,
+    nil_lookup, nil_lookup, vtbl_lookup, nil_lookup
 };
 
 var_t var_lookup(var_t v, var_t key) {
@@ -83,12 +83,12 @@ var_t var_lookup(var_t v, var_t key) {
 }
 
 
-static void null_assign(var_t t, var_t k, var_t v) { assert(false); } // TODO error
+static void nil_assign(var_t t, var_t k, var_t v) { assert(false); } // TODO error
 static void vtbl_assign(var_t t, var_t k, var_t v) { tbl_assign(t.tbl, k, v); }
 
 static void (* const var_assign_a[8])(var_t, var_t, var_t) = {
-    null_assign, null_assign, null_assign, null_assign,
-    null_assign, null_assign, vtbl_assign, null_assign
+    nil_assign, nil_assign, nil_assign, nil_assign,
+    nil_assign, nil_assign, vtbl_assign, nil_assign
 };
 
 void var_assign(var_t v, var_t key, var_t val) {
@@ -96,25 +96,25 @@ void var_assign(var_t v, var_t key, var_t val) {
 }
 
 
-static void null_set(var_t t, var_t k, var_t v) { assert(false); } // TODO error
-static void vtbl_set(var_t t, var_t k, var_t v) { tbl_set(t.tbl, k, v); }
+static void nil_insert(var_t t, var_t k, var_t v) { assert(false); } // TODO error
+static void vtbl_insert(var_t t, var_t k, var_t v) { tbl_insert(t.tbl, k, v); }
 
-static void (* const var_set_a[8])(var_t, var_t, var_t) = {
-    null_set, null_set, null_set, null_set,
-    null_set, null_set, vtbl_set, null_set
+static void (* const var_insert_a[8])(var_t, var_t, var_t) = {
+    nil_insert, nil_insert, nil_insert, nil_insert,
+    nil_insert, nil_insert, vtbl_insert, nil_insert
 };
 
-void var_set(var_t v, var_t key, var_t val) {
-    var_set_a[v.type](v, key, val);
+void var_insert(var_t v, var_t key, var_t val) {
+    var_insert_a[v.type](v, key, val);
 }
 
 
-static void null_add(var_t t, var_t v) { assert(false); } // TODO error
+static void nil_add(var_t t, var_t v) { assert(false); } // TODO error
 static void vtbl_add(var_t t, var_t v) { tbl_add(t.tbl, v); }
 
 static void (* const var_add_a[8])(var_t, var_t) = {
-    null_add, null_add, null_add, null_add,
-    null_add, null_add, vtbl_add, null_add
+    nil_add, nil_add, nil_add, nil_add,
+    nil_add, nil_add, vtbl_add, nil_add
 };
 
 void var_add(var_t v, var_t val) {
@@ -123,13 +123,13 @@ void var_add(var_t v, var_t val) {
 
 
 // Function calls performed on variables
-static var_t null_call(var_t f, var_t a) { assert(false); } // TODO error
+static var_t nil_call(var_t f, var_t a) { assert(false); } // TODO error
 static var_t vfn_call(var_t f, var_t a)  { return fn_call(f.fn, a.tbl); }
 static var_t vbfn_call(var_t f, var_t a) { return f.bfn(a); }
 
 static var_t (* const var_call_a[8])(var_t, var_t) = {
-    null_call, vbfn_call, null_call, null_call,
-    null_call, vfn_call, null_call, null_call
+    nil_call, vbfn_call, nil_call, nil_call,
+    nil_call, vfn_call, nil_call, nil_call
 };
 
 var_t var_call(var_t v, var_t args) {
@@ -141,10 +141,10 @@ var_t var_call(var_t v, var_t args) {
 
 // Cleans up memory of a variable
 
-static void null_destroy(void *m) {}
+static void nil_destroy(void *m) {}
 
 static void (* const vdestroy_a[4])(void *) = {
-    null_destroy, fn_destroy, tbl_destroy, tbl_destroy
+    nil_destroy, fn_destroy, tbl_destroy, tbl_destroy
 };
 
 void vdestroy(void *m) {

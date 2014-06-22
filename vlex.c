@@ -26,16 +26,16 @@ static int vl_str(struct vstate *vs);
 
 
 static int vl_ws(struct vstate *vs) {
-    vs->off++;
+    vs->pos++;
     return vlex(vs);
 }
 
 static int vl_com(struct vstate *vs) {
-    vs->off++;
+    vs->pos++;
 
-    if (vs->off >= vs->end || *vs->off != '`') {
-        while (vs->off < vs->end) {
-            unsigned char n = *vs->off++;
+    if (vs->pos >= vs->end || *vs->pos != '`') {
+        while (vs->pos < vs->end) {
+            unsigned char n = *vs->pos++;
             if (n == '`' || n == '\n')
                 break;
         }
@@ -43,15 +43,15 @@ static int vl_com(struct vstate *vs) {
         int count = 1;
         int seen = 0;
 
-        while (vs->off < vs->end) {
-            if (*vs->off++ != '`')
+        while (vs->pos < vs->end) {
+            if (*vs->pos++ != '`')
                 break;
 
             count++;
         }
 
-        while (vs->off < vs->end && seen < count) {
-            if (*vs->off++ == '`')
+        while (vs->pos < vs->end && seen < count) {
+            if (*vs->pos++ == '`')
                 seen++;
             else
                 seen = 0;
@@ -63,18 +63,18 @@ static int vl_com(struct vstate *vs) {
 
 static int vl_op(struct vstate *vs) {
     str_t *str = (str_t *)(vs->ref + 1);
-    str_t *op = vs->off++;
+    str_t *op = vs->pos++;
 
-    while (vs->off < vs->end) {
-        void *w = vlex_a[*vs->off];
+    while (vs->pos < vs->end) {
+        void *w = vlex_a[*vs->pos];
 
         if (w != vl_op)
             break;
 
-        vs->off++;
+        vs->pos++;
     }
 
-    vs->val = vstr(str, op-str, vs->off-op);
+    vs->val = vstr(str, op-str, vs->pos-op);
 
     if (str_equals(vs->val,vcstr(":"))) return VT_SET;
     if (str_equals(vs->val,vcstr("="))) return VT_SET;
@@ -84,18 +84,18 @@ static int vl_op(struct vstate *vs) {
 
 static int vl_kw(struct vstate *vs) {
     str_t *str = (str_t *)(vs->ref + 1);
-    str_t *kw = vs->off++;
+    str_t *kw = vs->pos++;
 
-    while (vs->off < vs->end) {
-        void *w = vlex_a[*vs->off];
+    while (vs->pos < vs->end) {
+        void *w = vlex_a[*vs->pos];
 
         if (w != vl_kw && w != vl_num)
             break;
 
-        vs->off++;
+        vs->pos++;
     };
 
-    vs->val = vstr(str, kw-str, vs->off-kw);
+    vs->val = vstr(str, kw-str, vs->pos-kw);
 
     if (str_equals(vs->val,vcstr("fn"))) return VT_FN;
     if (str_equals(vs->val,vcstr("return"))) return VT_RETURN;
@@ -104,11 +104,11 @@ static int vl_kw(struct vstate *vs) {
 }
 
 static int vl_tok(struct vstate *vs) {
-    return *vs->off++;
+    return *vs->pos++;
 }
 
 static int vl_sep(struct vstate *vs) {
-    vs->off++;
+    vs->pos++;
     return VT_SEP;
 }
 
@@ -120,12 +120,12 @@ static int vl_nl(struct vstate *vs) {
 }       
 
 static int vl_num(struct vstate *vs) {
-    vs->val = num_parse(&vs->off, vs->end);
+    vs->val = num_parse(&vs->pos, vs->end);
     return VT_NUM;
 }
 
 static int vl_str(struct vstate *vs) {
-    vs->val = str_parse(&vs->off, vs->end);
+    vs->val = str_parse(&vs->pos, vs->end);
     return VT_STR;
 }
 
@@ -203,8 +203,8 @@ int (* const vlex_a[256])(struct vstate *) = {
 // Performs lexical analysis on the passed string
 // Value is stored in lval and its type is returned
 int vlex(struct vstate *vs) {
-    if (vs->off < vs->end)
-        return vlex_a[*vs->off](vs);
+    if (vs->pos < vs->end)
+        return vlex_a[*vs->pos](vs);
     else
         return 0;
 }

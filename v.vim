@@ -14,7 +14,7 @@ syn keyword vBranch break continue return
 syn keyword vLet let
 syn keyword vType num str tbl fn
 syn keyword vReference args this global op
-syn keyword vValue null nan inf
+syn keyword vValue nil nan inf
 
 " Comments
 syn match vSingleComment "`[^`]*`\?"

@@ -19,17 +19,17 @@ var_t fn_create(var_t argv, var_t code, var_t scope) {
     assert(var_istbl(argv) && 
            var_isstr(code) &&
            (var_istbl(scope) || 
-            var_isnull(scope))); // TODO errors
+            var_isnil(scope))); // TODO errors
 
     args = tblp_readp(argv.tbl);
     vars = tbl_create(args->len + 1).tbl;
     f = vref_alloc(sizeof(fn_t) + args->len);
 
 
-    tbl_assign(vars, code, vnum(i++));
+    tbl_insert(vars, code, vnum(i++));
 
     tbl_for(k, v, args, {
-        tbl_assign(vars, v, vnum(i++));
+        tbl_insert(vars, v, vnum(i++));
     })
         
 
@@ -38,8 +38,8 @@ var_t fn_create(var_t argv, var_t code, var_t scope) {
     f->scope = scope.tbl;
 
     struct vstate *vs = valloc(sizeof(struct vstate));
-    vs->off = var_str(code);
-    vs->end = vs->off + code.len;
+    vs->pos = var_str(code);
+    vs->end = vs->pos + code.len;
     vs->ref = var_ref(code);
 
     vs->bcode = 0;
@@ -48,8 +48,8 @@ var_t fn_create(var_t argv, var_t code, var_t scope) {
 
     int ins = vparse(vs);
 
-    vs->off = var_str(code);
-    vs->end = vs->off + code.len;
+    vs->pos = var_str(code);
+    vs->end = vs->pos + code.len;
     vs->ref = var_ref(code);
     vs->bcode = valloc(ins);
     vs->encode = vencode;
@@ -95,16 +95,16 @@ var_t fn_call(fn_t *f, tbl_t *args) {
     tbl_t *scope = tbl_create(f->acount + 2).tbl;
     int i;
 
-    tbl_assign(scope, vcstr("args"), vtbl(args));
-    tbl_assign(scope, vcstr("this"), tbl_lookup(args, vcstr("this")));
+    tbl_insert(scope, vcstr("args"), vtbl(args));
+    tbl_insert(scope, vcstr("this"), tbl_lookup(args, vcstr("this")));
 
     for (i=1; i <= f->acount; i++) {
         var_t param = tbl_lookup(args, vnum(i));
 
-        if (var_isnull(param))
+        if (var_isnil(param))
             param = tbl_lookup(args, f->vars[i]);
 
-        tbl_assign(scope, f->vars[i], param);
+        tbl_insert(scope, f->vars[i], param);
     }
 
     scope->tail = f->scope;

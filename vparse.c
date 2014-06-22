@@ -47,7 +47,7 @@ static void vencvar(struct vstate *vs) {
     uint16_t arg;
     var_t index = tbl_lookup(vs->vars, vs->val);
 
-    if (var_isnull(index)) {
+    if (var_isnil(index)) {
         arg = vs->vars->len;
         tbl_assign(vs->vars, vs->val, vnum(arg));
     } else {
@@ -152,7 +152,7 @@ static void vp_primary(struct vstate *vs) {
 static void vp_tabassign(struct vstate *vs) {
     switch (vs->tok) {
         case VT_SET:    vp_value(vnext(vs));
-                        venc(vs, VASSIGN);
+                        venc(vs, VINSERT);
                         return vp_tabfollow(vs);
 
         default:        venc(vs, VADD);
@@ -202,7 +202,7 @@ static void vp_explet(struct vstate *vs) {
     switch (vs->tok) {
         case VT_SET:    if (!vs->indirect) vunexpected(vs);
                         vp_value(vnext(vs));
-                        venc(vs, VASSIGN);
+                        venc(vs, VINSERT);
                         venc(vs, VDROP);
                         return vp_expfollow(vs);
 
@@ -214,7 +214,7 @@ static void vp_expassign(struct vstate *vs) {
     switch (vs->tok) {
         case VT_SET:    if (!vs->indirect) vunexpected(vs);
                         vp_value(vnext(vs));
-                        venc(vs, VSET);
+                        venc(vs, VASSIGN);
                         return vp_expfollow(vs);
                         
         default:        if (vs->indirect) venc(vs, VLOOKUP);

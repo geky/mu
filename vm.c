@@ -53,18 +53,18 @@ var_t vexec(fn_t *f, var_t scope) {
             case VDROP:     sp--;                                           break;
 
             case VJUMP:     pc += vsarg(pc);                                break;
-            case VJFALSE:   pc += var_isnull(*sp--) ? vsarg(pc) : 2;        break;
-            case VJTRUE:    pc += !var_isnull(*sp--) ? vsarg(pc) : 2;       break;
+            case VJFALSE:   pc += var_isnil(*sp--) ? vsarg(pc) : 2;         break;
+            case VJTRUE:    pc += !var_isnil(*sp--) ? vsarg(pc) : 2;        break;
 
             case VLOOKUP:   sp -= 1; *sp = var_lookup(sp[0], sp[1]);        break;
-            case VSET:      sp -= 3; var_set(sp[1], sp[2], sp[3]);          break;
-            case VASSIGN:   sp -= 2; var_assign(sp[0], sp[1], sp[2]);       break;
+            case VASSIGN:   sp -= 3; var_assign(sp[1], sp[2], sp[3]);       break;
+            case VINSERT:   sp -= 2; var_insert(sp[0], sp[1], sp[2]);       break;
             case VADD:      sp -= 1; var_add(sp[0], sp[1]) ;                break;
             
             case VCALL:     sp -= 1; *sp = var_call(sp[0], sp[1]);          break;
             case VTCALL:    sp -= 2; return var_call(sp[1], sp[2]); // TODO make sure this is tail calling
             case VRET:      printf("end: %d\n", sp-stack); return *sp;
-            case VRETN:     printf("end: %d\n", sp-stack); return vnull;
+            case VRETN:     printf("end: %d\n", sp-stack); return vnil;
         }
     }
 }

@@ -16,18 +16,18 @@
 // so enum spans lower range of ascii
 enum vtok {
     VT_END      = 0,
-    VT_FN       = 1,
-    VT_RETURN   = 2,
+    VT_SEP      = 1,
+    VT_SET      = 2,
     VT_IDENT    = 3,
     VT_NUM      = 4,
     VT_STR      = 5,
     VT_OP       = 6,
     VT_DOT      = 7,
-    VT_SET      = 8,
-    VT_AND      = 9,
-    VT_OR       = 10,
-    VT_LET      = 11,
-    VT_SEP      = 12
+    VT_AND      = 8,
+    VT_OR       = 9,
+    VT_LET      = 10,
+    VT_FN       = 11,
+    VT_RETURN   = 12,
 };
 
 // Performs lexical analysis on the passed string

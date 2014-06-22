@@ -17,7 +17,7 @@ enum vproduct {
 
 // State of a parse
 struct vstate {
-    str_t *off;
+    str_t *pos;
     str_t *end;
     ref_t *ref;
 
