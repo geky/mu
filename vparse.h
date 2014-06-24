@@ -21,15 +21,20 @@ struct vstate {
     str_t *end;
     ref_t *ref;
 
-    uint8_t indirect;
-    uint8_t paren;
+    bool indirect : 1;
+    uint8_t paren : 8;
+    uint8_t prec  : 8;
+    uint8_t nprec : 8;
 
     int tok;
     var_t val;
 
+    tbl_t *vars;
+    tbl_t *ops;
+
+    int opins;
     int ins;
     uint8_t *bcode;
-    tbl_t *vars;
     int (*encode)(uint8_t *, enum vop, uint16_t);
 };
 

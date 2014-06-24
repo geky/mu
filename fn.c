@@ -10,18 +10,20 @@
 // Functions for managing functions
 // Each function is preceded with a reference count
 // which is used as its handle in a var
-var_t fn_create(var_t argv, var_t code, var_t scope) {
+var_t fn_create(var_t argv, var_t code, var_t scopev) {
     fn_t *f;
     tbl_t *args;
+    tbl_t *scope;
     tbl_t *vars;
     int i = 0;
 
     assert(var_istbl(argv) && 
            var_isstr(code) &&
-           (var_istbl(scope) || 
-            var_isnil(scope))); // TODO errors
+           (var_istbl(scopev) || 
+            var_isnil(scopev))); // TODO errors
 
     args = tblp_readp(argv.tbl);
+    scope = tblp_readp(scopev.tbl);
     vars = tbl_create(args->len + 1).tbl;
     f = vref_alloc(sizeof(fn_t) + args->len);
 
@@ -35,16 +37,20 @@ var_t fn_create(var_t argv, var_t code, var_t scope) {
 
     f->acount = args->len;
     f->stack = 25; // TODO make this reasonable
-    f->scope = scope.tbl;
+    f->scope = scope;
 
     struct vstate *vs = valloc(sizeof(struct vstate));
     vs->pos = var_str(code);
     vs->end = vs->pos + code.len;
     vs->ref = var_ref(code);
-
     vs->bcode = 0;
     vs->vars = vars;
+    vs->ops = 0;
     vs->encode = vcount;
+
+    var_t ops = tbl_lookup(scope, vcstr("ops"));
+    if (var_istbl(ops))
+        vs->ops = tblp_readp(ops.tbl);
 
     int ins = vparse(vs);
 

@@ -63,22 +63,50 @@ static int vl_com(struct vstate *vs) {
 
 static int vl_op(struct vstate *vs) {
     str_t *str = (str_t *)(vs->ref + 1);
-    str_t *op = vs->pos++;
+    str_t *kw = vs->pos++;
+    var_t op;
 
     while (vs->pos < vs->end) {
-        void *w = vlex_a[*vs->pos];
-
-        if (w != vl_op)
+        if (vlex_a[*vs->pos] != vl_op)
             break;
 
         vs->pos++;
     }
 
-    vs->val = vstr(str, op-str, vs->pos-op);
+    vs->val = vstr(str, kw-str, vs->pos-kw);
+
+
+    while (1) {
+        op = tbl_lookup(vs->ops, vs->val);
+
+        if (!var_isnil(op))
+            break;
+
+        vs->pos--;
+        vs->val.len--;
+
+        if (vs->val.len <= 0) {
+            assert(false); // TODO errors
+        }
+    }
+
+
+    vs->nprec = 0;
+
+    while (vs->pos < vs->end) {
+        if (vlex_a[*vs->pos] != vl_ws)
+            break;
+
+        vs->pos++;
+        vs->nprec++;
+    }
+
 
     if (str_equals(vs->val,vcstr(":"))) return VT_SET;
     if (str_equals(vs->val,vcstr("="))) return VT_SET;
     if (str_equals(vs->val,vcstr("."))) return '.';
+
+    vs->val = op;
     return VT_OP;
 }
 
@@ -199,6 +227,7 @@ int (* const vlex_a[256])(struct vstate *) = {
 /* f8 f9 fa fb */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
 /* fc fd fe ff */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
 };
+
 
 // Performs lexical analysis on the passed string
 // Value is stored in lval and its type is returned

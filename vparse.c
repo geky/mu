@@ -33,17 +33,7 @@ static void vexpect(struct vstate *vs, int tok) {
 
 
 // Different encoding calls
-#define venc(v, o) _venc(v, o, __FUNCTION__)
-static void _venc(struct vstate *vs, enum vop op, const char *f) {
-    printf("in %s\n", f);
-    vs->ins += vs->encode(&vs->bcode[vs->ins], op, 0);
-}
-
-static void vencarg(struct vstate *vs, enum vop op, uint16_t arg) {
-    vs->ins += vs->encode(&vs->bcode[vs->ins], op | VOP_ARG, arg);
-}
-
-static void vencvar(struct vstate *vs) {
+static uint16_t vaccvar(struct vstate *vs) {
     uint16_t arg;
     var_t index = tbl_lookup(vs->vars, vs->val);
 
@@ -54,7 +44,59 @@ static void vencvar(struct vstate *vs) {
         arg = (uint16_t)var_num(index);
     }
 
-    vencarg(vs, VVAR, arg);
+    return arg;
+}
+
+
+static void venlarge(struct vstate *vs, int in, int count) {
+    if (vs->bcode) {
+        memmove(&vs->bcode[in] + count,
+                &vs->bcode[in], 
+                vs->ins - in);
+    }
+}
+
+
+static void venc(struct vstate *vs, enum vop op) {
+    vs->ins += vs->encode(&vs->bcode[vs->ins], op, 0);
+}
+
+static void vencarg(struct vstate *vs, enum vop op, uint16_t arg) {
+    vs->ins += vs->encode(&vs->bcode[vs->ins], op | VOP_ARG, arg);
+}
+
+static void vencvar(struct vstate *vs) {
+    vencarg(vs, VVAR, vaccvar(vs));
+}
+
+
+static int vsized(struct vstate *vs, enum vop op) {
+    return vcount(0, op, 0);
+}
+
+static int vsizearg(struct vstate *vs, enum vop op, uint16_t arg) {
+    return vcount(0, op | VOP_ARG, arg);
+}
+
+static int vsizevar(struct vstate *vs) {
+    return vsizearg(vs, VVAR, vaccvar(vs));
+}
+
+
+static void vinsert(struct vstate *vs, enum vop op, int *in) {
+    int count = vs->encode(&vs->bcode[*in], op, 0);
+    vs->ins += count;
+    *in += count;
+}
+
+static void vinsertarg(struct vstate *vs, enum vop op, uint16_t arg, int *in) {
+    int count = vs->encode(&vs->bcode[*in], op | VOP_ARG, arg);
+    vs->ins += count;
+    *in += count;
+}
+
+static void vinsertvar(struct vstate *vs, int *in) {
+    vinsertarg(vs, VVAR, vaccvar(vs), in);
 }
 
 
@@ -115,23 +157,43 @@ static void vp_primaryop(struct vstate *vs) {
                         vs->indirect = false;
                         return vp_primaryop(vs);
 
+        case VT_OP:     if (vs->prec <= vs->nprec) return;
+                        venc(vs, VADD);
+                        {   int opins = vs->opins;
+                            uint8_t prec = vs->prec;
+                            venlarge(vs, vs->opins, vsizevar(vs)
+                                                  + vsized(vs, VTBL));
+                            vinsertvar(vs, &vs->opins);
+                            vinsert(vs, VTBL, &vs->opins);
+                            vs->prec = vs->nprec;
+                            vp_value(vnext(vs));
+                            vs->opins = opins;
+                            vs->prec = prec;
+                        }
+                        venc(vs, VADD);
+                        venc(vs, VCALL);
+                        return vp_primaryop(vs);
+
         default:        return;
     }
 }
 
 static void vp_primary(struct vstate *vs) {
     switch (vs->tok) {
-        case VT_IDENT:  venc(vs, VSCOPE);
+        case VT_IDENT:  vs->opins = vs->ins;
+                        venc(vs, VSCOPE);
                         vencvar(vs);
                         vs->indirect = true;
                         return vp_primaryop(vnext(vs));
 
         case VT_NUM:
-        case VT_STR:    vencvar(vs);
+        case VT_STR:    vs->opins = vs->ins;
+                        vencvar(vs);
                         vs->indirect = false;
                         return vp_primaryop(vnext(vs));
 
-        case '[':       venc(vs, VTBL);
+        case '[':       vs->opins = vs->ins;
+                        venc(vs, VTBL);
                         vs->paren++;
                         vp_table(vnext(vs));
                         vs->paren--;
@@ -139,10 +201,24 @@ static void vp_primary(struct vstate *vs) {
                         vs->indirect = false;
                         return vp_primaryop(vs);
 
-        case '(':       vs->paren++;
+        case '(':       vs->opins = vs->ins;
+                        vs->paren++;
                         vp_primary(vnext(vs));
                         vs->paren--;
                         vexpect(vs, ')');
+                        return vp_primaryop(vs);
+
+        case VT_OP:     vencvar(vs);
+                        venc(vs, VTBL);
+                        {   int opins = vs->opins;
+                            uint8_t prec = vs->prec;
+                            vs->prec = vs->nprec;
+                            vp_value(vnext(vs));
+                            vs->opins = opins;
+                            vs->prec = prec;
+                        }
+                        venc(vs, VADD);
+                        venc(vs, VCALL);
                         return vp_primaryop(vs);
 
         default:        vunexpected(vs);
@@ -254,6 +330,7 @@ static void vp_expression(struct vstate *vs) {
 int vparse(struct vstate *vs) {
     vs->ins = 0;
     vs->paren = 0;
+    vs->prec = -1;
     vs->tok = vlex(vs);
 
     vp_expression(vs);

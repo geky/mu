@@ -123,6 +123,7 @@ static void tbl_resize(tbl_t *tbl, uint16_t size) {
     var_t *keys = 0;
     var_t *vals = 0;
 
+
     if (!tbl->keys.range) {
         keys = valloc(cap * sizeof(var_t));
         memset(keys, 0, cap * sizeof(var_t));
@@ -145,7 +146,7 @@ static void tbl_resize(tbl_t *tbl, uint16_t size) {
         for (;; i = tbl_next(i)) {
             hash_t mi = i & mask;
 
-            if ((keys && var_isnil(keys[mi])) || mi <= len) {
+            if (keys ? var_isnil(keys[mi]) : mi <= len) {
                 if (keys) keys[mi] = k;
                 if (vals) vals[mi] = v;
 
