@@ -89,6 +89,10 @@ static inline bool tblp_isro(tbl_t *tbl) {
     return 0x1 & (uint32_t)tbl;
 }
 
+static inline tbl_t *tblp_ro(tbl_t *tbl) {
+    return (tbl_t *)(0x1 | (uint32_t)tbl);
+}
+
 static inline tbl_t *tblp_readp(tbl_t *tbl) {
     uint32_t bits = (uint32_t)tbl;
     bits &= ~0x1;

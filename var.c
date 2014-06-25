@@ -39,12 +39,12 @@ static hash_t nil_hash(var_t v) { return 0; }
 // use raw data field by default
 static hash_t data_hash(var_t v) { return v.data; }
 
-static hash_t (* const var_hash_a[8])(var_t) = {
-    nil_hash, data_hash, 0, num_hash,
-    str_hash, data_hash, data_hash, data_hash
-};
-
 hash_t var_hash(var_t v) {
+    static hash_t (* const var_hash_a[8])(var_t) = {
+        nil_hash, data_hash, 0, num_hash,
+        str_hash, data_hash, data_hash, data_hash
+    };
+
     return var_hash_a[v.type](v);
 }
 
@@ -53,12 +53,12 @@ hash_t var_hash(var_t v) {
 static var_t nil_repr(var_t v) { return vcstr("nil"); }
 static var_t def_repr(var_t v) { return vcstr("bad type"); }
 
-static var_t (* const var_repr_a[8])(var_t) = {
-    nil_repr, bfn_repr, def_repr, num_repr,
-    str_repr, fn_repr, tbl_repr, def_repr
-};
-
 var_t var_repr(var_t v) {
+    static var_t (* const var_repr_a[8])(var_t) = {
+        nil_repr, bfn_repr, def_repr, num_repr,
+        str_repr, fn_repr, tbl_repr, def_repr
+    };
+
     return var_repr_a[v.type](v);
 }
 
@@ -73,12 +73,12 @@ void var_print(var_t v) {
 static var_t nil_lookup(var_t t, var_t k) { assert(false); } // TODO error
 static var_t vtbl_lookup(var_t t, var_t k) { return tbl_lookup(t.tbl, k); }
 
-static var_t (* const var_lookup_a[8])(var_t, var_t) = {
-    nil_lookup, nil_lookup, nil_lookup, nil_lookup,
-    nil_lookup, nil_lookup, vtbl_lookup, nil_lookup
-};
-
 var_t var_lookup(var_t v, var_t key) {
+    static var_t (* const var_lookup_a[8])(var_t, var_t) = {
+        nil_lookup, nil_lookup, nil_lookup, nil_lookup,
+        nil_lookup, nil_lookup, vtbl_lookup, nil_lookup
+    };
+
     return var_lookup_a[v.type](v, key);
 }
 
@@ -86,12 +86,12 @@ var_t var_lookup(var_t v, var_t key) {
 static void nil_assign(var_t t, var_t k, var_t v) { assert(false); } // TODO error
 static void vtbl_assign(var_t t, var_t k, var_t v) { tbl_assign(t.tbl, k, v); }
 
-static void (* const var_assign_a[8])(var_t, var_t, var_t) = {
-    nil_assign, nil_assign, nil_assign, nil_assign,
-    nil_assign, nil_assign, vtbl_assign, nil_assign
-};
-
 void var_assign(var_t v, var_t key, var_t val) {
+    static void (* const var_assign_a[8])(var_t, var_t, var_t) = {
+        nil_assign, nil_assign, nil_assign, nil_assign,
+        nil_assign, nil_assign, vtbl_assign, nil_assign
+    };
+
     var_assign_a[v.type](v, key, val);
 }
 
@@ -99,12 +99,12 @@ void var_assign(var_t v, var_t key, var_t val) {
 static void nil_insert(var_t t, var_t k, var_t v) { assert(false); } // TODO error
 static void vtbl_insert(var_t t, var_t k, var_t v) { tbl_insert(t.tbl, k, v); }
 
-static void (* const var_insert_a[8])(var_t, var_t, var_t) = {
-    nil_insert, nil_insert, nil_insert, nil_insert,
-    nil_insert, nil_insert, vtbl_insert, nil_insert
-};
-
 void var_insert(var_t v, var_t key, var_t val) {
+    static void (* const var_insert_a[8])(var_t, var_t, var_t) = {
+        nil_insert, nil_insert, nil_insert, nil_insert,
+        nil_insert, nil_insert, vtbl_insert, nil_insert
+    };
+
     var_insert_a[v.type](v, key, val);
 }
 
@@ -112,12 +112,12 @@ void var_insert(var_t v, var_t key, var_t val) {
 static void nil_add(var_t t, var_t v) { assert(false); } // TODO error
 static void vtbl_add(var_t t, var_t v) { tbl_add(t.tbl, v); }
 
-static void (* const var_add_a[8])(var_t, var_t) = {
-    nil_add, nil_add, nil_add, nil_add,
-    nil_add, nil_add, vtbl_add, nil_add
-};
-
 void var_add(var_t v, var_t val) {
+    static void (* const var_add_a[8])(var_t, var_t) = {
+        nil_add, nil_add, nil_add, nil_add,
+        nil_add, nil_add, vtbl_add, nil_add
+    };
+
     var_add_a[v.type](v, val);
 }
 
@@ -127,13 +127,13 @@ static var_t nil_call(var_t f, var_t a) { assert(false); } // TODO error
 static var_t vfn_call(var_t f, var_t a)  { return fn_call(f.fn, a.tbl); }
 static var_t vbfn_call(var_t f, var_t a) { return f.bfn(a); }
 
-static var_t (* const var_call_a[8])(var_t, var_t) = {
-    nil_call, vbfn_call, nil_call, nil_call,
-    nil_call, vfn_call, nil_call, nil_call
-};
-
 var_t var_call(var_t v, var_t args) {
-    assert(args.type == TYPE_TBL); // TODO error
+    static var_t (* const var_call_a[8])(var_t, var_t) = {
+        nil_call, vbfn_call, nil_call, nil_call,
+        nil_call, vfn_call, nil_call, nil_call
+    };
+
+    assert(var_istbl(args)); // TODO error
 
     return var_call_a[v.type](v, args);
 }
@@ -143,10 +143,10 @@ var_t var_call(var_t v, var_t args) {
 
 static void nil_destroy(void *m) {}
 
-static void (* const vdestroy_a[4])(void *) = {
-    nil_destroy, fn_destroy, tbl_destroy, tbl_destroy
-};
-
 void vdestroy(void *m) {
+    static void (* const vdestroy_a[4])(void *) = {
+        nil_destroy, fn_destroy, tbl_destroy, tbl_destroy
+    };
+
     vdestroy_a[0x3 & (uint32_t)m](m);
 }

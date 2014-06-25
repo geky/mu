@@ -26,11 +26,12 @@ struct vstate {
     uint8_t prec  : 8;
     uint8_t nprec : 8;
 
+    tbl_t *vars;
+    tbl_t *keys;
+    tbl_t *ops;
+
     int tok;
     var_t val;
-
-    tbl_t *vars;
-    tbl_t *ops;
 
     int opins;
     int ins;

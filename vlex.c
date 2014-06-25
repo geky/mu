@@ -8,6 +8,34 @@
 #include <assert.h>
 
 
+// Currently these are initialized at runtime
+// TODO compile them?
+static tbl_t *vkeyt = 0;
+static tbl_t *vopt = 0;
+
+// Creates internal tables for keywords or uses prexisting.
+// Use this to initialize an op table if nescessary.
+tbl_t *vkeys(void) {
+    if (vkeyt) return vkeyt;
+
+    vkeyt = tbl_create(0).tbl;
+    tbl_insert(vkeyt, vcstr("fn"), vrnum(VT_FN));
+    tbl_insert(vkeyt, vcstr("let"), vrnum(VT_LET));
+    tbl_insert(vkeyt, vcstr("return"), vrnum(VT_RETURN));
+    return vkeyt;
+}
+
+tbl_t *vops(void) {
+    if (vopt) return vopt;
+
+    vopt = tbl_create(0).tbl;
+    tbl_insert(vopt, vcstr("="), vrnum(VT_SET));
+    tbl_insert(vopt, vcstr(":"), vrnum(VT_SET));
+    tbl_insert(vopt, vcstr("."), vrnum(VT_DOT));
+    return vopt;
+}
+
+
 // Lexer definitions for V's tokens
 __attribute__((noreturn))
 static int vl_bad(struct vstate *vs) {
@@ -75,7 +103,6 @@ static int vl_op(struct vstate *vs) {
 
     vs->val = vstr(str, kw-str, vs->pos-kw);
 
-
     while (1) {
         op = tbl_lookup(vs->ops, vs->val);
 
@@ -90,6 +117,7 @@ static int vl_op(struct vstate *vs) {
         }
     }
 
+    vs->val = op;
 
     vs->nprec = 0;
 
@@ -102,17 +130,17 @@ static int vl_op(struct vstate *vs) {
     }
 
 
-    if (str_equals(vs->val,vcstr(":"))) return VT_SET;
-    if (str_equals(vs->val,vcstr("="))) return VT_SET;
-    if (str_equals(vs->val,vcstr("."))) return '.';
-
-    vs->val = op;
-    return VT_OP;
+    if (var_isnum(op) && op.data >= VT_SET
+                      && op.data <= VT_DOT)
+        return op.data;
+    else
+        return VT_OP;
 }
 
 static int vl_kw(struct vstate *vs) {
     str_t *str = (str_t *)(vs->ref + 1);
     str_t *kw = vs->pos++;
+    var_t key;
 
     while (vs->pos < vs->end) {
         void *w = vlex_a[*vs->pos];
@@ -125,10 +153,14 @@ static int vl_kw(struct vstate *vs) {
 
     vs->val = vstr(str, kw-str, vs->pos-kw);
 
-    if (str_equals(vs->val,vcstr("fn"))) return VT_FN;
-    if (str_equals(vs->val,vcstr("return"))) return VT_RETURN;
-    if (str_equals(vs->val,vcstr("let"))) return VT_LET;
-    return VT_IDENT;
+    key = tbl_lookup(vs->keys, vs->val);
+
+
+    if (var_isnum(key) && key.data >= VT_FN 
+                       && key.data <= VT_RETURN)
+        return key.data;
+    else
+        return VT_IDENT;
 }
 
 static int vl_tok(struct vstate *vs) {

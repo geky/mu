@@ -136,7 +136,7 @@ static void vp_primarydot(struct vstate *vs) {
 
 static void vp_primaryop(struct vstate *vs) {
     switch (vs->tok) {
-        case '.':       if (vs->indirect) venc(vs, VLOOKUP);
+        case VT_DOT:    if (vs->indirect) venc(vs, VLOOKUP);
                         return vp_primarydot(vnext(vs));
 
         case '[':       if (vs->indirect) venc(vs, VLOOKUP);
@@ -179,21 +179,20 @@ static void vp_primaryop(struct vstate *vs) {
 }
 
 static void vp_primary(struct vstate *vs) {
+    vs->opins = vs->ins;
+
     switch (vs->tok) {
-        case VT_IDENT:  vs->opins = vs->ins;
-                        venc(vs, VSCOPE);
+        case VT_IDENT:  venc(vs, VSCOPE);
                         vencvar(vs);
                         vs->indirect = true;
                         return vp_primaryop(vnext(vs));
 
         case VT_NUM:
-        case VT_STR:    vs->opins = vs->ins;
-                        vencvar(vs);
+        case VT_STR:    vencvar(vs);
                         vs->indirect = false;
                         return vp_primaryop(vnext(vs));
 
-        case '[':       vs->opins = vs->ins;
-                        venc(vs, VTBL);
+        case '[':       venc(vs, VTBL);
                         vs->paren++;
                         vp_table(vnext(vs));
                         vs->paren--;
@@ -201,8 +200,7 @@ static void vp_primary(struct vstate *vs) {
                         vs->indirect = false;
                         return vp_primaryop(vs);
 
-        case '(':       vs->opins = vs->ins;
-                        vs->paren++;
+        case '(':       vs->paren++;
                         vp_primary(vnext(vs));
                         vs->paren--;
                         vexpect(vs, ')');
@@ -237,12 +235,15 @@ static void vp_tabassign(struct vstate *vs) {
 }
 
 static void vp_tabident(struct vstate *vs) {
-    switch (vs->tok) {
-        case VT_SET:    vencvar(vs);
-                        return vp_tabassign(vs);
+    int ins = vs->ins;
+    vencvar(vs);
+    vnext(vs);
 
-        default:        venc(vs, VSCOPE);
-                        vencvar(vs);
+    switch (vs->tok) {
+        case VT_SET:    return vp_tabassign(vs);
+
+        default:        venlarge(vs, ins, vsized(vs, VSCOPE));
+                        vinsert(vs, VSCOPE, &ins);
                         vs->indirect = true;
                         vp_primaryop(vs);
                         if (vs->indirect) venc(vs, VLOOKUP);
@@ -262,7 +263,7 @@ static void vp_table(struct vstate *vs) {
     switch (vs->tok) {
         case VT_SEP:    return vp_table(vnext(vs));
 
-        case VT_IDENT:  return vp_tabident(vnext(vs));
+        case VT_IDENT:  return vp_tabident(vs);
 
         case VT_NUM:
         case VT_STR:

@@ -1,6 +1,7 @@
 #include "fn.h"
 
 #include "mem.h"
+#include "vlex.h"
 #include "vparse.h"
 #include "vm.h"
 
@@ -45,12 +46,18 @@ var_t fn_create(var_t argv, var_t code, var_t scopev) {
     vs->ref = var_ref(code);
     vs->bcode = 0;
     vs->vars = vars;
-    vs->ops = 0;
     vs->encode = vcount;
 
+
     var_t ops = tbl_lookup(scope, vcstr("ops"));
+
     if (var_istbl(ops))
         vs->ops = tblp_readp(ops.tbl);
+    else
+        vs->ops = vops();
+
+    vs->keys = vkeys();
+
 
     int ins = vparse(vs);
 

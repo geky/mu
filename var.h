@@ -140,6 +140,13 @@ static inline var_t vfn(fn_t *f) {
     return v;
 }
 
+static inline var_t vrnum(int n) {
+    var_t v;
+    v.data = n;
+    v.type = TYPE_NUM;
+    return v;
+}
+
 static inline var_t vmtbl(tbl_t *t) {
     var_t v;
     v.ref = (ref_t*)t;
