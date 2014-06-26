@@ -21,19 +21,26 @@ struct vstate {
     str_t *end;
     ref_t *ref;
 
-    bool indirect : 1;
-    uint8_t paren : 8;
-    uint8_t prec  : 8;
-    uint8_t nprec : 8;
+    uint8_t indirect;
+    uint8_t paren;
+    uint8_t nprec;
+
+    uint8_t tok;
+    var_t val;
+
+    union {
+        struct {
+            uint8_t prec   : 8;
+            uint32_t opins : 24;
+        };
+
+        uint32_t opstate;
+    };
 
     tbl_t *vars;
     tbl_t *keys;
     tbl_t *ops;
 
-    int tok;
-    var_t val;
-
-    int opins;
     int ins;
     uint8_t *bcode;
     int (*encode)(uint8_t *, enum vop, uint16_t);

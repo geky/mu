@@ -83,20 +83,20 @@ static int vsizevar(struct vstate *vs) {
 }
 
 
-static void vinsert(struct vstate *vs, enum vop op, int *in) {
-    int count = vs->encode(&vs->bcode[*in], op, 0);
+static int vinsert(struct vstate *vs, enum vop op, int in) {
+    int count = vs->encode(&vs->bcode[in], op, 0);
     vs->ins += count;
-    *in += count;
+    return count;
 }
 
-static void vinsertarg(struct vstate *vs, enum vop op, uint16_t arg, int *in) {
-    int count = vs->encode(&vs->bcode[*in], op | VOP_ARG, arg);
+static int vinsertarg(struct vstate *vs, enum vop op, uint16_t arg, int in) {
+    int count = vs->encode(&vs->bcode[in], op | VOP_ARG, arg);
     vs->ins += count;
-    *in += count;
+    return count;
 }
 
-static void vinsertvar(struct vstate *vs, int *in) {
-    vinsertarg(vs, VVAR, vaccvar(vs), in);
+static int vinsertvar(struct vstate *vs, int in) {
+    return vinsertarg(vs, VVAR, vaccvar(vs), in);
 }
 
 
@@ -160,16 +160,14 @@ static void vp_primaryop(struct vstate *vs) {
         case VT_OP:     if (vs->prec <= vs->nprec) return;
                         if (vs->indirect) venc(vs, VLOOKUP);
                         venc(vs, VADD);
-                        {   int opins = vs->opins;
-                            uint8_t prec = vs->prec;
+                        {   uint32_t opstate = vs->opstate;
                             venlarge(vs, vs->opins, vsizevar(vs)
                                                   + vsized(vs, VTBL));
-                            vinsertvar(vs, &vs->opins);
-                            vinsert(vs, VTBL, &vs->opins);
+                            vs->opins += vinsertvar(vs, vs->opins);
+                            vs->opins += vinsert(vs, VTBL, vs->opins);
                             vs->prec = vs->nprec;
                             vp_value(vnext(vs));
-                            vs->opins = opins;
-                            vs->prec = prec;
+                            vs->opstate = opstate;
                         }
                         venc(vs, VADD);
                         venc(vs, VCALL);
@@ -203,22 +201,25 @@ static void vp_primary(struct vstate *vs) {
                         return vp_primaryop(vs);
 
         case '(':       vs->paren++;
-                        vp_primary(vnext(vs));
+                        {   uint32_t opstate = vs->opstate;
+                            vs->prec = -1;
+                            vp_primary(vnext(vs));
+                            vs->opstate = opstate;
+                        }
                         vs->paren--;
                         vexpect(vs, ')');
                         return vp_primaryop(vs);
 
         case VT_OP:     vencvar(vs);
                         venc(vs, VTBL);
-                        {   int opins = vs->opins;
-                            uint8_t prec = vs->prec;
+                        {   uint32_t opstate = vs->opstate;
                             vs->prec = vs->nprec;
                             vp_value(vnext(vs));
-                            vs->opins = opins;
-                            vs->prec = prec;
+                            vs->opstate = opstate;
                         }
                         venc(vs, VADD);
                         venc(vs, VCALL);
+                        vs->indirect = false;
                         return vp_primaryop(vs);
 
         default:        vunexpected(vs);
@@ -245,7 +246,7 @@ static void vp_tabident(struct vstate *vs) {
         case VT_SET:    return vp_tabassign(vs);
 
         default:        venlarge(vs, ins, vsized(vs, VSCOPE));
-                        vinsert(vs, VSCOPE, &ins);
+                        vinsert(vs, VSCOPE, ins);
                         vs->indirect = true;
                         vp_primaryop(vs);
                         if (vs->indirect) venc(vs, VLOOKUP);
