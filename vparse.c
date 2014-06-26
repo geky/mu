@@ -158,6 +158,7 @@ static void vp_primaryop(struct vstate *vs) {
                         return vp_primaryop(vs);
 
         case VT_OP:     if (vs->prec <= vs->nprec) return;
+                        if (vs->indirect) venc(vs, VLOOKUP);
                         venc(vs, VADD);
                         {   int opins = vs->opins;
                             uint8_t prec = vs->prec;
@@ -172,6 +173,7 @@ static void vp_primaryop(struct vstate *vs) {
                         }
                         venc(vs, VADD);
                         venc(vs, VCALL);
+                        vs->indirect = false;
                         return vp_primaryop(vs);
 
         default:        return;
@@ -291,6 +293,19 @@ static void vp_expassign(struct vstate *vs) {
     switch (vs->tok) {
         case VT_SET:    if (!vs->indirect) vunexpected(vs);
                         vp_value(vnext(vs));
+                        venc(vs, VASSIGN);
+                        return vp_expfollow(vs);
+
+        case VT_OPSET:  if (!vs->indirect) vunexpected(vs);
+                        vencvar(vs);
+                        venc(vs, VTBL);
+                        vencarg(vs, VDUP, 3);
+                        vencarg(vs, VDUP, 3);
+                        venc(vs, VLOOKUP);
+                        venc(vs, VADD);
+                        vp_value(vnext(vs));
+                        venc(vs, VADD);
+                        venc(vs, VCALL);
                         venc(vs, VASSIGN);
                         return vp_expfollow(vs);
                         

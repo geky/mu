@@ -20,12 +20,13 @@ enum vtok {
     VT_NUM      = 2,
     VT_STR      = 3,
     VT_OP       = 4,
-    VT_SET      = 5,
-    VT_DOT      = 6,
-    VT_IDENT    = 7,
-    VT_FN       = 8,
-    VT_LET      = 9,
-    VT_RETURN   = 10,
+    VT_OPSET    = 5,
+    VT_SET      = 6,
+    VT_DOT      = 7,
+    VT_IDENT    = 8,
+    VT_FN       = 9,
+    VT_LET      = 10,
+    VT_RETURN   = 11
 };
 
 

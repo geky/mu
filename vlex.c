@@ -48,6 +48,7 @@ static int vl_op(struct vstate *vs);
 static int vl_kw(struct vstate *vs);
 static int vl_tok(struct vstate *vs);
 static int vl_sep(struct vstate *vs);
+static int vl_set(struct vstate *vs);
 static int vl_nl(struct vstate *vs);
 static int vl_num(struct vstate *vs);
 static int vl_str(struct vstate *vs);
@@ -87,7 +88,7 @@ static int vl_com(struct vstate *vs) {
     }
 
     return vlex(vs);
-}   
+}
 
 static int vl_op(struct vstate *vs) {
     str_t *str = (str_t *)(vs->ref + 1);
@@ -95,11 +96,13 @@ static int vl_op(struct vstate *vs) {
     var_t op;
 
     while (vs->pos < vs->end) {
-        if (vlex_a[*vs->pos] != vl_op)
+        void *w = vlex_a[*vs->pos];
+
+        if (w != vl_op && w != vl_set)
             break;
 
         vs->pos++;
-    }
+    };
 
     vs->val = vstr(str, kw-str, vs->pos-kw);
 
@@ -112,12 +115,11 @@ static int vl_op(struct vstate *vs) {
         vs->pos--;
         vs->val.len--;
 
-        if (vs->val.len <= 0) {
-            assert(false); // TODO errors
-        }
+        assert(vs->val.len > 0); // TODO errors
     }
 
     vs->val = op;
+
 
     vs->nprec = 0;
 
@@ -131,10 +133,15 @@ static int vl_op(struct vstate *vs) {
 
 
     if (var_isnum(op) && op.data >= VT_SET
-                      && op.data <= VT_DOT)
+                      && op.data <= VT_DOT) {
         return op.data;
-    else
+    } else if (vs->pos < vs->end && 
+               vlex_a[*vs->pos] == vl_set) {
+        vs->pos++;
+        return VT_OPSET;
+    } else {
         return VT_OP;
+    }
 }
 
 static int vl_kw(struct vstate *vs) {
@@ -152,9 +159,7 @@ static int vl_kw(struct vstate *vs) {
     };
 
     vs->val = vstr(str, kw-str, vs->pos-kw);
-
     key = tbl_lookup(vs->keys, vs->val);
-
 
     if (var_isnum(key) && key.data >= VT_FN 
                        && key.data <= VT_RETURN)
@@ -170,6 +175,10 @@ static int vl_tok(struct vstate *vs) {
 static int vl_sep(struct vstate *vs) {
     vs->pos++;
     return VT_SEP;
+}
+
+static int vl_set(struct vstate *vs) {
+    return vl_op(vs);
 }
 
 static int vl_nl(struct vstate *vs) {
@@ -208,8 +217,8 @@ int (* const vlex_a[256])(struct vstate *) = {
 /*  ,  -  .  / */   vl_sep,   vl_op,    vl_op,    vl_op,
 /*  0  1  2  3 */   vl_num,   vl_num,   vl_num,   vl_num,
 /*  4  5  6  7 */   vl_num,   vl_num,   vl_num,   vl_num,
-/*  8  9  :  ; */   vl_num,   vl_num,   vl_op,    vl_sep,
-/*  <  =  >  ? */   vl_op,    vl_op,    vl_op,    vl_op,
+/*  8  9  :  ; */   vl_num,   vl_num,   vl_set,   vl_sep,
+/*  <  =  >  ? */   vl_op,    vl_set,   vl_op,    vl_op,
 /*  @  A  B  C */   vl_op,    vl_kw,    vl_kw,    vl_kw,
 /*  D  E  F  G */   vl_kw,    vl_kw,    vl_kw,    vl_kw,
 /*  H  I  J  K */   vl_kw,    vl_kw,    vl_kw,    vl_kw,

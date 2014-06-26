@@ -41,30 +41,30 @@ var_t vexec(fn_t *f, var_t scope) {
     var_t stack[f->stack]; // TODO check for overflow
 
     register str_t *pc = f->bcode;
-    register var_t *sp = stack;
+    register var_t *sp = stack + f->stack;
 
     while (1) {
         switch (VOP_OP & *pc++) {
-            case VVAR:      *++sp = f->vars[varg(pc)]; pc += 2;             break;
-            case VTBL:      *++sp = tbl_create(0);                          break;
-            case VSCOPE:    *++sp = scope;                                  break;
+            case VVAR:      *--sp = f->vars[varg(pc)]; pc += 2;             break;
+            case VTBL:      *--sp = tbl_create(0);                          break;
+            case VSCOPE:    *--sp = scope;                                  break;
             
-            case VDUP:      sp[1] = sp[varg(pc)]; sp++; pc += 2;            break;
-            case VDROP:     sp--;                                           break;
+            case VDUP:      sp[-1] = sp[varg(pc)]; sp--; pc += 2;           break;
+            case VDROP:     sp++;                                           break;
 
             case VJUMP:     pc += vsarg(pc);                                break;
-            case VJFALSE:   pc += var_isnil(*sp--) ? vsarg(pc) : 2;         break;
-            case VJTRUE:    pc += !var_isnil(*sp--) ? vsarg(pc) : 2;        break;
+            case VJFALSE:   pc += var_isnil(*sp++) ? vsarg(pc) : 2;         break;
+            case VJTRUE:    pc += !var_isnil(*sp++) ? vsarg(pc) : 2;        break;
 
-            case VLOOKUP:   sp -= 1; *sp = var_lookup(sp[0], sp[1]);        break;
-            case VASSIGN:   sp -= 3; var_assign(sp[1], sp[2], sp[3]);       break;
-            case VINSERT:   sp -= 2; var_insert(sp[0], sp[1], sp[2]);       break;
-            case VADD:      sp -= 1; var_add(sp[0], sp[1]) ;                break;
+            case VLOOKUP:   sp += 1; *sp = var_lookup(sp[0], sp[-1]);       break;
+            case VASSIGN:   sp += 3; var_assign(sp[-1], sp[-2], sp[-3]);    break;
+            case VINSERT:   sp += 2; var_insert(sp[0], sp[-1], sp[-2]);     break;
+            case VADD:      sp += 1; var_add(sp[0], sp[-1]) ;               break;
             
-            case VCALL:     sp -= 1; *sp = var_call(sp[0], sp[1]);          break;
-            case VTCALL:    sp -= 2; return var_call(sp[1], sp[2]); // TODO make sure this is tail calling
-            case VRET:      printf("end: %d\n", sp-stack); return *sp;
-            case VRETN:     printf("end: %d\n", sp-stack); return vnil;
+            case VCALL:     sp += 1; *sp = var_call(sp[0], sp[-1]);         break;
+            case VTCALL:    sp += 2; return var_call(sp[-1], sp[-2]); // TODO make sure this is tail calling
+            case VRET:      printf("end: %d\n", stack-sp); return *sp;
+            case VRETN:     printf("end: %d\n", stack-sp); return vnil;
         }
     }
 }
