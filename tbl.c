@@ -88,7 +88,7 @@ var_t tbl_lookup(tbl_t *tbl, var_t key) {
                 var_t v = tbl_getval(tbl, mi);
 
                 if (var_isnil(v))
-                    break;
+                    continue;
 
                 return v;
             }

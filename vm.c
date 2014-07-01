@@ -17,6 +17,9 @@ static inline int16_t vsarg(str_t *pc) {
     return (int16_t)varg(pc);
 }
 
+// Return the size taken by the specified opcode
+// Note: size of the jump opcode currently can not change
+// based on argument, because this is not handled by the parser
 int vcount(uint8_t *code, enum vop op, uint16_t arg) {
     if (VOP_ARG & op)
         return 3;
@@ -24,6 +27,7 @@ int vcount(uint8_t *code, enum vop op, uint16_t arg) {
         return 1;
 }
 
+// Encode the specified opcode and return its size
 int vencode(uint8_t *code, enum vop op, uint16_t arg) {
     *code++ = op;
 
@@ -36,7 +40,7 @@ int vencode(uint8_t *code, enum vop op, uint16_t arg) {
     }
 }
 
-
+// Execute the bytecode
 var_t vexec(fn_t *f, var_t scope) {
     var_t stack[f->stack]; // TODO check for overflow
 
@@ -44,6 +48,14 @@ var_t vexec(fn_t *f, var_t scope) {
     register var_t *sp = stack + f->stack;
 
     while (1) {
+        printf("pc: %d\t%02x\t", pc-f->bcode, *pc);
+        printf("sp: %d\t", f->stack-(sp-stack)); 
+        if (sp == stack + f->stack) {
+            printf("-\n");
+        } else {
+            var_print(*sp); printf("\n");
+        }
+
         switch (VOP_OP & *pc++) {
             case VVAR:      *--sp = f->vars[varg(pc)]; pc += 2;             break;
             case VTBL:      *--sp = tbl_create(0);                          break;
@@ -52,9 +64,9 @@ var_t vexec(fn_t *f, var_t scope) {
             case VDUP:      sp[-1] = sp[varg(pc)]; sp--; pc += 2;           break;
             case VDROP:     sp++;                                           break;
 
-            case VJUMP:     pc += vsarg(pc);                                break;
-            case VJFALSE:   pc += var_isnil(*sp++) ? vsarg(pc) : 2;         break;
-            case VJTRUE:    pc += !var_isnil(*sp++) ? vsarg(pc) : 2;        break;
+            case VJUMP:     pc += vsarg(pc)+2;                              break;
+            case VJFALSE:   pc += var_isnil(*sp++) ? vsarg(pc)+2 : 2;       break;
+            case VJTRUE:    pc += !var_isnil(*sp++) ? vsarg(pc)+2 : 2;      break;
 
             case VLOOKUP:   sp += 1; *sp = var_lookup(sp[0], sp[-1]);       break;
             case VASSIGN:   sp += 3; var_assign(sp[-1], sp[-2], sp[-3]);    break;
@@ -63,8 +75,8 @@ var_t vexec(fn_t *f, var_t scope) {
             
             case VCALL:     sp += 1; *sp = var_call(sp[0], sp[-1]);         break;
             case VTCALL:    sp += 2; return var_call(sp[-1], sp[-2]); // TODO make sure this is tail calling
-            case VRET:      printf("end: %d\n", stack-sp); return *sp;
-            case VRETN:     printf("end: %d\n", stack-sp); return vnil;
+            case VRET:      return *sp;
+            case VRETN:     return vnil;
         }
     }
 }

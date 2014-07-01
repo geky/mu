@@ -37,6 +37,15 @@ struct vstate {
         uint32_t opstate;
     };
 
+    union {
+        struct {
+            int lins;
+            tbl_t *ltbl;
+        };
+
+        uint64_t lstate;
+    };
+
     tbl_t *vars;
     tbl_t *keys;
     tbl_t *ops;

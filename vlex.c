@@ -22,6 +22,11 @@ tbl_t *vkeys(void) {
     tbl_insert(vkeyt, vcstr("fn"), vrnum(VT_FN));
     tbl_insert(vkeyt, vcstr("let"), vrnum(VT_LET));
     tbl_insert(vkeyt, vcstr("return"), vrnum(VT_RETURN));
+    tbl_insert(vkeyt, vcstr("if"), vrnum(VT_IF));
+    tbl_insert(vkeyt, vcstr("while"), vrnum(VT_WHILE));
+    tbl_insert(vkeyt, vcstr("continue"), vrnum(VT_CONT));
+    tbl_insert(vkeyt, vcstr("break"), vrnum(VT_BREAK));
+    tbl_insert(vkeyt, vcstr("else"), vrnum(VT_ELSE));
     return vkeyt;
 }
 
@@ -162,7 +167,7 @@ static int vl_kw(struct vstate *vs) {
     key = tbl_lookup(vs->keys, vs->val);
 
     if (var_isnum(key) && key.data >= VT_FN 
-                       && key.data <= VT_RETURN)
+                       && key.data <= VT_ELSE)
         return key.data;
     else
         return VT_IDENT;

@@ -71,9 +71,16 @@ enum vop {
 
 // Function definitions must be created by 
 // machine implementations
+
+// Return the size taken by the specified opcode
+// Note: size of the jump opcode currently can not change
+// based on argument, because this is not handled by the parser
 int vcount(uint8_t *code, enum vop op, uint16_t arg);
+
+// Encode the specified opcode and return its size
 int vencode(uint8_t *code, enum vop op, uint16_t arg);
 
+// Execute the bytecode
 var_t vexec(fn_t *f, var_t scope);
 
 

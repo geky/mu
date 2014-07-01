@@ -26,7 +26,12 @@ enum vtok {
     VT_IDENT    = 8,
     VT_FN       = 9,
     VT_LET      = 10,
-    VT_RETURN   = 11
+    VT_RETURN   = 11,
+    VT_IF       = 12,
+    VT_WHILE    = 13,
+    VT_CONT     = 14,
+    VT_BREAK    = 15,
+    VT_ELSE     = 16
 };
 
 
