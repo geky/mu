@@ -139,6 +139,31 @@ static void vp_value(struct vstate *vs) {
 }
 
 
+static void vp_primaryif(struct vstate *vs) {
+    int ifins = vs->ins;
+    vs->ins += vsizearg(vs, VJFALSE, 0);
+    vp_value(vs);
+
+    switch (vs->tok) {
+        case VT_ELSE:   {   int elins = vs->ins;
+                            vs->ins += vsizearg(vs, VJUMP, 0);
+                            vp_value(vnext(vs));
+                            vinsertarg(vs, VJFALSE,
+                                (elins+vsizearg(vs, VJUMP, 0)) -
+                                (ifins+vsizearg(vs, VJFALSE, 0)), ifins);
+                            vinsertarg(vs, VJUMP,
+                                vs->ins - (elins+vsizearg(vs, VJUMP, 0)), elins);
+                        }
+                        return;
+
+        default:        vencarg(vs, VJUMP, vsized(vs, VNIL));
+                        vinsertarg(vs, VJFALSE,
+                            vs->ins - (ifins+vsizearg(vs, VJFALSE, 0)), ifins);
+                        venc(vs, VNIL);
+                        return;
+    }
+}
+
 static void vp_primarydot(struct vstate *vs) {
     switch (vs->tok) {
         case VT_IDENT:  vencvar(vs);
@@ -202,6 +227,10 @@ static void vp_primary(struct vstate *vs) {
                         vs->indirect = true;
                         return vp_primaryop(vnext(vs));
 
+        case VT_NIL:    venc(vs, VNIL);
+                        vs->indirect = false;
+                        return vp_primaryop(vnext(vs));
+
         case VT_NUM:
         case VT_STR:    vencvar(vs);
                         vs->indirect = false;
@@ -234,6 +263,13 @@ static void vp_primary(struct vstate *vs) {
                         }
                         venc(vs, VADD);
                         venc(vs, VCALL);
+                        vs->indirect = false;
+                        return vp_primaryop(vs);
+
+        case VT_IF:     vexpect(vnext(vs), '(');
+                        vp_value(vs);
+                        vexpect(vs, ')');
+                        vp_primaryif(vs);
                         vs->indirect = false;
                         return vp_primaryop(vs);
 

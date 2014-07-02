@@ -24,14 +24,15 @@ enum vtok {
     VT_SET      = 6,
     VT_DOT      = 7,
     VT_IDENT    = 8,
-    VT_FN       = 9,
-    VT_LET      = 10,
-    VT_RETURN   = 11,
-    VT_IF       = 12,
-    VT_WHILE    = 13,
-    VT_CONT     = 14,
-    VT_BREAK    = 15,
-    VT_ELSE     = 16
+    VT_NIL      = 9,
+    VT_FN       = 10,
+    VT_LET      = 11,
+    VT_RETURN   = 12,
+    VT_IF       = 13,
+    VT_WHILE    = 14,
+    VT_CONT     = 15,
+    VT_BREAK    = 16,
+    VT_ELSE     = 17
 };
 
 

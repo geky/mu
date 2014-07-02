@@ -46,6 +46,7 @@ enum vop {
 /*  opcode    encoding      arg         stack   result      description                                     */
 
     VVAR    = 0x10 << 3, // var index   +1      var[i]      places constant variable on stack
+    VNIL    = 0x11 << 3, // -           +1      nil         places nil on the stack
     VTBL    = 0x12 << 3, // -           +1      []          creates a new table on the stack
     VSCOPE  = 0x13 << 3, // -           +1      scope       places the scope on the stack
 

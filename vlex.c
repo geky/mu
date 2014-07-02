@@ -19,6 +19,7 @@ tbl_t *vkeys(void) {
     if (vkeyt) return vkeyt;
 
     vkeyt = tbl_create(0).tbl;
+    tbl_insert(vkeyt, vcstr("nil"), vrnum(VT_NIL));
     tbl_insert(vkeyt, vcstr("fn"), vrnum(VT_FN));
     tbl_insert(vkeyt, vcstr("let"), vrnum(VT_LET));
     tbl_insert(vkeyt, vcstr("return"), vrnum(VT_RETURN));
@@ -166,7 +167,7 @@ static int vl_kw(struct vstate *vs) {
     vs->val = vstr(str, kw-str, vs->pos-kw);
     key = tbl_lookup(vs->keys, vs->val);
 
-    if (var_isnum(key) && key.data >= VT_FN 
+    if (var_isnum(key) && key.data >= VT_NIL
                        && key.data <= VT_ELSE)
         return key.data;
     else

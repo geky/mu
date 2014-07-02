@@ -58,6 +58,7 @@ var_t vexec(fn_t *f, var_t scope) {
 
         switch (VOP_OP & *pc++) {
             case VVAR:      *--sp = f->vars[varg(pc)]; pc += 2;             break;
+            case VNIL:      *--sp = vnil;                                   break;
             case VTBL:      *--sp = tbl_create(0);                          break;
             case VSCOPE:    *--sp = scope;                                  break;
             
