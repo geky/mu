@@ -29,7 +29,7 @@ static inline hash_t tbl_next(hash_t i) {
 // Functions for managing tables
 // Each table is preceeded with a reference count
 // which is used as its handle in a var
-var_t tbl_create(uint16_t size) {
+tbl_t *tbl_create(uint16_t size) {
     tbl_t *tbl = vref_alloc(sizeof(tbl_t));
     int32_t cap = tbl_npw2(tbl_ncap(size));
 
@@ -40,7 +40,7 @@ var_t tbl_create(uint16_t size) {
     tbl->keys = (union tblarr){0x1};
     tbl->vals = (union tblarr){0x1};
 
-    return vtbl(tbl);
+    return tbl;
 }
 
 // Called by garbage collector to clean up
@@ -53,20 +53,21 @@ void tbl_destroy(void *m) {
         var_t v = tbl_getval(tbl, i);
 
         if (!var_isnil(k)) {
-            var_decref(k);
-            var_decref(v);
+            var_dec(k);
+            var_dec(v);
         }
     }
 
     if (!tbl->keys.range) vdealloc(tbl->keys.array);
     if (!tbl->vals.range) vdealloc(tbl->vals.array);
+    if (tbl->tail) tbl_dec(tbl->tail);
 }
 
 
 // Recursively looks up a key in the table
 // returns either that value or nil
 var_t tbl_lookup(tbl_t *tbl, var_t key) {
-    tbl = tblp_readp(tbl);
+    tbl = tbl_readp(tbl);
 
     if (var_isnil(key))
         return vnil;
@@ -176,7 +177,7 @@ static void tbl_resize(tbl_t *tbl, uint16_t size) {
 // Inserts a value in the table with the given key
 // without decending down the tail chain
 void tbl_insert(tbl_t *tbl, var_t key, var_t val) {
-    tbl = tblp_writep(tbl);
+    tbl = tbl_writep(tbl);
 
     if (var_isnil(key))
         return;
@@ -210,7 +211,7 @@ void tbl_insert(tbl_t *tbl, var_t key, var_t val) {
                 tbl->nils--;
                 tbl->len++;
             } else {
-                var_decref(v);
+                var_dec(v);
                 tbl_setval(tbl, mi, val);
 
                 if (var_isnil(val)) {
@@ -240,7 +241,7 @@ void tbl_assign(tbl_t *tbl, var_t key, var_t val) {
     hash_t i, hash = var_hash(key);
 
     for (; tbl; tbl = tbl->tail) {
-        if (tblp_isro(tbl))
+        if (tbl_isro(tbl))
             break;
 
         if (tbl->mask == -1)
@@ -259,7 +260,7 @@ void tbl_assign(tbl_t *tbl, var_t key, var_t val) {
                 if (var_isnil(v))
                     break;
 
-                var_decref(v);
+                var_dec(v);
                 tbl_setval(tbl, mi, val);
 
                 if (var_isnil(val)) {
@@ -276,7 +277,7 @@ void tbl_assign(tbl_t *tbl, var_t key, var_t val) {
         return;
 
 
-    tbl = tblp_writep(head);
+    tbl = tbl_writep(head);
 
     if (tbl_ncap(tbl->len + tbl->nils + 1) > tbl->mask + 1)
         tbl_resize(tbl, tbl->len+1);
@@ -300,7 +301,7 @@ void tbl_assign(tbl_t *tbl, var_t key, var_t val) {
 
 // Returns a string representation of the table
 var_t tbl_repr(var_t v) {
-    tbl_t *tbl = tblp_readp(v.tbl);
+    tbl_t *tbl = tbl_readp(v.tbl);
     unsigned int size = 2;
     int i, j;
 
@@ -340,7 +341,7 @@ var_t tbl_repr(var_t v) {
         if (!tbl->keys.range) {
             memcpy(s, var_str(key_repr[i]), key_repr[i].len);
             s += key_repr[i].len;
-            var_decref(key_repr[i]);
+            var_dec(key_repr[i]);
 
             *s++ = ':';
             *s++ = ' ';
@@ -348,7 +349,7 @@ var_t tbl_repr(var_t v) {
 
         memcpy(s, var_str(val_repr[i]), val_repr[i].len);
         s += val_repr[i].len;
-        var_decref(val_repr[i]);
+        var_dec(val_repr[i]);
 
         if (i != tbl->len-1) {
             *s++ = ',';

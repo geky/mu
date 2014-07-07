@@ -82,7 +82,7 @@ int vcount(uint8_t *code, enum vop op, uint16_t arg);
 int vencode(uint8_t *code, enum vop op, uint16_t arg);
 
 // Execute the bytecode
-var_t vexec(fn_t *f, var_t scope);
+var_t vexec(fn_t *f, tbl_t *scope);
 
 
 #endif

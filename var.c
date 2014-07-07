@@ -16,12 +16,12 @@
 // same type and equivalent.
 // all nils are equal
 static bool nil_equals(var_t a, var_t b) { return true; }
-// compare raw data field by default
-static bool data_equals(var_t a, var_t b) { return a.data == b.data; }
+// compare raw bits by default
+static bool bit_equals(var_t a, var_t b) { return a.bits == b.bits; }
 
 static bool (* const var_equals_a[8])(var_t, var_t) = {
-    nil_equals, data_equals, 0, num_equals,
-    str_equals, data_equals, data_equals, data_equals
+    nil_equals, num_equals, bit_equals, bit_equals,
+    str_equals, bit_equals, bit_equals, bit_equals
 };
 
 bool var_equals(var_t a, var_t b) {
@@ -36,13 +36,13 @@ bool var_equals(var_t a, var_t b) {
 // nils should never be hashed
 // however hash could be called directly
 static hash_t nil_hash(var_t v) { return 0; }
-// use raw data field by default
-static hash_t data_hash(var_t v) { return v.data; }
+// use raw bits by default
+static hash_t bit_hash(var_t v) { return v.meta ^ v.data; }
 
 hash_t var_hash(var_t v) {
     static hash_t (* const var_hash_a[8])(var_t) = {
-        nil_hash, data_hash, 0, num_hash,
-        str_hash, data_hash, data_hash, data_hash
+        nil_hash, num_hash, bit_hash, bit_hash,
+        str_hash, bit_hash, bit_hash, bit_hash
     };
 
     return var_hash_a[v.type](v);
@@ -51,12 +51,13 @@ hash_t var_hash(var_t v) {
 
 // Returns a string representation of the variable
 static var_t nil_repr(var_t v) { return vcstr("nil"); }
-static var_t def_repr(var_t v) { return vcstr("bad type"); }
+static var_t bfn_repr(var_t v) { return vcstr("fn() <builtin>"); }
+static var_t bad_repr(var_t v) { return vcstr("<bad var>"); }
 
 var_t var_repr(var_t v) {
     static var_t (* const var_repr_a[8])(var_t) = {
-        nil_repr, bfn_repr, def_repr, num_repr,
-        str_repr, fn_repr, tbl_repr, def_repr
+        nil_repr, num_repr, bfn_repr, bfn_repr,
+        str_repr, fn_repr,  tbl_repr, bad_repr
     };
 
     return var_repr_a[v.type](v);
@@ -123,30 +124,26 @@ void var_add(var_t v, var_t val) {
 
 
 // Function calls performed on variables
-static var_t nil_call(var_t f, var_t a) { assert(false); } // TODO error
-static var_t vfn_call(var_t f, var_t a)  { return fn_call(f.fn, a.tbl); }
-static var_t vbfn_call(var_t f, var_t a) { return f.bfn(a); }
+static var_t nil_call(var_t f, tbl_t *a) { assert(false); } // TODO error
+static var_t vfn_call(var_t f, tbl_t *a) { return fn_call(var_fn(f), a, f.tbl); }
+static var_t vbfn_call(var_t f, tbl_t *a) { return f.bfn(a); }
+static var_t vsfn_call(var_t f, tbl_t *a) { f.type = 4; return f.sfn(a, f.stbl); }
 
-var_t var_call(var_t v, var_t args) {
-    static var_t (* const var_call_a[8])(var_t, var_t) = {
-        nil_call, vbfn_call, nil_call, nil_call,
+var_t var_call(var_t v, tbl_t *args) {
+    static var_t (* const var_call_a[8])(var_t, tbl_t *) = {
+        nil_call, nil_call, vbfn_call, vsfn_call,
         nil_call, vfn_call, nil_call, nil_call
     };
-
-    assert(var_istbl(args)); // TODO error
 
     return var_call_a[v.type](v, args);
 }
 
 
 // Cleans up memory of a variable
+// Only takes care of none table memory
+static void str_destroy(void *m) {}
 
-static void nil_destroy(void *m) {}
-
-void vdestroy(void *m) {
-    static void (* const vdestroy_a[4])(void *) = {
-        nil_destroy, fn_destroy, tbl_destroy, tbl_destroy
-    };
-
-    vdestroy_a[0x3 & (uint32_t)m](m);
-}
+void (* const vdtor_a[8])(void *) = {
+    0, 0, 0, tbl_destroy,
+    str_destroy, fn_destroy, 0, 0
+};

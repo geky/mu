@@ -11,6 +11,7 @@ ASM := $(OBJ:.o=.s)
 #CFLAGS += -O2
 #CFLAGS += -O2 -pg
 CFLAGS += -O0 -g3 -gdwarf-2 -ggdb
+CFLAGS += -include stdio.h
 CFLAGS += -finline -foptimize-sibling-calls -freg-struct-return
 CFLAGS += -m32
 CFLAGS += -Wall -Winline

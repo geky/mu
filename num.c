@@ -1,7 +1,5 @@
 #include "num.h"
 
-#include "mem.h"
-
 
 // Returns true if both variables are equal
 bool num_equals(var_t a, var_t b) {

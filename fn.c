@@ -11,77 +11,57 @@
 // Functions for managing functions
 // Each function is preceded with a reference count
 // which is used as its handle in a var
-var_t fn_create(var_t argv, var_t code, var_t scopev) {
+fn_t *fn_create(tbl_t *args, var_t code, tbl_t *ops, tbl_t *keys) {
     fn_t *f;
-    tbl_t *args;
-    tbl_t *scope;
     tbl_t *vars;
     int i = 0;
 
-    assert(var_istbl(argv) && 
-           var_isstr(code) &&
-           (var_istbl(scopev) || 
-            var_isnil(scopev))); // TODO errors
-
-    args = tblp_readp(argv.tbl);
-    scope = tblp_readp(scopev.tbl);
-    vars = tbl_create(args->len + 1).tbl;
-    f = vref_alloc(sizeof(fn_t) + args->len);
-
+    args = tbl_readp(args);
+    f = vref_alloc(sizeof(fn_t));
+    vars = tbl_create(args->len + 1);
 
     tbl_insert(vars, code, vnum(i++));
 
     tbl_for(k, v, args, {
         tbl_insert(vars, v, vnum(i++));
     })
+
         
-
-    f->acount = args->len;
-    f->stack = 25; // TODO make this reasonable
-    f->scope = scope;
-
     struct vstate *vs = valloc(sizeof(struct vstate));
+    vs->ref = var_ref(code);
     vs->pos = var_str(code);
     vs->end = vs->pos + code.len;
-    vs->ref = var_ref(code);
     vs->bcode = 0;
     vs->vars = vars;
     vs->encode = vcount;
 
-
-    var_t ops = tbl_lookup(scope, vcstr("ops"));
-
-    if (var_istbl(ops))
-        vs->ops = tblp_readp(ops.tbl);
-    else
-        vs->ops = vops();
-
-    vs->keys = vkeys();
+    vs->ops = ops ? tbl_readp(ops) : vops();
+    vs->keys = keys ? tbl_readp(keys) : vkeys();
 
 
     int ins = vparse(vs);
 
     vs->pos = var_str(code);
-    vs->end = vs->pos + code.len;
-    vs->ref = var_ref(code);
     vs->bcode = valloc(ins);
     vs->encode = vencode;
 
     vparse(vs);
 
     f->bcode = vs->bcode;
+    f->acount = args->len;
     f->vcount = vars->len;
+    f->stack = 25; // TODO make this reasonable
+
     f->vars = valloc(sizeof(var_t) * f->vcount);
 
     tbl_for(k, v, vars, {
         f->vars[(uint16_t)var_num(v)] = k;
-        var_incref(k);
     });
     
-    vref_dec(vars);
+    tbl_dec(vars);
     vdealloc(vs);
 
-    return vfn(f);
+    return f;
 }
 
 
@@ -91,49 +71,41 @@ void fn_destroy(void *m) {
     fn_t *f = m;
     int i;
 
-    if (f->scope)
-        vref_dec(f->scope);
-
-    vref_dec((ref_t *)f->bcode);
-
     for (i=0; i < f->vcount; i++) {
-        var_decref(f->vars[i]);
+        var_dec(f->vars[i]);
     }
+
+    vdealloc((void *)f->bcode);
+    vdealloc(f->vars);
 }
 
 
 // Call a function. Each function takes a table
 // of arguments, and returns a single variable.
-var_t fn_call(fn_t *f, tbl_t *args) {
-    tbl_t *scope = tbl_create(f->acount + 2).tbl;
+var_t fn_call(fn_t *f, tbl_t *args, tbl_t *closure) {
+    tbl_t *scope = tbl_create(f->acount + 1);
     int i;
 
     tbl_insert(scope, vcstr("args"), vtbl(args));
-    tbl_insert(scope, vcstr("this"), tbl_lookup(args, vcstr("this")));
 
-    for (i=1; i <= f->acount; i++) {
+    for (i=0; i < f->acount; i++) {
         var_t param = tbl_lookup(args, vnum(i));
 
         if (var_isnil(param))
-            param = tbl_lookup(args, f->vars[i]);
+            param = tbl_lookup(args, f->vars[i-1]);
 
-        tbl_insert(scope, f->vars[i], param);
+        tbl_insert(scope, f->vars[i-1], param);
     }
 
-    scope->tail = f->scope;
+    scope->tail = closure;
 
-
-    return vexec(f, vtbl(scope));
+    return vexec(f, scope);
 }
 
 
 // Returns a string representation of a function
-var_t bfn_repr(var_t v) {
-    return vcstr("fn() <builtin>");
-}
-
 var_t fn_repr(var_t v) {
-    fn_t *f = v.fn;
+    fn_t *f = var_fn(v);
     unsigned int size = 7 + f->vars[0].len;
     int i;
 

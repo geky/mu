@@ -18,26 +18,26 @@ static tbl_t *vopt = 0;
 tbl_t *vkeys(void) {
     if (vkeyt) return vkeyt;
 
-    vkeyt = tbl_create(0).tbl;
-    tbl_insert(vkeyt, vcstr("nil"), vrnum(VT_NIL));
-    tbl_insert(vkeyt, vcstr("fn"), vrnum(VT_FN));
-    tbl_insert(vkeyt, vcstr("let"), vrnum(VT_LET));
-    tbl_insert(vkeyt, vcstr("return"), vrnum(VT_RETURN));
-    tbl_insert(vkeyt, vcstr("if"), vrnum(VT_IF));
-    tbl_insert(vkeyt, vcstr("while"), vrnum(VT_WHILE));
-    tbl_insert(vkeyt, vcstr("continue"), vrnum(VT_CONT));
-    tbl_insert(vkeyt, vcstr("break"), vrnum(VT_BREAK));
-    tbl_insert(vkeyt, vcstr("else"), vrnum(VT_ELSE));
+    vkeyt = tbl_create(0);
+    tbl_insert(vkeyt, vcstr("nil"), vraw(VT_NIL));
+    tbl_insert(vkeyt, vcstr("fn"), vraw(VT_FN));
+    tbl_insert(vkeyt, vcstr("let"), vraw(VT_LET));
+    tbl_insert(vkeyt, vcstr("return"), vraw(VT_RETURN));
+    tbl_insert(vkeyt, vcstr("if"), vraw(VT_IF));
+    tbl_insert(vkeyt, vcstr("while"), vraw(VT_WHILE));
+    tbl_insert(vkeyt, vcstr("continue"), vraw(VT_CONT));
+    tbl_insert(vkeyt, vcstr("break"), vraw(VT_BREAK));
+    tbl_insert(vkeyt, vcstr("else"), vraw(VT_ELSE));
     return vkeyt;
 }
 
 tbl_t *vops(void) {
     if (vopt) return vopt;
 
-    vopt = tbl_create(0).tbl;
-    tbl_insert(vopt, vcstr("="), vrnum(VT_SET));
-    tbl_insert(vopt, vcstr(":"), vrnum(VT_SET));
-    tbl_insert(vopt, vcstr("."), vrnum(VT_DOT));
+    vopt = tbl_create(0);
+    tbl_insert(vopt, vcstr("="), vraw(VT_SET));
+    tbl_insert(vopt, vcstr(":"), vraw(VT_SET));
+    tbl_insert(vopt, vcstr("."), vraw(VT_DOT));
     return vopt;
 }
 

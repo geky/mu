@@ -97,7 +97,7 @@ static void vpatch(struct vstate *vs) {
             vs->ins - (v.data+vsizearg(vs, VJUMP, 0)), v.data);
     });
 
-    vref_dec(vs->ltbl);
+    tbl_dec(vs->ltbl);
     vs->ltbl = 0;
 }
 
@@ -448,7 +448,7 @@ static void vp_expression(struct vstate *vs) {
 
         case VT_WHILE:  {   uint64_t lstate = vs->lstate;
                             vs->lins = vs->ins;
-                            vs->ltbl = tbl_create(0).tbl;
+                            vs->ltbl = tbl_create(0);
                             vexpect(vnext(vs), '(');
                             vp_value(vs);
                             vexpect(vs, ')');
@@ -466,7 +466,7 @@ static void vp_expression(struct vstate *vs) {
 
         case VT_BREAK:  if (!vs->ltbl) vunexpected(vs);
                         vnext(vs);
-                        tbl_add(vs->ltbl, vrnum(vs->ins));
+                        tbl_add(vs->ltbl, vraw(vs->ins));
                         vs->ins += vsizearg(vs, VJUMP, 0);
                         return;
 

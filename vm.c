@@ -41,7 +41,7 @@ int vencode(uint8_t *code, enum vop op, uint16_t arg) {
 }
 
 // Execute the bytecode
-var_t vexec(fn_t *f, var_t scope) {
+var_t vexec(fn_t *f, tbl_t *scope) {
     var_t stack[f->stack]; // TODO check for overflow
 
     register str_t *pc = f->bcode;
@@ -59,8 +59,8 @@ var_t vexec(fn_t *f, var_t scope) {
         switch (VOP_OP & *pc++) {
             case VVAR:      *--sp = f->vars[varg(pc)]; pc += 2;             break;
             case VNIL:      *--sp = vnil;                                   break;
-            case VTBL:      *--sp = tbl_create(0);                          break;
-            case VSCOPE:    *--sp = scope;                                  break;
+            case VTBL:      *--sp = vtbl(tbl_create(0));                    break;
+            case VSCOPE:    *--sp = vtbl(scope);                            break;
             
             case VDUP:      sp[-1] = sp[varg(pc)]; sp--; pc += 2;           break;
             case VDROP:     sp++;                                           break;
@@ -74,8 +74,8 @@ var_t vexec(fn_t *f, var_t scope) {
             case VINSERT:   sp += 2; var_insert(sp[0], sp[-1], sp[-2]);     break;
             case VADD:      sp += 1; var_add(sp[0], sp[-1]) ;               break;
             
-            case VCALL:     sp += 1; *sp = var_call(sp[0], sp[-1]);         break;
-            case VTCALL:    sp += 2; return var_call(sp[-1], sp[-2]); // TODO make sure this is tail calling
+            case VCALL:     sp += 1; *sp = var_call(sp[0], sp[-1].tbl);     break;
+            case VTCALL:    sp += 2; return var_call(sp[-1], sp[-2].tbl); // TODO make sure this is tail calling
             case VRET:      return *sp;
             case VRETN:     return vnil;
         }

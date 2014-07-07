@@ -5,6 +5,7 @@
 #ifndef V_MEM
 #define V_MEM
 
+#include <stdint.h>
 #include <string.h>
 
 // Reference type as word type
@@ -24,10 +25,20 @@ void vdealloc(void *);
 // count. Deallocated immediately when ref hits zero.
 // It is up to the user to avoid cyclic dependencies.
 // Reference is garunteed to be aligned to 8 bytes.
-// References ignored if 3rd bit is not set.
 void *vref_alloc(size_t size);
-void vref_inc(void *ref);
-void vref_dec(void *ref);
 
+static inline void vref_inc(void *m) {
+    ref_t *ref = (ref_t*)(~0x7 & (uint32_t)m);
+    (*ref)++;
+}
+
+static inline void vref_dec(void *m, void (*dtor)(void*)) {
+    ref_t *ref = (ref_t*)(~0x7 & (uint32_t)m);
+
+    if (--(*ref) == 0) {
+        dtor(ref + 1);
+        vdealloc(ref);
+    }
+}
 
 #endif

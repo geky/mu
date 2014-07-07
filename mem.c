@@ -35,37 +35,13 @@ void *vref_alloc(size_t size) {
 
     // garuntee address width
     assert(sizeof m == sizeof(uint32_t));
-    // garuntee alignement
+    // garuntee alignment
     assert((0x7 & (uint32_t)m) == 0);
 
     // start with count of 1
     *m = 1;
 
-    // return the data following the referece
-    // also garuntees that bit 3 is set
+    // return the data following the reference
     return m + 1;
-}
-
-void vref_inc(void *m) {
-    uint32_t bits = (uint32_t)m;
-
-    if (bits & 0x4) {
-        ref_t *ref = (ref_t*)(~0x7 & bits);
-        (*ref)++;
-    }
-}
-
-void vref_dec(void *m) {
-    uint32_t bits = (uint32_t)m;
-
-    if (bits & 0x4) {
-        ref_t *ref = (ref_t*)(~0x7 & bits);
-        (*ref)--;
-
-        if (*ref == 0) {
-            vdestroy(ref + 1);
-            vdealloc(ref);
-        }
-    }
 }
 

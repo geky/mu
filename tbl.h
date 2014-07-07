@@ -38,10 +38,11 @@ struct tbl {
 // Functions for managing tables
 // Each table is preceeded with a reference count
 // which is used as its handle in a var
-var_t tbl_create(uint16_t size);
+tbl_t *tbl_create(uint16_t size);
 
 // Called by garbage collector to clean up
 void tbl_destroy(void *);
+
 
 // Recursively looks up a key in the table
 // returns either that value or nil
@@ -84,25 +85,31 @@ var_t tbl_repr(var_t v);
 }
 
 
+
 // Accessing table pointers with the ro flag
-static inline bool tblp_isro(tbl_t *tbl) {
+static inline bool tbl_isro(tbl_t *tbl) {
     return 0x1 & (uint32_t)tbl;
 }
 
-static inline tbl_t *tblp_ro(tbl_t *tbl) {
+static inline tbl_t *tbl_ro(tbl_t *tbl) {
     return (tbl_t *)(0x1 | (uint32_t)tbl);
 }
 
-static inline tbl_t *tblp_readp(tbl_t *tbl) {
+static inline tbl_t *tbl_readp(tbl_t *tbl) {
     uint32_t bits = (uint32_t)tbl;
     bits &= ~0x1;
     return (tbl_t *)bits;
 }
 
-static inline tbl_t *tblp_writep(tbl_t *tbl) {
-    assert(!tblp_isro(tbl)); // TODO error on const tbl
+static inline tbl_t *tbl_writep(tbl_t *tbl) {
+    assert(!tbl_isro(tbl)); // TODO error on const tbl
     return tbl;
 }
+
+
+// Table reference counting
+static inline void tbl_inc(void *m) { vref_inc(m); }
+static inline void tbl_dec(void *m) { vref_dec(m, tbl_destroy); }
 
 
 // Table array accessing
@@ -134,7 +141,6 @@ static inline void tbl_setarray(tbl_t *tbl, uint32_t i, var_t v, union tblarr *a
     }
 
     a->array[i] = v;
-    var_incref(v);
 }
 
 static inline var_t tbl_getkey(tbl_t *tbl, uint32_t i) {
