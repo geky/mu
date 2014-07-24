@@ -13,16 +13,11 @@
 #define tbl_maxlen ((1<<16)-1)
 
 
-// Each table is composed of two arrays 
-// each can hide as a range with an offset
-union tblarr {
-    uint32_t bits;
-    bool range : 1;
-
-    struct { uint16_t padd; uint16_t off; };
-    var_t *array;
-};  
-
+// Each table is composed of an array of values 
+// with a stride for keys/values. If keys/values 
+// is not stored in the array it is implicitely 
+// stored as a range/offset based on the specified 
+// offset and length.
 struct tbl {
     struct tbl *tail; // tail chain of tables
 
@@ -30,8 +25,13 @@ struct tbl {
     uint16_t len;  // count of keys in use
     int32_t mask;  // size of entries - 1
 
-    union tblarr keys; // array of keys
-    union tblarr vals; // array of values
+    uint16_t koff;   // key offset
+    uint16_t stride; // 0, 1, 2 for offsets
+
+    union {
+        uint16_t voff; // var offset
+        var_t *array;  // pointer to stored data
+    };
 };
 
 
@@ -68,22 +68,36 @@ var_t tbl_repr(var_t v);
 // Macro for iterating through a table in c
 // Assign names for k and v, and pass in the 
 // block to execute for each pair in tbl
-#define tbl_for(k, v, tbl, block) {             \
-    var_t k;                                    \
-    var_t v;                                    \
-    tbl_t *_t = tbl;                            \
-    int _i;                                     \
-                                                \
-    for (_i=0; _i <= _t->mask; _i++) {          \
-        k = tbl_getkey(_t, _i);                 \
-        v = tbl_getval(_t, _i);                 \
-                                                \
-        if (!var_isnil(k) && !var_isnil(v)) {   \
-            block                               \
-        }                                       \
-    }                                           \
+#define tbl_for(k, v, tbl, block) {                         \
+    var_t k;                                                \
+    var_t v;                                                \
+    tbl_t *_t = tbl;                                        \
+    int _i;                                                 \
+                                                            \
+    switch (_t->stride) {                                   \
+        case 0: for (_i=0; _i < _t->len; _i++) {            \
+            k = vnum(_t->koff + _i);                        \
+            v = vnum(_t->voff + _i);                        \
+            {block};                                        \
+        } break;                                            \
+                                                            \
+        case 1: for (_i=0; _i < _t->nils+_t->len; _i++) {   \
+            k = vnum(_t->koff + _i);                        \
+            v = _t->array[_i];                              \
+                                                            \
+            if (!var_isnil(v))                              \
+                {block};                                    \
+        } break;                                            \
+                                                            \
+        case 2: for (_i=0; _i <= _t->mask; _i++) {          \
+            k = _t->array[2*_i    ];                        \
+            v = _t->array[2*_i + 1];                        \
+                                                            \
+            if (!var_isnil(k) && !var_isnil(v))             \
+                {block};                                    \
+        } break;                                            \
+    }                                                       \
 }
-
 
 
 // Accessing table pointers with the ro flag
@@ -96,9 +110,7 @@ static inline tbl_t *tbl_ro(tbl_t *tbl) {
 }
 
 static inline tbl_t *tbl_readp(tbl_t *tbl) {
-    uint32_t bits = (uint32_t)tbl;
-    bits &= ~0x1;
-    return (tbl_t *)bits;
+    return (tbl_t *)(~0x1 & (uint32_t)tbl);
 }
 
 static inline tbl_t *tbl_writep(tbl_t *tbl) {
@@ -110,54 +122,6 @@ static inline tbl_t *tbl_writep(tbl_t *tbl) {
 // Table reference counting
 static inline void tbl_inc(void *m) { vref_inc(m); }
 static inline void tbl_dec(void *m) { vref_dec(m, tbl_destroy); }
-
-
-// Table array accessing
-var_t *tbl_realizerange(uint16_t off, uint16_t len, int32_t cap);
-
-static inline var_t tbl_getarray(tbl_t *tbl, uint32_t i, union tblarr *a) {
-    if (a->range) {
-        if (i - a->off < tbl->len + tbl->nils)
-            return vnum(i-a->off);
-        else 
-            return vnil;
-    }
-
-    return a->array[i];
-}
-
-static inline void tbl_setarray(tbl_t *tbl, uint32_t i, var_t v, union tblarr *a) {
-    if (a->range) {
-        if (v.type == TYPE_NUM && num_equals(v, vnum(i))) {
-            if (i - a->off <= tbl->len + tbl->nils) {
-                return;
-            } else if (tbl->len + tbl->nils == 0 && i <= tbl_maxlen) {
-                a->off = i;
-                return;
-            }
-        }
-
-        a->array = tbl_realizerange(a->off, tbl->len+tbl->nils, tbl->mask+1);
-    }
-
-    a->array[i] = v;
-}
-
-static inline var_t tbl_getkey(tbl_t *tbl, uint32_t i) {
-    return tbl_getarray(tbl, i, &tbl->keys);
-}
-
-static inline var_t tbl_getval(tbl_t *tbl, uint32_t i) {
-    return tbl_getarray(tbl, i, &tbl->vals);
-}
-
-static inline void tbl_setkey(tbl_t *tbl, uint32_t i, var_t v) {
-    tbl_setarray(tbl, i, v, &tbl->keys);
-}
-
-static inline void tbl_setval(tbl_t *tbl, uint32_t i, var_t v) {
-    tbl_setarray(tbl, i, v, &tbl->vals);
-}
 
 
 #endif
