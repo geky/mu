@@ -28,7 +28,7 @@ hash_t num_hash(var_t v) {
 
 
 // Parses a string and returns a number
-const uint8_t num_a[256] = {
+const str_t num_a[256] = {
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,  '.', 0xff,
@@ -48,9 +48,9 @@ const uint8_t num_a[256] = {
 };
 
 // TODO add bounds checking
-var_t num_parse(str_t **off, str_t *end) {
+var_t num_parse(const str_t **off, const str_t *end) {
     var_t v;
-    str_t *str = *off;
+    const str_t *str = *off;
 
     num_t scale;
     num_t sign;
@@ -58,10 +58,10 @@ var_t num_parse(str_t **off, str_t *end) {
     struct base {
         num_t radix;
         num_t exp;
-        uint8_t exp_c;
+        str_t exp_c;
     } base = { 10.0, 10.0, 0xe };
 
-    register uint8_t w;
+    register str_t w;
 
 
     // determine the base
@@ -182,7 +182,7 @@ var_t num_repr(var_t v) {
         return vcstr("0");
 
     } else {
-        uint8_t *s, *out;
+        str_t *s, *out;
 
         out = vref_alloc(16);
         s = out;

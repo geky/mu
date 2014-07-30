@@ -32,7 +32,7 @@ static inline bool tbl_ishash(var_t v, hash_t hash) {
 // Functions for managing tables
 // Each table is preceeded with a reference count
 // which is used as its handle in a var
-tbl_t *tbl_create(uint16_t size) {
+tbl_t *tbl_create(len_t size) {
     tbl_t *tbl = vref_alloc(sizeof(tbl_t));
 
     tbl->mask = tbl_npw2(tbl_ncap(size)) - 1;
@@ -53,14 +53,14 @@ void tbl_destroy(void *m) {
     tbl_t *tbl = m;
 
     if (tbl->stride > 0) {
-        int i, size;
+        int i, entries;
 
         if (tbl->stride < 2)
-            size = tbl->len;
+            entries = tbl->len;
         else
-            size = 2 * (tbl->mask+1);
+            entries = 2 * (tbl->mask+1);
 
-        for (i=0; i < size; i++)
+        for (i=0; i < entries; i++)
             var_dec(tbl->array[i]);
 
         vdealloc(tbl->array);
@@ -145,7 +145,7 @@ static void tbl_realizekeys(tbl_t *tbl) {
 
 
 // reallocates and rehashes a table
-static inline void tbl_resize(tbl_t * tbl, uint16_t size) {
+static inline void tbl_resize(tbl_t * tbl, len_t size) {
     hash_t cap = tbl_npw2(tbl_ncap(size));
     hash_t mask = cap - 1;
 
@@ -478,7 +478,7 @@ var_t tbl_repr(var_t v) {
     tbl_t *tbl = tbl_readp(v.tbl);
     unsigned int size = 2;
 
-    uint8_t *out, *s;
+    str_t *out, *s;
 
     var_t *key_repr = valloc(tbl->len * sizeof(var_t));
     var_t *val_repr = valloc(tbl->len * sizeof(var_t));

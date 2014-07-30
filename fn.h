@@ -10,13 +10,13 @@
 
 
 struct fn {
-    str_t *bcode;
+    const str_t *bcode;
 
-    uint16_t acount;
-    uint16_t vcount;
-    uint16_t fcount;
+    len_t acount;
+    len_t vcount;
+    len_t fcount;
 
-    uint16_t stack;
+    len_t stack;
 
     fn_t *fns;
     var_t *vars;

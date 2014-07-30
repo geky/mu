@@ -44,12 +44,12 @@ tbl_t *vops(void);
 
 // Performs lexical analysis on the passed string
 // Value is stored in val and a token's type is returned
-int vlex(struct vstate *);
+vtok_t vlex(struct vstate *);
 
 
 // Lookup table of lex functions based 
 // only on a single character of token
-extern int (* const vlex_a[256])(struct vstate *);
+extern vtok_t (* const vlex_a[256])(struct vstate *);
 
 
 #endif

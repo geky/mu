@@ -26,6 +26,14 @@
  *
  */
 
+// operator types
+typedef uint8_t vop_t;
+typedef uint16_t varg_t;
+
+// instruction counts
+typedef uint32_t vins_t;
+
+
 enum {
     VOP_OP    = 0xf8, // Opcode in top 5 bits
     VOP_FLAGS = 0x07, // Flags in bottom 3 bits
@@ -34,13 +42,6 @@ enum {
     VOP_END   = 0x04, // Indicates the end of code generation, 
 };                    // will only occur in a return opcode
 
-
-
-/*
- * The following are the opcode definitions
- * They are kept simply and limited to facilitate 
- * code generation.
- */
 
 enum vop {
 /*  opcode    encoding      arg         stack   result      description                                     */
@@ -76,10 +77,10 @@ enum vop {
 // Return the size taken by the specified opcode
 // Note: size of the jump opcode currently can not change
 // based on argument, because this is not handled by the parser
-int vcount(uint8_t *code, enum vop op, uint16_t arg);
+vins_t vcount(str_t *code, vop_t op, varg_t arg);
 
 // Encode the specified opcode and return its size
-int vencode(uint8_t *code, enum vop op, uint16_t arg);
+vins_t vencode(str_t *code, vop_t op, varg_t arg);
 
 // Execute the bytecode
 var_t vexec(fn_t *f, tbl_t *scope);

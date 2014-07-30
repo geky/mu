@@ -15,7 +15,7 @@ bool str_equals(var_t a, var_t b);
 hash_t str_hash(var_t v);
 
 // Parses a string and returns a string
-var_t str_parse(str_t **off, str_t *end);
+var_t str_parse(const str_t **off, const str_t *end);
 
 // Returns a string representation of a string
 var_t str_repr(var_t v);

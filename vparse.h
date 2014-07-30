@@ -8,6 +8,12 @@
 #include "var.h"
 #include "vm.h"
 
+
+// Parsing type definitions
+typedef struct vstate vstate_t;
+typedef uint8_t vtok_t;
+
+
 // Representation of parsing product
 enum vproduct {
     VP_NONE = 0,
@@ -17,21 +23,21 @@ enum vproduct {
 
 // State of a parse
 struct vstate {
-    str_t *pos;
-    str_t *end;
+    const str_t *pos;
+    const str_t *end;
     ref_t *ref;
 
     uint8_t indirect;
     uint8_t paren;
     uint8_t nprec;
 
-    uint8_t tok;
+    vtok_t tok;
     var_t val;
 
     union {
         struct {
             uint8_t prec   : 8;
-            uint32_t opins : 24;
+            vins_t opins : 24;
         };
 
         uint32_t opstate;
@@ -39,7 +45,7 @@ struct vstate {
 
     union {
         struct {
-            int lins;
+            vins_t lins;
             tbl_t *ltbl;
         };
 
@@ -50,14 +56,14 @@ struct vstate {
     tbl_t *keys;
     tbl_t *ops;
 
-    int ins;
-    uint8_t *bcode;
-    int (*encode)(uint8_t *, enum vop, uint16_t);
+    vins_t ins;
+    str_t *bcode;
+    vins_t (*encode)(str_t *, vop_t, varg_t);
 };
 
 
 // Parses V source code and evaluates the result
-int vparse(struct vstate *);
+vins_t vparse(struct vstate *);
 
 
 #endif

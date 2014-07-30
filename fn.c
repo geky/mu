@@ -106,10 +106,10 @@ var_t fn_call(fn_t *f, tbl_t *args, tbl_t *closure) {
 // Returns a string representation of a function
 var_t fn_repr(var_t v) {
     fn_t *f = var_fn(v);
-    unsigned int size = 7 + f->vars[0].len;
+    int size = 7 + f->vars[0].len;
     int i;
 
-    uint8_t *out, *s;
+    str_t *out, *s;
 
     for (i=1; i <= f->acount; i++) {
         size += f->vars[i].len;

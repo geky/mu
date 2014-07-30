@@ -44,28 +44,28 @@ tbl_t *vops(void) {
 
 // Lexer definitions for V's tokens
 __attribute__((noreturn))
-static int vl_bad(struct vstate *vs) {
+static vtok_t vl_bad(struct vstate *vs) {
     assert(false); //TODO: errors: bad parse
 }
 
-static int vl_ws(struct vstate *vs);
-static int vl_com(struct vstate *vs);
-static int vl_op(struct vstate *vs);
-static int vl_kw(struct vstate *vs);
-static int vl_tok(struct vstate *vs);
-static int vl_sep(struct vstate *vs);
-static int vl_set(struct vstate *vs);
-static int vl_nl(struct vstate *vs);
-static int vl_num(struct vstate *vs);
-static int vl_str(struct vstate *vs);
+static vtok_t vl_ws(struct vstate *vs);
+static vtok_t vl_com(struct vstate *vs);
+static vtok_t vl_op(struct vstate *vs);
+static vtok_t vl_kw(struct vstate *vs);
+static vtok_t vl_tok(struct vstate *vs);
+static vtok_t vl_sep(struct vstate *vs);
+static vtok_t vl_set(struct vstate *vs);
+static vtok_t vl_nl(struct vstate *vs);
+static vtok_t vl_num(struct vstate *vs);
+static vtok_t vl_str(struct vstate *vs);
 
 
-static int vl_ws(struct vstate *vs) {
+static vtok_t vl_ws(struct vstate *vs) {
     vs->pos++;
     return vlex(vs);
 }
 
-static int vl_com(struct vstate *vs) {
+static vtok_t vl_com(struct vstate *vs) {
     vs->pos++;
 
     if (vs->pos >= vs->end || *vs->pos != '`') {
@@ -96,9 +96,9 @@ static int vl_com(struct vstate *vs) {
     return vlex(vs);
 }
 
-static int vl_op(struct vstate *vs) {
-    str_t *str = (str_t *)(vs->ref + 1);
-    str_t *kw = vs->pos++;
+static vtok_t vl_op(struct vstate *vs) {
+    const str_t *str = (str_t *)(vs->ref + 1);
+    const str_t *kw = vs->pos++;
     var_t op;
 
     while (vs->pos < vs->end) {
@@ -150,9 +150,9 @@ static int vl_op(struct vstate *vs) {
     }
 }
 
-static int vl_kw(struct vstate *vs) {
-    str_t *str = (str_t *)(vs->ref + 1);
-    str_t *kw = vs->pos++;
+static vtok_t vl_kw(struct vstate *vs) {
+    const str_t *str = (str_t *)(vs->ref + 1);
+    const str_t *kw = vs->pos++;
     var_t key;
 
     while (vs->pos < vs->end) {
@@ -174,32 +174,32 @@ static int vl_kw(struct vstate *vs) {
         return VT_IDENT;
 }
 
-static int vl_tok(struct vstate *vs) {
+static vtok_t vl_tok(struct vstate *vs) {
     return *vs->pos++;
 }
 
-static int vl_sep(struct vstate *vs) {
+static vtok_t vl_sep(struct vstate *vs) {
     vs->pos++;
     return VT_SEP;
 }
 
-static int vl_set(struct vstate *vs) {
+static vtok_t vl_set(struct vstate *vs) {
     return vl_op(vs);
 }
 
-static int vl_nl(struct vstate *vs) {
+static vtok_t vl_nl(struct vstate *vs) {
     if (vs->paren)
         return vl_ws(vs);
     else
         return vl_sep(vs);
 }       
 
-static int vl_num(struct vstate *vs) {
+static vtok_t vl_num(struct vstate *vs) {
     vs->val = num_parse(&vs->pos, vs->end);
     return VT_NUM;
 }
 
-static int vl_str(struct vstate *vs) {
+static vtok_t vl_str(struct vstate *vs) {
     vs->val = str_parse(&vs->pos, vs->end);
     return VT_STR;
 }
@@ -208,7 +208,7 @@ static int vl_str(struct vstate *vs) {
 
 // Lookup table of lex functions based 
 // only on first character of token
-int (* const vlex_a[256])(struct vstate *) = {
+vtok_t (* const vlex_a[256])(struct vstate *) = {
 /* 00 01 02 03 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
 /* 04 05 06 \a */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
 /* \b \t \n \v */   vl_bad,   vl_ws,    vl_nl,    vl_ws,
@@ -278,7 +278,7 @@ int (* const vlex_a[256])(struct vstate *) = {
 
 // Performs lexical analysis on the passed string
 // Value is stored in lval and its type is returned
-int vlex(struct vstate *vs) {
+vtok_t vlex(struct vstate *vs) {
     if (vs->pos < vs->end)
         return vlex_a[*vs->pos](vs);
     else

@@ -33,9 +33,15 @@ typedef enum type {
 // All vars hash to 32 bits 
 typedef uint32_t hash_t;
 
+// Length type bound to 16 bits for space consumption
+typedef uint16_t len_t;
+#define vmaxlen 0xffff
+
 // Base types
 typedef double num_t;
-typedef const uint8_t str_t;
+typedef uint8_t str_t;
+
+// Base structs
 typedef struct tbl tbl_t;
 typedef struct fn fn_t;
 typedef struct var bfn_t(tbl_t *a);
@@ -58,7 +64,7 @@ typedef struct var {
                 ref_t *ref;
 
                 // string representation
-                str_t *str;
+                const str_t *str;
 
                 // function representation
                 fn_t *fn;
@@ -73,8 +79,8 @@ typedef struct var {
 
                 // string offset and length
                 struct {
-                    uint16_t off;
-                    uint16_t len;
+                    len_t off;
+                    len_t len;
                 };
 
                 // pointer to table representation
@@ -102,13 +108,13 @@ static inline bool var_istbl(var_t v) { return (0x6 & v.meta) == 0x6; }
 static inline bool var_isobj(var_t v) { return v.type == TYPE_OBJ; }
 
 // definitions for accessing components
-static inline ref_t *var_ref(var_t v) { v.type = 0; return v.ref; }
+static inline ref_t *var_ref(var_t v)     { v.type = 0; return v.ref; }
 static inline enum type var_type(var_t v) { return v.type; }
 
-static inline num_t var_num(var_t v) { v.type = 0; return v.num; }
-static inline str_t *var_str(var_t v) { return v.str + v.off; }
-static inline fn_t *var_fn(var_t v) { v.meta--; return v.fn; }
-static inline tbl_t *var_tbl(var_t v) { return v.tbl; }
+static inline num_t var_num(var_t v)        { v.type = 0; return v.num; }
+static inline const str_t *var_str(var_t v) { return v.str + v.off; }
+static inline fn_t *var_fn(var_t v)         { v.meta--; return v.fn; }
+static inline tbl_t *var_tbl(var_t v)       { return v.tbl; }
 
 
 // definitions of literal vars in C
@@ -118,7 +124,7 @@ static inline tbl_t *var_tbl(var_t v) { return v.tbl; }
 
 
 // var constructors for C
-static inline var_t vraw(int r) {
+static inline var_t vraw(uint32_t r) {
     var_t v;
     v.data = r;
     v.type = TYPE_NUM;
@@ -132,7 +138,7 @@ static inline var_t vnum(num_t n) {
     return v;
 }
 
-static inline var_t vstr(str_t *s, uint16_t off, uint16_t len) {
+static inline var_t vstr(const str_t *s, len_t off, len_t len) {
     var_t v;
     v.str = s;
     v.off = off;
@@ -181,7 +187,7 @@ static inline var_t vsfn(sfn_t *f, tbl_t *s) {
 #define vcstr(c) ({                     \
     static struct {                     \
         ref_t r;                        \
-        str_t s[sizeof(c)-1];           \
+        const str_t s[sizeof(c)-1];     \
     } _vcstr = { 1, {(c)}};             \
                                         \
     _vcstr.r++;                         \

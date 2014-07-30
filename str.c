@@ -16,7 +16,7 @@ bool str_equals(var_t a, var_t b) {
 hash_t str_hash(var_t v) {
     // based off the djb2 algorithm
     hash_t hash = 5381;
-    str_t *str = var_str(v);
+    const str_t *str = var_str(v);
     int i;
 
     for (i = 0; i < v.len; i++) {
@@ -28,12 +28,12 @@ hash_t str_hash(var_t v) {
 }
 
 // Parses a string and returns a string
-var_t str_parse(str_t **off, str_t *end) {
-    str_t *str = *off + 1;
-    str_t quote = **off;
-    unsigned int size = 0;
+var_t str_parse(const str_t **off, const str_t *end) {
+    const str_t *str = *off + 1;
+    const str_t quote = **off;
+    int size = 0;
 
-    uint8_t *s, *out;
+    str_t *s, *out;
 
 
     while (str < end) {
@@ -155,11 +155,11 @@ load:
 
 // Returns a string representation of a string
 var_t str_repr(var_t v) {
-    str_t *str = var_str(v);    
-    str_t *end = str + v.len;
-    unsigned int size = 2;
+    const str_t *str = var_str(v);    
+    const str_t *end = str + v.len;
+    int size = 2;
 
-    uint8_t *s, *out;
+    str_t *s, *out;
 
     while (str < end) {
         if (*str < ' ' || *str > '~' || *str == '\'') {

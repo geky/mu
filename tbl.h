@@ -10,8 +10,6 @@
 
 #include <assert.h>
 
-#define tbl_maxlen ((1<<16)-1)
-
 
 // Each table is composed of an array of values 
 // with a stride for keys/values. If keys/values 
@@ -21,14 +19,14 @@
 struct tbl {
     struct tbl *tail; // tail chain of tables
 
-    uint16_t nils; // count of nil entries
-    uint16_t len;  // count of keys in use
+    len_t nils; // count of nil entries
+    len_t len;  // count of keys in use
     hash_t mask;  // size of entries - 1
 
     int stride; // 0, 1, 2 for offsets
 
     union {
-        hash_t offset;
+        int offset;
         var_t *array;  // pointer to stored data
     };
 };
@@ -37,7 +35,7 @@ struct tbl {
 // Functions for managing tables
 // Each table is preceeded with a reference count
 // which is used as its handle in a var
-tbl_t *tbl_create(uint16_t size);
+tbl_t *tbl_create(len_t size);
 
 // Called by garbage collector to clean up
 void tbl_destroy(void *);

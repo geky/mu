@@ -8,7 +8,7 @@
 
 
 // Macro for accepting the current token and continuing
-static inline struct vstate *vnext(struct vstate *vs) {
+static inline vstate_t *vnext(vstate_t *vs) {
     vs->tok = vlex(vs);
     return vs;
 }
@@ -16,14 +16,14 @@ static inline struct vstate *vnext(struct vstate *vs) {
 // Parsing error handling
 #define vunexpected(vs) _vunexpected(vs, __FUNCTION__)
 __attribute__((noreturn))
-static void _vunexpected(struct vstate *vs, const char *fn) {
+static void _vunexpected(vstate_t *vs, const char *fn) {
     //printf("unexpected '%c' (%d) in %s\n", vs->tok, vs->tok, fn);
     printf("unexpected (%d) in %s\n", vs->tok, fn);
     assert(false); // TODO make this throw actual messages
 }
 
 // Expect a token or fail
-static void vexpect(struct vstate *vs, int tok) {
+static void vexpect(vstate_t *vs, vtok_t tok) {
     if (vs->tok != tok) {
         //printf("expected '%c' (%d) not '%c' (%d)\n", tok, tok, vs->tok, vs->tok);
         printf("expected (%d) not (%d)\n", tok, vs->tok);
@@ -35,15 +35,15 @@ static void vexpect(struct vstate *vs, int tok) {
 
 
 // Different encoding calls
-static uint16_t vaccvar(struct vstate *vs) {
-    uint16_t arg;
+static varg_t vaccvar(vstate_t *vs) {
+    varg_t arg;
     var_t index = tbl_lookup(vs->vars, vs->val);
 
     if (var_isnil(index)) {
         arg = vs->vars->len;
         tbl_assign(vs->vars, vs->val, vnum(arg));
     } else {
-        arg = (uint16_t)var_num(index);
+        arg = (varg_t)var_num(index);
     }
 
     return arg;
@@ -51,47 +51,47 @@ static uint16_t vaccvar(struct vstate *vs) {
 
 
 
-static void venc(struct vstate *vs, enum vop op) {
+static void venc(vstate_t *vs, vop_t op) {
     vs->ins += vs->encode(&vs->bcode[vs->ins], op, 0);
 }
 
-static void vencarg(struct vstate *vs, enum vop op, uint16_t arg) {
+static void vencarg(vstate_t *vs, vop_t op, varg_t arg) {
     vs->ins += vs->encode(&vs->bcode[vs->ins], op | VOP_ARG, arg);
 }
 
-static void vencvar(struct vstate *vs) {
+static void vencvar(vstate_t *vs) {
     vencarg(vs, VVAR, vaccvar(vs));
 }
 
 
-static int vsized(struct vstate *vs, enum vop op) {
+static vins_t vsized(vstate_t *vs, vop_t op) {
     return vcount(0, op, 0);
 }
 
-static int vsizearg(struct vstate *vs, enum vop op, uint16_t arg) {
+static vins_t vsizearg(vstate_t *vs, vop_t op, varg_t arg) {
     return vcount(0, op | VOP_ARG, arg);
 }
 
-static int vsizevar(struct vstate *vs) {
+static vins_t vsizevar(vstate_t *vs) {
     return vsizearg(vs, VVAR, vaccvar(vs));
 }
 
 
-static int vinsert(struct vstate *vs, enum vop op, int in) {
+static vins_t vinsert(vstate_t *vs, vop_t op, vins_t in) {
     return vs->encode(&vs->bcode[in], op, 0);
 }
 
-static int vinsertarg(struct vstate *vs, enum vop op, uint16_t arg, int in) {
+static vins_t vinsertarg(vstate_t *vs, vop_t op, varg_t arg, vins_t in) {
     return vs->encode(&vs->bcode[in], op | VOP_ARG, arg);
 }
 
-static int vinsertvar(struct vstate *vs, int in) {
+static vins_t vinsertvar(vstate_t *vs, vins_t in) {
     return vinsertarg(vs, VVAR, vaccvar(vs), in);
 }
 
 
 
-static void vpatch(struct vstate *vs) {
+static void vpatch(vstate_t *vs) {
     tbl_for(k, v, vs->ltbl, {
         vinsertarg(vs, VJUMP,
             vs->ins - (v.data+vsizearg(vs, VJUMP, 0)), v.data);
@@ -101,7 +101,7 @@ static void vpatch(struct vstate *vs) {
     vs->ltbl = 0;
 }
 
-static void venlarge(struct vstate *vs, int in, int count) {
+static void venlarge(vstate_t *vs, vins_t in, vins_t count) {
     if (vs->bcode) {
         memmove(&vs->bcode[in] + count,
                 &vs->bcode[in], 
@@ -115,23 +115,23 @@ static void venlarge(struct vstate *vs, int in, int count) {
 
 
 // Parser for V's grammar
-static void vp_value(struct vstate *vs);
-static void vp_primarydot(struct vstate *vs);
-static void vp_primaryop(struct vstate *vs);
-static void vp_primary(struct vstate *vs);
-static void vp_table(struct vstate *vs);
-static void vp_tabassign(struct vstate *vs);
-static void vp_tabident(struct vstate *vs);
-static void vp_tabfollow(struct vstate *vs);
-static void vp_tabentry(struct vstate *vs);
-static void vp_explist(struct vstate *vs);
-static void vp_explet(struct vstate *vs);
-static void vp_expassign(struct vstate *vs);
-static void vp_expfollow(struct vstate *vs);
-static void vp_expression(struct vstate *vs);
+static void vp_value(vstate_t *vs);
+static void vp_primarydot(vstate_t *vs);
+static void vp_primaryop(vstate_t *vs);
+static void vp_primary(vstate_t *vs);
+static void vp_table(vstate_t *vs);
+static void vp_tabassign(vstate_t *vs);
+static void vp_tabident(vstate_t *vs);
+static void vp_tabfollow(vstate_t *vs);
+static void vp_tabentry(vstate_t *vs);
+static void vp_explist(vstate_t *vs);
+static void vp_explet(vstate_t *vs);
+static void vp_expassign(vstate_t *vs);
+static void vp_expfollow(vstate_t *vs);
+static void vp_expression(vstate_t *vs);
 
 
-static void vp_value(struct vstate *vs) {
+static void vp_value(vstate_t *vs) {
     vp_primary(vs);
 
     if (vs->indirect)
@@ -139,13 +139,13 @@ static void vp_value(struct vstate *vs) {
 }
 
 
-static void vp_primaryif(struct vstate *vs) {
-    int ifins = vs->ins;
+static void vp_primaryif(vstate_t *vs) {
+    vins_t ifins = vs->ins;
     vs->ins += vsizearg(vs, VJFALSE, 0);
     vp_value(vs);
 
     switch (vs->tok) {
-        case VT_ELSE:   {   int elins = vs->ins;
+        case VT_ELSE:   {   vins_t elins = vs->ins;
                             vs->ins += vsizearg(vs, VJUMP, 0);
                             vp_value(vnext(vs));
                             vinsertarg(vs, VJFALSE,
@@ -164,7 +164,7 @@ static void vp_primaryif(struct vstate *vs) {
     }
 }
 
-static void vp_primarydot(struct vstate *vs) {
+static void vp_primarydot(vstate_t *vs) {
     switch (vs->tok) {
         case VT_IDENT:  vencvar(vs);
                         vs->indirect = true;
@@ -174,7 +174,7 @@ static void vp_primarydot(struct vstate *vs) {
     }
 }
 
-static void vp_primaryop(struct vstate *vs) {
+static void vp_primaryop(vstate_t *vs) {
     switch (vs->tok) {
         case VT_DOT:    if (vs->indirect) venc(vs, VLOOKUP);
                         return vp_primarydot(vnext(vs));
@@ -218,7 +218,7 @@ static void vp_primaryop(struct vstate *vs) {
     }
 }
 
-static void vp_primary(struct vstate *vs) {
+static void vp_primary(vstate_t *vs) {
     vs->opins = vs->ins;
 
     switch (vs->tok) {
@@ -278,12 +278,12 @@ static void vp_primary(struct vstate *vs) {
 }
 
 
-static void vp_table(struct vstate *vs) {
+static void vp_table(vstate_t *vs) {
     vp_tabentry(vs);
     return vp_tabfollow(vs);
 }
 
-static void vp_tabassign(struct vstate *vs) {
+static void vp_tabassign(vstate_t *vs) {
     switch (vs->tok) {
         case VT_SET:    vp_value(vnext(vs));
                         venc(vs, VINSERT);
@@ -294,7 +294,7 @@ static void vp_tabassign(struct vstate *vs) {
     }
 }
 
-static void vp_tabident(struct vstate *vs) {
+static void vp_tabident(vstate_t *vs) {
     int ins = vs->ins;
     vencvar(vs);
     vnext(vs);
@@ -311,7 +311,7 @@ static void vp_tabident(struct vstate *vs) {
     }
 }
 
-static void vp_tabfollow(struct vstate *vs) {
+static void vp_tabfollow(vstate_t *vs) {
     switch (vs->tok) {
         case VT_SEP:    return vp_table(vnext(vs));
 
@@ -319,7 +319,7 @@ static void vp_tabfollow(struct vstate *vs) {
     }
 }
 
-static void vp_tabentry(struct vstate *vs) {
+static void vp_tabentry(vstate_t *vs) {
     switch (vs->tok) {
         case VT_IDENT:  return vp_tabident(vs);
 
@@ -335,12 +335,12 @@ static void vp_tabentry(struct vstate *vs) {
 }
 
 
-static void vp_explist(struct vstate *vs) {
+static void vp_explist(vstate_t *vs) {
     vp_expression(vs);
     return vp_expfollow(vs);
 }
 
-static void vp_explet(struct vstate *vs) {
+static void vp_explet(vstate_t *vs) {
     switch (vs->tok) {
         case VT_SET:    if (!vs->indirect) vunexpected(vs);
                         vp_value(vnext(vs));
@@ -352,7 +352,7 @@ static void vp_explet(struct vstate *vs) {
     }
 }
 
-static void vp_expassign(struct vstate *vs) {
+static void vp_expassign(vstate_t *vs) {
     switch (vs->tok) {
         case VT_SET:    if (!vs->indirect) vunexpected(vs);
                         vp_value(vnext(vs));
@@ -378,13 +378,13 @@ static void vp_expassign(struct vstate *vs) {
     }
 }
 
-static void vp_expif(struct vstate *vs) {
-    int ifins = vs->ins;
+static void vp_expif(vstate_t *vs) {
+    vins_t ifins = vs->ins;
     vs->ins += vsizearg(vs, VJFALSE, 0);
     vp_expression(vs);
 
     switch (vs->tok) {
-        case VT_ELSE:   {   int elins = vs->ins;
+        case VT_ELSE:   {   vins_t elins = vs->ins;
                             vs->ins += vsizearg(vs, VJUMP, 0);
                             vp_expression(vnext(vs));
                             vinsertarg(vs, VJFALSE, 
@@ -402,8 +402,8 @@ static void vp_expif(struct vstate *vs) {
     }
 }
 
-static void vp_expwhile(struct vstate *vs) {
-    int whins = vs->ins;
+static void vp_expwhile(vstate_t *vs) {
+    vins_t whins = vs->ins;
     vs->ins += vsizearg(vs, VJFALSE, 0);
     vp_expression(vs);
 
@@ -420,7 +420,7 @@ static void vp_expwhile(struct vstate *vs) {
     }
 }
 
-static void vp_expfollow(struct vstate *vs) {
+static void vp_expfollow(vstate_t *vs) {
     switch (vs->tok) {
         case VT_SEP:    return vp_explist(vnext(vs));
 
@@ -428,7 +428,7 @@ static void vp_expfollow(struct vstate *vs) {
     }
 }
 
-static void vp_expression(struct vstate *vs) {
+static void vp_expression(vstate_t *vs) {
     switch (vs->tok) {
         case '{':       vp_explist(vnext(vs));
                         vexpect(vs, '}');
@@ -485,7 +485,7 @@ static void vp_expression(struct vstate *vs) {
 
 
 // Parses V source code and evaluates the result
-int vparse(struct vstate *vs) {
+vins_t vparse(vstate_t *vs) {
     vs->ins = 0;
     vs->paren = 0;
     vs->prec = -1;

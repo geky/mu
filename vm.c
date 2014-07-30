@@ -9,18 +9,18 @@
 // bytecode does not need to be portable, as it 
 // is compiled ad hoc, but it does need to worry 
 // about alignment issues.
-static inline uint16_t varg(str_t *pc) {
+static inline varg_t varg(const str_t *pc) {
     return (pc[0] << 8) | pc[1];
 }
 
-static inline int16_t vsarg(str_t *pc) {
-    return (int16_t)varg(pc);
+static inline varg_t vsarg(const str_t *pc) {
+    return (varg_t)varg(pc);
 }
 
 // Return the size taken by the specified opcode
 // Note: size of the jump opcode currently can not change
 // based on argument, because this is not handled by the parser
-int vcount(uint8_t *code, enum vop op, uint16_t arg) {
+vins_t vcount(str_t *code, vop_t op, varg_t arg) {
     if (VOP_ARG & op)
         return 3;
     else
@@ -28,7 +28,7 @@ int vcount(uint8_t *code, enum vop op, uint16_t arg) {
 }
 
 // Encode the specified opcode and return its size
-int vencode(uint8_t *code, enum vop op, uint16_t arg) {
+vins_t vencode(str_t *code, vop_t op, varg_t arg) {
     *code++ = op;
 
     if (VOP_ARG & op) {
@@ -44,7 +44,7 @@ int vencode(uint8_t *code, enum vop op, uint16_t arg) {
 var_t vexec(fn_t *f, tbl_t *scope) {
     var_t stack[f->stack]; // TODO check for overflow
 
-    register str_t *pc = f->bcode;
+    register const str_t *pc = f->bcode;
     register var_t *sp = stack + f->stack;
 
     while (1) {
