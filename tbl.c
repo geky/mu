@@ -7,22 +7,25 @@
 
 
 // finds capactiy based on load factor of 1.5
-static inline int32_t tbl_ncap(int32_t s) {
+static inline hash_t tbl_ncap(hash_t s) {
     return s + (s >> 1);
 }
 
 // finds next power of two
-static inline int32_t tbl_npw2(int32_t s) {
-    if (s)
-        return 1 << (32-__builtin_clz(s - 1));
-    else
-        return 0;
+static inline hash_t tbl_npw2(hash_t s) {
+    return s ? 1 << (32-__builtin_clz(s - 1)) : 0;
 }
 
 // iterates through hash entries using
 // i = i*5 + 1 to avoid degenerative cases
 static inline hash_t tbl_next(hash_t i) {
     return (i<<2) + i + 1;
+}
+
+// test for if a number is equivalent to its hash
+// if true a key is valid for range representations
+static inline bool tbl_ishash(var_t v, hash_t hash) {
+    return var_isnum(v) && num_equals(v, vnum(hash));
 }
 
 
@@ -38,8 +41,7 @@ tbl_t *tbl_create(uint16_t size) {
     tbl->nils = 0;
     tbl->len = 0;
 
-    tbl->koff = 0;
-    tbl->voff = 0;
+    tbl->offset = 0;
     tbl->stride = 0;
 
     return tbl;
@@ -49,21 +51,17 @@ tbl_t *tbl_create(uint16_t size) {
 // Called by garbage collector to clean up
 void tbl_destroy(void *m) {
     tbl_t *tbl = m;
-    int i;
 
     if (tbl->stride > 0) {
-        if (tbl->stride > 1) {
-            for (i=0; i <= tbl->mask; i++) {
-                if (!var_isnil(tbl->array[2*i])) {
-                    var_dec(tbl->array[2*i    ]);
-                    var_dec(tbl->array[2*i + 1]);
-                }
-            }
-        } else {
-            for (i=0; i < tbl->nils+tbl->len; i++) {
-                var_dec(tbl->array[i]);
-            } 
-        }
+        int i, size;
+
+        if (tbl->stride < 2)
+            size = tbl->len;
+        else
+            size = 2 * (tbl->mask+1);
+
+        for (i=0; i < size; i++)
+            var_dec(tbl->array[i]);
 
         vdealloc(tbl->array);
     }
@@ -83,13 +81,11 @@ var_t tbl_lookup(tbl_t *tbl, var_t key) {
 
     for (tbl = tbl_readp(tbl); tbl; tbl = tbl_readp(tbl->tail)) {
         if (tbl->stride < 2) {
-            i = hash - tbl->koff;
-
-            if (var_equals(key, vnum(hash)) && i < tbl->nils+tbl->len) {
+            if (tbl_ishash(key, hash) && hash < tbl->len) {
                 if (tbl->stride == 0)
-                    return vnum(i + tbl->voff);
-                else if (!var_isnil(tbl->array[i]))
-                    return tbl->array[i];
+                    return vnum(hash + tbl->offset);
+                else
+                    return tbl->array[hash];
             }
         } else {
             for (i = hash;; i = tbl_next(i)) {
@@ -111,12 +107,12 @@ var_t tbl_lookup(tbl_t *tbl, var_t key) {
 
 // converts implicit range to actual array of nums on heap
 static void tbl_realizevars(tbl_t *tbl) {
-    int32_t cap = tbl->mask + 1;
+    hash_t cap = tbl->mask + 1;
     var_t *w = valloc(cap * sizeof(var_t));
     int i;
 
     for (i=0; i < tbl->len; i++) {
-        w[i] = vnum(i + tbl->voff);
+        w[i] = vnum(i + tbl->offset);
     }
 
     tbl->array = w;
@@ -124,24 +120,25 @@ static void tbl_realizevars(tbl_t *tbl) {
 }
 
 static void tbl_realizekeys(tbl_t *tbl) {
-    int32_t cap = tbl->mask + 1;
+    hash_t cap = tbl->mask + 1;
     var_t *w = valloc(2*cap * sizeof(var_t));
     int i;
 
     if (tbl->stride == 0) {
         for (i=0; i < tbl->len; i++) {
-            w[2*i  ] = vnum(i + tbl->koff);
-            w[2*i+1] = vnum(i + tbl->voff);
+            w[2*i  ] = vnum(i);
+            w[2*i+1] = vnum(i + tbl->offset);
         }
     } else {
         for (i=0; i < tbl->len; i++) {
-            w[2*i  ] = vnum(i + tbl->koff);
+            w[2*i  ] = vnum(i);
             w[2*i+1] = tbl->array[i];
         }
 
         vdealloc(tbl->array);
     }
 
+    memset(w + 2*tbl->len, 0, (2*cap - 2*tbl->len) * sizeof(var_t));
     tbl->array = w;
     tbl->stride = 2;
 }
@@ -149,8 +146,8 @@ static void tbl_realizekeys(tbl_t *tbl) {
 
 // reallocates and rehashes a table
 static inline void tbl_resize(tbl_t * tbl, uint16_t size) {
-    int32_t cap = tbl_npw2(tbl_ncap(size));
-    int32_t j, mask = cap - 1;
+    hash_t cap = tbl_npw2(tbl_ncap(size));
+    hash_t mask = cap - 1;
 
     if (tbl->stride < 2) {
         tbl->mask = mask;
@@ -158,180 +155,164 @@ static inline void tbl_resize(tbl_t * tbl, uint16_t size) {
         if (tbl->stride == 0)
             return;
 
-        if (tbl->nils + tbl->len <= cap) {
-            var_t *w = valloc(cap * sizeof(var_t));
-            memcpy(w, tbl->array, (tbl->nils+tbl->len) * sizeof(var_t));
+        var_t *w = valloc(cap * sizeof(var_t));
+        memcpy(w, tbl->array, tbl->len * sizeof(var_t));
 
-            vdealloc(tbl->array);
-            tbl->array = w;
-            return;
-        }
+        vdealloc(tbl->array);
+        tbl->array = w;
+    } else {
+        var_t *w = valloc(2*cap * sizeof(var_t));
+        memset(w, 0, 2*cap * sizeof(var_t));
 
-        tbl_realizekeys(tbl);
-    }
+        hash_t i, j;
 
-    var_t *w = valloc(2*cap * sizeof(var_t));
-    memset(w, 0, 2*cap * sizeof(var_t));
+        for (j=0; j <= tbl->mask; j++) {
+            var_t *u = &tbl->array[2*j];
 
-    for (j=0; j <= tbl->mask; j++) {
-        var_t *u = &tbl->array[2*j];
+            if (var_isnil(u[0]) || var_isnil(u[1]))
+                continue;
 
-        if (var_isnil(u[0]) || var_isnil(u[1]))
-            continue;
+            for (i = var_hash(u[0]);; i = tbl_next(i)) {
+                hash_t mi = i & mask;
+                var_t *v = &w[2*mi];
 
-        hash_t i = var_hash(u[0]);
-
-        for (;; i = tbl_next(i)) {
-            hash_t mi = i & mask;
-            var_t *v = &w[2*mi];
-
-            if (var_isnil(v[0])) {
-                v[0] = u[0];
-                v[1] = u[1];
-                break;
+                if (var_isnil(v[0])) {
+                    v[0] = u[0];
+                    v[1] = u[1];
+                    break;
+                }
             }
         }
-    }
 
-    vdealloc(tbl->array);
-    tbl->array = w;
-    tbl->nils = 0;
-    tbl->mask = mask;
+        vdealloc(tbl->array);
+        tbl->array = w;
+        tbl->nils = 0;
+        tbl->mask = mask;
+    }
 }
     
 
 // Inserts a value in the table with the given key
 // without decending down the tail chain
-void tbl_insert(tbl_t *tbl, var_t key, var_t val) {
-    tbl = tbl_writep(tbl);
-
-    if (var_isnil(key))
-        return;
-
-    if (!var_isnil(val) && tbl_ncap(tbl->nils+tbl->len + 1) > tbl->mask + 1)
-        tbl_resize(tbl, tbl->len + 1);
-
-   
+static void tbl_insertnil(tbl_t *tbl, var_t key, var_t val) {
     hash_t i, hash = var_hash(key);
 
     if (tbl->stride < 2) {
-        i = hash - tbl->koff;
-
-        if (!var_isnil(key) && tbl->nils+tbl->len == 0 &&
-            var_isnum(key) && !(hash & ~0xffff)) {
-            tbl->koff = hash;
-
-            if (tbl->stride == 0) {
-                if (var_isnum(val) && !(num_hash(val) & ~0xffff)) {
-                    tbl->voff = num_hash(val);
-                    tbl->len++;
-                    return;
-                }
-
-                tbl_realizevars(tbl);
-            }
-
-            tbl->array[0] = val;
-            tbl->len++;
+        if (!tbl_ishash(key, hash) || hash >= tbl->len)
             return;
-        }
 
-        if (var_equals(key, vnum(hash))) {
-            if (var_isnil(val)) {
-                if (i >= tbl->nils+tbl->len)
-                    return;
+        if (hash == tbl->len - 1) {
+            if (tbl->stride != 0)
+                var_dec(tbl->array[hash]);
 
-                if (i == tbl->nils+tbl->len - 1) {
-                    if (tbl->stride != 0)
-                        var_dec(tbl->array[i]);
-
-                    tbl->len--;
-                    return;
-                }
-
-                if (tbl->stride == 0)
-                    tbl_realizevars(tbl);
-
-                if (var_isnil(tbl->array[i]))
-                    return;
-
-                var_dec(tbl->array[i]);
-                tbl->array[i] = vnil;
-                tbl->nils++; tbl->len--;
-                return;
-            } else {
-               if (i == tbl->nils+tbl->len) {
-                    if (tbl->stride == 0) {
-                        if (var_equals(val, vnum(i+tbl->voff))) {
-                            tbl->len++;
-                            return;
-                        }
-
-                        tbl_realizevars(tbl);
-                    }
-
-                    tbl->array[i] = val;
-                    tbl->len++;
-                    return;
-                } else if (i < tbl->nils+tbl->len) {
-                    if (tbl->stride == 0) {
-                        if (var_equals(val, vnum(i+tbl->voff)))
-                            return;
-
-                        tbl_realizevars(tbl);
-                    }
-
-                    if (var_isnil(tbl->array[i])) {
-                        tbl->array[i] = val;
-                        tbl->nils--; tbl->len++;
-                        return;
-                    }
-
-                    var_dec(tbl->array[i]);
-                    tbl->array[i] = val;
-                    return;
-                }
-            }
+            tbl->len--;
+            return;
         }
 
         tbl_realizekeys(tbl);
     }
 
+    for (i = hash;; i = tbl_next(i)) {
+        hash_t mi = i & tbl->mask;
+        var_t *v = &tbl->array[2*mi];
+
+        if (var_isnil(v[0]))
+            return;
+
+        if (var_equals(key, v[0])) {
+            if (!var_isnil(v[1])) {
+                var_dec(v[1]);
+                v[1] = vnil;
+                tbl->nils++;
+                tbl->len--;
+            }
+
+            return;
+        }
+    }
+}
+
+
+static void tbl_insertval(tbl_t *tbl, var_t key, var_t val) {
+    hash_t i, hash = var_hash(key);
+
+    if (tbl_ncap(tbl->nils+tbl->len + 1) > tbl->mask + 1)
+        tbl_resize(tbl, tbl->len + 1);
+
+    if (tbl->stride < 2) {
+        if (tbl_ishash(key, hash)) {
+            if (hash == tbl->len) {
+                if (tbl->stride == 0) {
+                    if (var_isnum(val)) {
+                        if (tbl->len == 0)
+                            tbl->offset = num_hash(val);
+
+                        if (tbl_ishash(val, hash + tbl->offset)) {
+                            tbl->len++;
+                            return;
+                        }
+                    }
+
+                    tbl_realizevars(tbl);
+                }
+
+                tbl->array[hash] = val;
+                tbl->len++;
+                return;
+            } else if (hash < tbl->len) {
+                if (tbl->stride == 0) {
+                    if (tbl_ishash(val, hash + tbl->offset))
+                        return;
+
+                    tbl_realizevars(tbl);
+                }
+
+                var_dec(tbl->array[hash]);
+                tbl->array[hash] = val;
+                return;
+            }
+        }
+
+        tbl_realizekeys(tbl);
+    }
 
     for (i = hash;; i = tbl_next(i)) {
         hash_t mi = i & tbl->mask;
         var_t *v = &tbl->array[2*mi];
 
         if (var_isnil(v[0])) {
-            if (var_isnil(val))
-                return;
-
-            var_dec(v[0]); v[0] = key;
-            var_dec(v[1]); v[1] = val;
+            v[0] = key;
+            v[1] = val;
             tbl->len++;
             return;
         }
 
         if (var_equals(key, v[0])) {
-            if (var_isnil(val)) {
-                if (var_isnil(v[1]))
-                    return;
-
-                var_dec(v[1]); v[1] = vnil;
-                tbl->nils++; tbl->len--;
-                return;
-            }
-
             if (var_isnil(v[1])) {
                 v[1] = val;
-                tbl->nils--; tbl->len++;
-                return;
+                tbl->nils--;
+                tbl->len++;
+            } else {
+                var_dec(v[1]);
+                v[1] = val;
             }
-            
-            var_dec(v[1]); v[1] = val;
+
             return;
         }
     }
+}
+    
+
+void tbl_insert(tbl_t *tbl, var_t key, var_t val) {
+    tbl = tbl_writep(tbl);
+
+    if (var_isnil(key))
+        return;
+
+    if (var_isnil(val))
+        tbl_insertnil(tbl, key, val);
+    else
+        tbl_insertval(tbl, key, val);
 }
 
 
@@ -343,154 +324,151 @@ void tbl_add(tbl_t *tbl, var_t val) {
 
 // Recursively assigns a value in the table with the given key
 // decends down the tail chain until its found
-void tbl_assign(tbl_t *head, var_t key, var_t val) {
-    if (var_isnil(key))
-        return;
-
+static void tbl_assignnil(tbl_t *tbl, var_t key, var_t val) {
     hash_t i, hash = var_hash(key);
-    tbl_t *tbl;
 
-    for (tbl = head; tbl; tbl = tbl->tail) {
+    for (; tbl; tbl = tbl->tail) {
         if (tbl_isro(tbl))
             break;
-        else
-            tbl = tbl_writep(tbl);
 
         if (tbl->stride < 2) {
-            i = hash - tbl->koff;
+            if (!tbl_ishash(key, hash) || hash >= tbl->len)
+                continue;
 
-            if (var_equals(key, vnum(hash)) && i < tbl->nils+tbl->len) {
-                if (var_isnil(val)) {
-                    if (i == tbl->nils+tbl->len - 1) {
-                        if (tbl->stride != 0)
-                            var_dec(tbl->array[i]);
+            if (hash == tbl->len - 1) {
+                if (tbl->stride != 0)
+                    var_dec(tbl->array[hash]);
 
-                        tbl->len--;
-                        return;
-                    }
-
-                    if (tbl->stride == 0)
-                        tbl_realizevars(tbl);
-
-                    if (!var_isnil(tbl->array[i])) {
-                        var_dec(tbl->array[i]);
-                        tbl->array[i] = vnil;
-                        tbl->nils++; tbl->len--;
-                        return;
-                    }
-                } else {
-                    if (tbl->stride == 0) {
-                        if (var_equals(val, vnum(i+tbl->voff)))
-                            return;
-
-                        tbl_realizevars(tbl);
-                    }
-
-                    if (!var_isnil(tbl->array[i])) {
-                        var_dec(tbl->array[i]);
-                        tbl->array[i] = val;
-                        return;
-                    }
-                }
+                tbl->len--;
+                return;
             }
-        } else {
-            for (i = hash;; i = tbl_next(i)) {
-                hash_t mi = i & tbl->mask;
-                var_t *v = &tbl->array[2*mi];
 
-                if (var_isnil(v[0])) 
+            tbl_realizekeys(tbl);
+        }
+
+        for (i = hash;; i = tbl_next(i)) {
+            hash_t mi = i & tbl->mask;
+            var_t *v = &tbl->array[2*mi];
+
+            if (var_isnil(v[0])) 
+                break;
+
+            if (var_equals(key, v[0])) {
+                if (var_isnil(v[1]))
                     break;
 
-                if (var_equals(key, v[0])) {
-                    if (var_isnil(v[1]))
-                        break;
+                var_dec(v[1]);
+                v[1] = vnil;
+                tbl->nils++;
+                tbl->len--;
+                return;
+            }
+        }
+    }
+}
 
-                    if (var_isnil(val)) {
-                        var_dec(v[1]); v[1] = vnil;
-                        tbl->nils++; tbl->len--;
-                        return;
-                    }
 
-                    var_dec(v[1]); v[1] = val;
+static void tbl_assignval(tbl_t *head, var_t key, var_t val) {
+    hash_t i, hash = var_hash(key);
+    tbl_t *tbl = head;
+
+    for (; tbl; tbl = tbl->tail) {
+        if (tbl_isro(tbl))
+            break;
+
+        if (tbl->stride < 2) {
+            if (!tbl_ishash(key, hash) || hash >= tbl->len)
+                continue;
+
+            if (tbl->stride == 0) {
+                if (tbl_ishash(val, hash + tbl->offset))
                     return;
-                }
+
+                tbl_realizevars(tbl);
+            }
+
+            var_dec(tbl->array[hash]);
+            tbl->array[hash] = val;
+            return;
+        }
+
+        for (i = hash;; i = tbl_next(i)) {
+            hash_t mi = i & tbl->mask;
+            var_t *v = &tbl->array[2*mi];
+
+            if (var_isnil(v[0]))
+                break;
+
+            if (var_equals(key, v[0])) {
+                if (var_isnil(v[1]))
+                    break;
+
+                var_dec(v[1]);
+                v[1] = val;
+                return;
             }
         }
     }
 
-    if (var_isnil(val))
-        return;
-
 
     tbl = tbl_writep(head);
 
-    if (tbl_ncap(tbl->len + tbl->nils + 1) > tbl->mask + 1)
+    if (tbl_ncap(tbl->len+tbl->nils + 1) > tbl->mask + 1)
         tbl_resize(tbl, tbl->len+1);
 
-
     if (tbl->stride < 2) {
-        i = hash - tbl->koff;
-
-        if (tbl->nils+tbl->len == 0 && var_isnum(val) && !(hash & ~0xffff)) {
-            tbl->koff = hash;
-
+        if (tbl_ishash(key, hash) && hash == tbl->len) {
             if (tbl->stride == 0) {
-                if (var_isnum(val) && !(num_hash(val) & ~0xffff)) {
-                    tbl->voff = num_hash(val);
-                    tbl->len++;
-                    return;
+                if (var_isnum(val)) {
+                    if (tbl->len == 0)
+                        tbl->offset = num_hash(val);
+
+                    if (tbl_ishash(val, hash + tbl->offset)) {
+                        tbl->len++;
+                        return;
+                    }
                 }
 
                 tbl_realizevars(tbl);
             }
 
-            tbl->array[0] = val;
+            tbl->array[hash] = val;
             tbl->len++;
             return;
         }
 
-        if (var_equals(key, vnum(hash))) {
-            if (i == tbl->nils+tbl->len) {
-                if (tbl->stride == 0) {
-                    if (var_equals(val, vnum(i+tbl->voff))) {
-                        tbl->len++;
-                        return;
-                    }
-
-                    tbl_realizevars(tbl);
-                }
-
-                tbl->array[i] = val;
-                tbl->len++;
-                return;
-            } else if (i < tbl->nils+tbl->len && var_isnil(tbl->array[i])) {
-                tbl->array[i] = val;
-                tbl->nils--; tbl->len++;
-                return;
-            }
-        }
-
         tbl_realizekeys(tbl);
     }
-
 
     for (i = hash;; i = tbl_next(i)) {
         hash_t mi = i & tbl->mask;
         var_t *v = &tbl->array[2*mi];
 
         if (var_isnil(v[0])) {
-            var_dec(v[0]); v[0] = key;
-            var_dec(v[1]); v[1] = val;
+            v[0] = key;
+            v[1] = val;
             tbl->len++;
             return;
         }
 
         if (var_equals(key, v[0]) && var_isnil(v[1])) {
             v[1] = val;
-            tbl->nils--; tbl->len++;
+            tbl->nils--;
+            tbl->len++;
             return;
         }
     }
+}
+
+
+void tbl_assign(tbl_t *tbl, var_t key, var_t val) {
+    if (var_isnil(key))
+        return;
+
+    if (var_isnil(val))
+        tbl_assignnil(tbl, key, val);
+    else
+        tbl_assignval(tbl, key, val);
 }
 
 

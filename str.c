@@ -162,9 +162,9 @@ var_t str_repr(var_t v) {
     uint8_t *s, *out;
 
     while (str < end) {
-        if (*str < ' ' || *str > '~' || *str == '"') {
+        if (*str < ' ' || *str > '~' || *str == '\'') {
             switch (*str) {
-                case '"':
+                case '\'':
                 case '\a':
                 case '\b':
                 case '\f':
@@ -187,14 +187,14 @@ var_t str_repr(var_t v) {
     out = vref_alloc(size);
     s = out;
 
-    *s++ = '"';
+    *s++ = '\'';
 
     while (str < end) {
-        if (*str < ' ' || *str > '~' || *str == '"') {
+        if (*str < ' ' || *str > '~' || *str == '\'') {
             *s++ = '\\';
 
             switch (*str) {
-                case '"':  *s++ = '"'; break;
+                case '\'': *s++ = '\''; break;
                 case '\a': *s++ = 'a'; break;
                 case '\b': *s++ = 'b'; break;
                 case '\f': *s++ = 'f'; break;
@@ -216,7 +216,7 @@ var_t str_repr(var_t v) {
         str++;
     }
 
-    *s++ = '"';
+    *s++ = '\'';
 
     return vstr(out, 0, size);
 }

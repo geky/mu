@@ -23,13 +23,12 @@ struct tbl {
 
     uint16_t nils; // count of nil entries
     uint16_t len;  // count of keys in use
-    int32_t mask;  // size of entries - 1
+    hash_t mask;  // size of entries - 1
 
-    uint16_t koff;   // key offset
-    uint16_t stride; // 0, 1, 2 for offsets
+    int stride; // 0, 1, 2 for offsets
 
     union {
-        uint16_t voff; // var offset
+        hash_t offset;
         var_t *array;  // pointer to stored data
     };
 };
@@ -76,13 +75,13 @@ var_t tbl_repr(var_t v);
                                                             \
     switch (_t->stride) {                                   \
         case 0: for (_i=0; _i < _t->len; _i++) {            \
-            k = vnum(_t->koff + _i);                        \
-            v = vnum(_t->voff + _i);                        \
+            k = vnum(_i);                                   \
+            v = vnum(_t->offset + _i);                      \
             {block};                                        \
         } break;                                            \
                                                             \
         case 1: for (_i=0; _i < _t->nils+_t->len; _i++) {   \
-            k = vnum(_t->koff + _i);                        \
+            k = vnum(_i);                                   \
             v = _t->array[_i];                              \
                                                             \
             if (!var_isnil(v))                              \
