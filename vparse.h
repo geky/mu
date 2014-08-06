@@ -36,8 +36,8 @@ struct vstate {
 
     union {
         struct {
-            uint8_t prec   : 8;
-            vins_t opins : 24;
+            uint8_t prec : 8;
+            int opins    : 24;
         };
 
         uint32_t opstate;
@@ -45,7 +45,7 @@ struct vstate {
 
     union {
         struct {
-            vins_t lins;
+            int lins;
             tbl_t *ltbl;
         };
 
@@ -56,14 +56,14 @@ struct vstate {
     tbl_t *keys;
     tbl_t *ops;
 
-    vins_t ins;
+    int ins;
     str_t *bcode;
-    vins_t (*encode)(str_t *, vop_t, varg_t);
+    int (*encode)(str_t *, vop_t, varg_t);
 };
 
 
 // Parses V source code and evaluates the result
-vins_t vparse(struct vstate *);
+int vparse(vstate_t *);
 
 
 #endif

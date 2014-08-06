@@ -18,7 +18,7 @@ static inline vstate_t *vnext(vstate_t *vs) {
 __attribute__((noreturn))
 static void _vunexpected(vstate_t *vs, const char *fn) {
     //printf("unexpected '%c' (%d) in %s\n", vs->tok, vs->tok, fn);
-    printf("unexpected (%d) in %s\n", vs->tok, fn);
+    printf("\033[31munexpected (%d) in %s\033[0m\n", vs->tok, fn);
     assert(false); // TODO make this throw actual messages
 }
 
@@ -64,28 +64,28 @@ static void vencvar(vstate_t *vs) {
 }
 
 
-static vins_t vsized(vstate_t *vs, vop_t op) {
+static int vsized(vstate_t *vs, vop_t op) {
     return vcount(0, op, 0);
 }
 
-static vins_t vsizearg(vstate_t *vs, vop_t op, varg_t arg) {
+static int vsizearg(vstate_t *vs, vop_t op, varg_t arg) {
     return vcount(0, op | VOP_ARG, arg);
 }
 
-static vins_t vsizevar(vstate_t *vs) {
+static int vsizevar(vstate_t *vs) {
     return vsizearg(vs, VVAR, vaccvar(vs));
 }
 
 
-static vins_t vinsert(vstate_t *vs, vop_t op, vins_t in) {
+static int vinsert(vstate_t *vs, vop_t op, int in) {
     return vs->encode(&vs->bcode[in], op, 0);
 }
 
-static vins_t vinsertarg(vstate_t *vs, vop_t op, varg_t arg, vins_t in) {
+static int vinsertarg(vstate_t *vs, vop_t op, varg_t arg, int in) {
     return vs->encode(&vs->bcode[in], op | VOP_ARG, arg);
 }
 
-static vins_t vinsertvar(vstate_t *vs, vins_t in) {
+static int vinsertvar(vstate_t *vs, int in) {
     return vinsertarg(vs, VVAR, vaccvar(vs), in);
 }
 
@@ -101,7 +101,7 @@ static void vpatch(vstate_t *vs) {
     vs->ltbl = 0;
 }
 
-static void venlarge(vstate_t *vs, vins_t in, vins_t count) {
+static void venlarge(vstate_t *vs, int in, int count) {
     if (vs->bcode) {
         memmove(&vs->bcode[in] + count,
                 &vs->bcode[in], 
@@ -140,12 +140,12 @@ static void vp_value(vstate_t *vs) {
 
 
 static void vp_primaryif(vstate_t *vs) {
-    vins_t ifins = vs->ins;
+    int ifins = vs->ins;
     vs->ins += vsizearg(vs, VJFALSE, 0);
     vp_value(vs);
 
     switch (vs->tok) {
-        case VT_ELSE:   {   vins_t elins = vs->ins;
+        case VT_ELSE:   {   int elins = vs->ins;
                             vs->ins += vsizearg(vs, VJUMP, 0);
                             vp_value(vnext(vs));
                             vinsertarg(vs, VJFALSE,
@@ -379,12 +379,12 @@ static void vp_expassign(vstate_t *vs) {
 }
 
 static void vp_expif(vstate_t *vs) {
-    vins_t ifins = vs->ins;
+    int ifins = vs->ins;
     vs->ins += vsizearg(vs, VJFALSE, 0);
     vp_expression(vs);
 
     switch (vs->tok) {
-        case VT_ELSE:   {   vins_t elins = vs->ins;
+        case VT_ELSE:   {   int elins = vs->ins;
                             vs->ins += vsizearg(vs, VJUMP, 0);
                             vp_expression(vnext(vs));
                             vinsertarg(vs, VJFALSE, 
@@ -403,7 +403,7 @@ static void vp_expif(vstate_t *vs) {
 }
 
 static void vp_expwhile(vstate_t *vs) {
-    vins_t whins = vs->ins;
+    int whins = vs->ins;
     vs->ins += vsizearg(vs, VJFALSE, 0);
     vp_expression(vs);
 
@@ -485,7 +485,7 @@ static void vp_expression(vstate_t *vs) {
 
 
 // Parses V source code and evaluates the result
-vins_t vparse(vstate_t *vs) {
+int vparse(vstate_t *vs) {
     vs->ins = 0;
     vs->paren = 0;
     vs->prec = -1;

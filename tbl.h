@@ -19,15 +19,19 @@
 struct tbl {
     struct tbl *tail; // tail chain of tables
 
-    len_t nils; // count of nil entries
-    len_t len;  // count of keys in use
-    hash_t mask;  // size of entries - 1
+    len_t nils;     // count of nil entries
+    len_t len;      // count of keys in use
+    hash_t mask;    // size of entries - 1
 
-    int stride; // 0, 1, 2 for offsets
+    enum { 
+        TBL_RANGE = 0, 
+        TBL_LIST  = 1, 
+        TBL_HASH  = 2 
+    } stride;           // table types
 
     union {
-        int offset;
-        var_t *array;  // pointer to stored data
+        int offset;     // offset for implicit ranges
+        var_t *array;   // pointer to stored data
     };
 };
 
@@ -65,35 +69,33 @@ var_t tbl_repr(var_t v);
 // Macro for iterating through a table in c
 // Assign names for k and v, and pass in the 
 // block to execute for each pair in tbl
-#define tbl_for(k, v, tbl, block) {                         \
-    var_t k;                                                \
-    var_t v;                                                \
-    tbl_t *_t = tbl;                                        \
-    int _i;                                                 \
-                                                            \
-    switch (_t->stride) {                                   \
-        case 0: for (_i=0; _i < _t->len; _i++) {            \
-            k = vnum(_i);                                   \
-            v = vnum(_t->offset + _i);                      \
-            {block};                                        \
-        } break;                                            \
-                                                            \
-        case 1: for (_i=0; _i < _t->nils+_t->len; _i++) {   \
-            k = vnum(_i);                                   \
-            v = _t->array[_i];                              \
-                                                            \
-            if (!var_isnil(v))                              \
-                {block};                                    \
-        } break;                                            \
-                                                            \
-        case 2: for (_i=0; _i <= _t->mask; _i++) {          \
-            k = _t->array[2*_i    ];                        \
-            v = _t->array[2*_i + 1];                        \
-                                                            \
-            if (!var_isnil(k) && !var_isnil(v))             \
-                {block};                                    \
-        } break;                                            \
-    }                                                       \
+#define tbl_for(k, v, tbl, block) {                 \
+    var_t k;                                        \
+    var_t v;                                        \
+    tbl_t *_t = tbl_readp(tbl);                     \
+    int _i, _c = _t->len;                           \
+                                                    \
+    for (_i=0; _c; _i++) {                          \
+        switch (_t->stride) {                       \
+            case 0:                                 \
+                k = vnum(_i);                       \
+                v = vnum(_t->offset + _i);          \
+                break;                              \
+            case 1:                                 \
+                k = vnum(_i);                       \
+                v = _t->array[_i];                  \
+                break;                              \
+            case 2:                                 \
+                k = _t->array[2*_i  ];              \
+                v = _t->array[2*_i+1];              \
+                if (var_isnil(k) || var_isnil(v))   \
+                    continue;                       \
+                break;                              \
+        }                                           \
+                                                    \
+        {block};                                    \
+        _c--;                                       \
+    }                                               \
 }
 
 

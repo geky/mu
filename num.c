@@ -1,4 +1,5 @@
 #include "num.h"
+#include "str.h"
 
 
 // Returns true if both variables are equal
@@ -27,95 +28,70 @@ hash_t num_hash(var_t v) {
 }
 
 
-// Parses a string and returns a number
-const str_t num_a[256] = {
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,  '.', 0xff,
-       0,    1,    2,    3,    4,    5,    6,    7,    8,    9, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff,   10,   11,   12,   13,   14,   15, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,  'o',
-     'p', 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,  'x', 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff,   10,   11,   12,   13,   14,   15, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,  'o',
-     'p', 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,  'x', 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
-};
-
+// TODO check this
 // TODO add bounds checking
 var_t num_parse(const str_t **off, const str_t *end) {
-    var_t v;
     const str_t *str = *off;
+    num_t res = 0;
 
-    num_t scale;
-    num_t sign;
+    num_t scale, sign;
 
     struct base {
         num_t radix;
         num_t exp;
-        str_t exp_c;
-    } base = { 10.0, 10.0, 0xe };
-
-    register str_t w;
+        str_t expc;
+        str_t expC;
+    } base = { 10.0, 10.0, 'e', 'E' };
 
 
     // determine the base
     if (end-str > 2 && *str == '0') {
-        str++; // discard initial zero
-
-        switch (num_a[*str]) {
-            case 0xb:
-                base = (struct base){ 2.0, 2.0, 'p' };
-                str++;
+        switch (str[1]) {
+            case 'b': case 'B':
+                base = (struct base){ 2.0, 2.0, 'p', 'P' };
+                str += 2;
                 break;
 
-            case 'o':
-                base = (struct base){ 8.0, 2.0, 'p' };
-                str++;
+            case 'o': case 'O':
+                base = (struct base){ 8.0, 2.0, 'p', 'P' };
+                str += 2;
                 break;
 
-            case 'x':
-                base = (struct base){ 16.0, 2.0, 'p' };
-                str++;
+            case 'x': case 'X':
+                base = (struct base){ 16.0, 2.0, 'p', 'P' };
+                str += 2;
                 break;
-        } 
+        }
     }
 
-//integer:
-    v.num = 0;
-
+    // determine the integer component
     while (str < end) {
-        w = num_a[*str];
+        int n = num_val(*str);
 
-        if (w >= base.radix) {
-            if (w == '.')
+        if (n >= base.radix) {
+            if (*str == '.')
                 goto fraction;
-            else if (w == base.exp_c)
+            else if (*str == base.expc || *str == base.expC)
                 goto exp;
             else
                 goto done;
         }
 
         str++;
-        v.num *= base.radix;
-        v.num += w;
+        res *= base.radix;
+        res += n;
     }
 
     goto done;
 
-fraction:
+fraction:   // determine fraction component
     scale = 1.0;
 
     while (str < end) {
-        w = num_a[*str];
+        int n = num_val(*str);
 
-        if (w >= base.radix) {
-            if (w == base.exp)
+        if (n >= base.radix) {
+            if (*str == base.expc || *str == base.expC)
                 goto exp;
             else
                 goto done;
@@ -123,12 +99,12 @@ fraction:
 
         str++;
         scale /= base.radix;
-        v.num += scale * w;
+        res += scale * n;
     }
 
     goto done;
 
-exp:
+exp:        // determine exponent component
     scale = 0.0;
     sign = 1.0;
 
@@ -142,63 +118,57 @@ exp:
     }
 
     while (str < end) {
-        w = num_a[*str];
+        int n = num_val(*str);
 
-        if (w >= base.radix) {
-            v.num *= pow(base.radix, sign*scale);
+        if (n >= base.radix) {
+            res *= pow(base.radix, sign*scale);
             goto done;
         }
 
         str++;
         scale *= base.radix;
-        scale += w;
+        scale += n;
     }
 
-done:
+done:       // return the result
     *off = str;
 
-    v.type = TYPE_NUM;
-
-    return v;
+    return vnum(res);
 }
 
 
-// Returns a string representation of a number
+// Obtains a string representation of a number
 var_t num_repr(var_t v) {
     v.type = 0;
 
-    if (isnan(v.num)) {
+    if (v.num == 0) {
+        return vcstr("0");
+    } else if (isnan(v.num)) {
         return vcstr("nan");
-
     } else if (isinf(v.num)) {
         var_t s = vcstr("-inf");
 
-        if (v.num > 0.0)
+        if (v.num > 0.0) {
             s.off++;
+            s.len--;
+        }
 
         return s;
-
-    } else if (v.num == 0) {
-        return vcstr("0");
-
     } else {
-        str_t *s, *out;
-
-        out = vref_alloc(16);
-        s = out;
-
+        str_t *out = str_create(VNUMLEN);
+        str_t *res = out;
 
         if (v.num < 0.0) {
             v.num = -v.num;
-            *s++ = '-';
+            *res++ = '-';
         }
 
 
-        int exp = floor(log10(v.num));
+        num_t exp = floor(log10(v.num));
         num_t digit = pow(10.0, exp);
-        bool expform = (exp > 14 || exp < -13);
+        bool isexp = (exp > VNUMLEN-2 || exp < -(VNUMLEN-3));
 
-        if (expform) {
+        if (isexp) {
             v.num /= digit;
             digit = 1.0;
         } else if (digit < 1.0) {
@@ -206,42 +176,40 @@ var_t num_repr(var_t v) {
         }
 
 
-        int len = expform ? 10 : 15;
+        int len = isexp ? VNUMLEN-6 : VNUMLEN-1;
 
         for (; len >= 0; len--) {
             if (v.num <= 0.0 && digit < 1.0)
                 break;
 
             if (digit < 0.5 && digit > 0.05)
-                *s++ = '.';
+                *res++ = '.';
 
-            int d = floor(v.num / digit);
-            *s++ = '0' + d;
+            num_t d = floor(v.num / digit);
+            *res++ = '0' + (str_t)d;
 
             v.num -= d * digit;
             digit /= 10.0;
         }
 
 
-        if (expform) {
-            *s++ = 'e';
+        if (isexp) {
+            *res++ = 'e';
 
-            if (exp > 0) {
-                *s++ = '+';
-            } else {
-                *s++ = '-';
+            if (exp < 0) {
                 exp = -exp;
+                *res++ = '-';
             }
 
             if (exp > 100)
-                *s++ = '0' + (int)(exp / 100);
+                *res++ = '0' + ((str_t)exp / 100);
 
             // exp will always be greater than 10 here
-            *s++ = '0' + (int)(exp / 10) % 10;
-            *s++ = '0' + (int)(exp / 1) % 10;  
+            *res++ = '0' + ((str_t)exp / 10) % 10;
+            *res++ = '0' + ((str_t)exp / 1) % 10;  
         }
 
-        return vstr(out, 0, s - out);
+        return vstr(out, 0, res - out);
     }
 }
 

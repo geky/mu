@@ -44,28 +44,28 @@ tbl_t *vops(void) {
 
 // Lexer definitions for V's tokens
 __attribute__((noreturn))
-static vtok_t vl_bad(struct vstate *vs) {
+static vtok_t vl_bad(vstate_t *vs) {
     assert(false); //TODO: errors: bad parse
 }
 
-static vtok_t vl_ws(struct vstate *vs);
-static vtok_t vl_com(struct vstate *vs);
-static vtok_t vl_op(struct vstate *vs);
-static vtok_t vl_kw(struct vstate *vs);
-static vtok_t vl_tok(struct vstate *vs);
-static vtok_t vl_sep(struct vstate *vs);
-static vtok_t vl_set(struct vstate *vs);
-static vtok_t vl_nl(struct vstate *vs);
-static vtok_t vl_num(struct vstate *vs);
-static vtok_t vl_str(struct vstate *vs);
+static vtok_t vl_ws(vstate_t *vs);
+static vtok_t vl_com(vstate_t *vs);
+static vtok_t vl_op(vstate_t *vs);
+static vtok_t vl_kw(vstate_t *vs);
+static vtok_t vl_tok(vstate_t *vs);
+static vtok_t vl_sep(vstate_t *vs);
+static vtok_t vl_set(vstate_t *vs);
+static vtok_t vl_nl(vstate_t *vs);
+static vtok_t vl_num(vstate_t *vs);
+static vtok_t vl_str(vstate_t *vs);
 
 
-static vtok_t vl_ws(struct vstate *vs) {
+static vtok_t vl_ws(vstate_t *vs) {
     vs->pos++;
     return vlex(vs);
 }
 
-static vtok_t vl_com(struct vstate *vs) {
+static vtok_t vl_com(vstate_t *vs) {
     vs->pos++;
 
     if (vs->pos >= vs->end || *vs->pos != '`') {
@@ -96,8 +96,8 @@ static vtok_t vl_com(struct vstate *vs) {
     return vlex(vs);
 }
 
-static vtok_t vl_op(struct vstate *vs) {
-    const str_t *str = (str_t *)(vs->ref + 1);
+static vtok_t vl_op(vstate_t *vs) {
+    const str_t *str = (str_t *)(vs->ref + 1) + 2;
     const str_t *kw = vs->pos++;
     var_t op;
 
@@ -150,8 +150,8 @@ static vtok_t vl_op(struct vstate *vs) {
     }
 }
 
-static vtok_t vl_kw(struct vstate *vs) {
-    const str_t *str = (str_t *)(vs->ref + 1);
+static vtok_t vl_kw(vstate_t *vs) {
+    const str_t *str = (str_t *)(vs->ref + 1) + 2;
     const str_t *kw = vs->pos++;
     var_t key;
 
@@ -174,32 +174,32 @@ static vtok_t vl_kw(struct vstate *vs) {
         return VT_IDENT;
 }
 
-static vtok_t vl_tok(struct vstate *vs) {
+static vtok_t vl_tok(vstate_t *vs) {
     return *vs->pos++;
 }
 
-static vtok_t vl_sep(struct vstate *vs) {
+static vtok_t vl_sep(vstate_t *vs) {
     vs->pos++;
     return VT_SEP;
 }
 
-static vtok_t vl_set(struct vstate *vs) {
+static vtok_t vl_set(vstate_t *vs) {
     return vl_op(vs);
 }
 
-static vtok_t vl_nl(struct vstate *vs) {
+static vtok_t vl_nl(vstate_t *vs) {
     if (vs->paren)
         return vl_ws(vs);
     else
         return vl_sep(vs);
 }       
 
-static vtok_t vl_num(struct vstate *vs) {
+static vtok_t vl_num(vstate_t *vs) {
     vs->val = num_parse(&vs->pos, vs->end);
     return VT_NUM;
 }
 
-static vtok_t vl_str(struct vstate *vs) {
+static vtok_t vl_str(vstate_t *vs) {
     vs->val = str_parse(&vs->pos, vs->end);
     return VT_STR;
 }
@@ -208,7 +208,7 @@ static vtok_t vl_str(struct vstate *vs) {
 
 // Lookup table of lex functions based 
 // only on first character of token
-vtok_t (* const vlex_a[256])(struct vstate *) = {
+vtok_t (* const vlex_a[256])(vstate_t *) = {
 /* 00 01 02 03 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
 /* 04 05 06 \a */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
 /* \b \t \n \v */   vl_bad,   vl_ws,    vl_nl,    vl_ws,
@@ -278,7 +278,7 @@ vtok_t (* const vlex_a[256])(struct vstate *) = {
 
 // Performs lexical analysis on the passed string
 // Value is stored in lval and its type is returned
-vtok_t vlex(struct vstate *vs) {
+vtok_t vlex(vstate_t *vs) {
     if (vs->pos < vs->end)
         return vlex_a[*vs->pos](vs);
     else

@@ -30,9 +30,6 @@
 typedef uint8_t vop_t;
 typedef uint16_t varg_t;
 
-// instruction counts
-typedef uint32_t vins_t;
-
 
 enum {
     VOP_OP    = 0xf8, // Opcode in top 5 bits
@@ -77,10 +74,10 @@ enum vop {
 // Return the size taken by the specified opcode
 // Note: size of the jump opcode currently can not change
 // based on argument, because this is not handled by the parser
-vins_t vcount(str_t *code, vop_t op, varg_t arg);
+int vcount(str_t *code, vop_t op, varg_t arg);
 
 // Encode the specified opcode and return its size
-vins_t vencode(str_t *code, vop_t op, varg_t arg);
+int vencode(str_t *code, vop_t op, varg_t arg);
 
 // Execute the bytecode
 var_t vexec(fn_t *f, tbl_t *scope);

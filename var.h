@@ -17,16 +17,16 @@
 // Highest bit indicates if reference counted
 typedef enum type {
     TYPE_NIL = 0x0, // nil - nil
-    TYPE_NUM = 0x1, // number - 12.3
+    TYPE_NUM = 0x2, // number - 12.3
 
-    TYPE_BFN = 0x2, // builtin function
-    TYPE_SFN = 0x3, // builtin function with scope
+    TYPE_STR = 0x6, // string - "hello"
+    TYPE_FN  = 0x7, // function - fn() { return 5 }
 
-    TYPE_STR = 0x4, // string - "hello"
-    TYPE_FN  = 0x5, // function - fn() { return 5 }
+    TYPE_BFN = 0x4, // builtin function
+    TYPE_SFN = 0x5, // builtin function with scope
 
-    TYPE_TBL = 0x6, // table - ['a':1, 'b':2, 'c':3]
-    TYPE_OBJ = 0x7, // wrapped table - obj(['a':1, 'b':2])
+    TYPE_TBL = 0x1, // table - ['a':1, 'b':2, 'c':3]
+    TYPE_OBJ = 0x3, // wrapped table - obj(['a':1, 'b':2])
 } type_t;
 
 
@@ -34,8 +34,8 @@ typedef enum type {
 typedef uint32_t hash_t;
 
 // Length type bound to 16 bits for space consumption
+#define VMAXLEN 0xffff
 typedef uint16_t len_t;
-#define vmaxlen 0xffff
 
 // Base types
 typedef double num_t;
@@ -44,14 +44,17 @@ typedef uint8_t str_t;
 // Base structs
 typedef struct tbl tbl_t;
 typedef struct fn fn_t;
-typedef struct var bfn_t(tbl_t *a);
-typedef struct var sfn_t(tbl_t *a, tbl_t *s);
+
+// Base functions
+#define VFN(ret) __attribute__((aligned(8))) ret
+typedef VFN(struct var) bfn_t(tbl_t *a);
+typedef VFN(struct var) sfn_t(tbl_t *a, tbl_t *s);
 
 
 // Actual var type declariation
 typedef struct var {
     union {
-        // bitwise representation
+        // bitwise representations
         uint64_t bits;
         uint8_t  bytes[8];
 
@@ -66,11 +69,10 @@ typedef struct var {
                 // string representation
                 const str_t *str;
 
-                // function representation
+                // function representations
                 fn_t *fn;
-
-                // builtin scope representation
-                tbl_t *stbl;
+                bfn_t *bfn;
+                sfn_t *sfn;
             };
 
             union {
@@ -85,12 +87,6 @@ typedef struct var {
 
                 // pointer to table representation
                 tbl_t *tbl;
-
-                // builtin function pointer
-                bfn_t *bfn;
-
-                // builtin function pointer with scope
-                sfn_t *sfn;
             };
         };
 
@@ -104,24 +100,26 @@ typedef struct var {
 static inline bool var_isnil(var_t v) { return !v.meta; }
 static inline bool var_isnum(var_t v) { return v.type == TYPE_NUM; }
 static inline bool var_isstr(var_t v) { return v.type == TYPE_STR; }
-static inline bool var_istbl(var_t v) { return (0x6 & v.meta) == 0x6; }
+static inline bool var_istbl(var_t v) { return (5 & v.meta) == 1; }
 static inline bool var_isobj(var_t v) { return v.type == TYPE_OBJ; }
+static inline bool var_isfn(var_t v)  { return (6 & v.meta) == 4 || 
+                                               v.type == TYPE_FN; }
 
 // definitions for accessing components
-static inline ref_t *var_ref(var_t v)     { v.type = 0; return v.ref; }
-static inline enum type var_type(var_t v) { return v.type; }
+static inline ref_t *var_ref(var_t v)  { v.type = 0; return v.ref; }
+static inline type_t var_type(var_t v) { return v.type; }
 
-static inline num_t var_num(var_t v)        { v.type = 0; return v.num; }
+static inline num_t var_num(var_t v)        { v.meta &= ~3; return v.num; }
 static inline const str_t *var_str(var_t v) { return v.str + v.off; }
-static inline fn_t *var_fn(var_t v)         { v.meta--; return v.fn; }
 static inline tbl_t *var_tbl(var_t v)       { return v.tbl; }
+static inline fn_t *var_fn(var_t v)         { v.meta &= ~3; return v.fn; }
 
 
 // definitions of literal vars in C
 #define vnil ((var_t){{0}})
-#define vnan vnum(NAN)
-#define vinf vnum(INFINITY)
-
+#define vnan  vnum(NAN)
+#define vinf  vnum(INFINITY)
+#define vninf vnum(-INFINITY)
 
 // var constructors for C
 static inline var_t vraw(uint32_t r) {
@@ -179,42 +177,43 @@ static inline var_t vbfn(bfn_t *f) {
 static inline var_t vsfn(sfn_t *f, tbl_t *s) {
     var_t v;
     v.sfn = f;
-    v.stbl = s;
+    v.tbl = s;
     v.type = TYPE_SFN;
     return v;
 }
 
-#define vcstr(c) ({                     \
-    static struct {                     \
-        ref_t r;                        \
-        const str_t s[sizeof(c)-1];     \
-    } _vcstr = { 1, {(c)}};             \
-                                        \
-    _vcstr.r++;                         \
-    vstr(_vcstr.s, 0, sizeof(c)-1);     \
+#define vcstr(c) ({                         \
+    static struct {                         \
+        ref_t r; len_t l;                   \
+        const str_t s[sizeof(c)-1];         \
+    } _vcstr = { 1, sizeof(c)-1, {(c)}};    \
+                                            \
+    _vcstr.r++;                             \
+    vstr(_vcstr.s, 0, sizeof(c)-1);         \
 })
 
 
 // Mapping of reference counting functions
 extern void tbl_destroy(void *);
-extern void (*const vdtor_a[8])(void*);
+extern void str_destroy(void *);
+extern void fn_destroy(void *);
 
 static inline void var_inc(var_t v) {
-    if (v.type >= TYPE_SFN) {
-        if (v.type <= TYPE_FN)
-            vref_inc(v.ref);
-        if (v.type >= TYPE_FN)
-            vref_inc(v.tbl);
-    }
+    if ((6 & v.meta) == 6)
+        vref_inc(v.ref);
+    if (1 & v.meta && v.tbl)
+        vref_inc(v.tbl);
 }
 
 static inline void var_dec(var_t v) {
-    if (v.type >= TYPE_SFN) {
-        if (v.type <= TYPE_FN)
-            vref_dec(v.ref, vdtor_a[v.type]);
-        if (v.type >= TYPE_FN)
-            vref_dec(v.tbl, tbl_destroy);
-    }
+    static void (* const dtors[2])(void *) = {
+        str_destroy, fn_destroy
+    };
+
+    if ((6 & v.meta) == 6)
+        vref_dec(v.ref, dtors[1 & v.meta]);
+    if (1 & v.meta && v.tbl)
+        vref_dec(v.tbl, tbl_destroy);
 }
 
 

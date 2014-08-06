@@ -1,6 +1,7 @@
 #include "fn.h"
 
 #include "mem.h"
+#include "str.h"
 #include "vlex.h"
 #include "vparse.h"
 #include "vm.h"
@@ -12,13 +13,11 @@
 // Each function is preceded with a reference count
 // which is used as its handle in a var
 fn_t *fn_create(tbl_t *args, var_t code, tbl_t *ops, tbl_t *keys) {
-    fn_t *f;
-    tbl_t *vars;
-    int i = 0;
-
     args = tbl_readp(args);
-    f = vref_alloc(sizeof(fn_t));
-    vars = tbl_create(args->len + 1);
+
+    fn_t *f = vref_alloc(sizeof(fn_t));
+    tbl_t *vars = tbl_create(args->len + 1);
+    int i = 0;
 
     tbl_insert(vars, code, vnum(i++));
 
@@ -26,8 +25,7 @@ fn_t *fn_create(tbl_t *args, var_t code, tbl_t *ops, tbl_t *keys) {
         tbl_insert(vars, v, vnum(i++));
     })
 
-        
-    struct vstate *vs = valloc(sizeof(struct vstate));
+    vstate_t *vs = valloc(sizeof(vstate_t));
     vs->ref = var_ref(code);
     vs->pos = var_str(code);
     vs->end = vs->pos + code.len;
@@ -39,10 +37,10 @@ fn_t *fn_create(tbl_t *args, var_t code, tbl_t *ops, tbl_t *keys) {
     vs->keys = keys ? tbl_readp(keys) : vkeys();
 
 
-    int ins = vparse(vs);
+    f->bcount = vparse(vs);
 
     vs->pos = var_str(code);
-    vs->bcode = valloc(ins);
+    vs->bcode = valloc(f->bcount);
     vs->encode = vencode;
 
     vparse(vs);
@@ -52,14 +50,13 @@ fn_t *fn_create(tbl_t *args, var_t code, tbl_t *ops, tbl_t *keys) {
     f->vcount = vars->len;
     f->stack = 25; // TODO make this reasonable
 
-    f->vars = valloc(sizeof(var_t) * f->vcount);
-
+    f->vars = valloc(f->vcount * sizeof(var_t));
     tbl_for(k, v, vars, {
-        f->vars[(uint16_t)var_num(v)] = k;
+        f->vars[(len_t)var_num(v)] = k;
     });
     
     tbl_dec(vars);
-    vdealloc(vs);
+    vdealloc(vs, sizeof(vstate_t));
 
     return f;
 }
@@ -71,12 +68,14 @@ void fn_destroy(void *m) {
     fn_t *f = m;
     int i;
 
+    f->vars -= 1;
     for (i=0; i < f->vcount; i++) {
         var_dec(f->vars[i]);
     }
 
-    vdealloc((void *)f->bcode);
-    vdealloc(f->vars);
+    vdealloc((void *)f->bcode, f->bcount);
+    vdealloc(f->vars, f->vcount * sizeof(var_t));
+    vref_dealloc(m, sizeof(fn_t));
 }
 
 
@@ -89,12 +88,12 @@ var_t fn_call(fn_t *f, tbl_t *args, tbl_t *closure) {
     tbl_insert(scope, vcstr("args"), vtbl(args));
 
     for (i=0; i < f->acount; i++) {
-        var_t param = tbl_lookup(args, vnum(i));
+        var_t param = tbl_lookup(args, vnum(0));
 
         if (var_isnil(param))
-            param = tbl_lookup(args, f->vars[i-1]);
+            param = tbl_lookup(args, f->vars[i+1]);
 
-        tbl_insert(scope, f->vars[i-1], param);
+        tbl_insert(scope, f->vars[i+1], param);
     }
 
     scope->tail = closure;
@@ -109,42 +108,38 @@ var_t fn_repr(var_t v) {
     int size = 7 + f->vars[0].len;
     int i;
 
-    str_t *out, *s;
-
-    for (i=1; i <= f->acount; i++) {
-        size += f->vars[i].len;
-
-        if (i != f->acount-1)
-            size += 2;
+    for (i=0; i < f->acount; i++) {
+        size += f->vars[i+1].len;
+        size += (i == f->acount-1) ? 0 : 2;
     }
 
+    assert(size <= VMAXLEN); // TODO error
 
-    out = vref_alloc(size);
-    s = out;
+    str_t *out = str_create(size);
+    str_t *res = out;
 
-    *s++ = 'f';
-    *s++ = 'n';
-    *s++ = '(';
+    *res++ = 'f';
+    *res++ = 'n';
+    *res++ = '(';
 
-    for (i=1; i <= f->acount; i++) {
-        memcpy(s, var_str(f->vars[i]), f->vars[i].len);
-        s += f->vars[i].len;
+    for (i=0; i < f->acount; i++) {
+        memcpy(res, var_str(f->vars[i+1]), f->vars[i+1].len);
+        res += f->vars[i+1].len;
 
-        if (i++ != f->acount-1) {
-            *s++ = ',';
-            *s++ = ' ';
+        if (i != f->acount-1) {
+            *res++ = ',';
+            *res++ = ' ';
         }
     }
 
-    *s++ = ')';
-    *s++ = ' ';
-    *s++ = '{';
+    *res++ = ')';
+    *res++ = ' ';
+    *res++ = '{';
 
-    memcpy(s, var_str(f->vars[0]), f->vars[0].len);
-    s += f->vars[0].len;
+    memcpy(res, var_str(f->vars[0]), f->vars[0].len);
+    res += f->vars[0].len;
 
-    *s++ = '}';
-
+    *res++ = '}';
 
     return vstr(out, 0, size);
 }

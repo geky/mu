@@ -20,7 +20,7 @@ static inline varg_t vsarg(const str_t *pc) {
 // Return the size taken by the specified opcode
 // Note: size of the jump opcode currently can not change
 // based on argument, because this is not handled by the parser
-vins_t vcount(str_t *code, vop_t op, varg_t arg) {
+int vcount(str_t *code, vop_t op, varg_t arg) {
     if (VOP_ARG & op)
         return 3;
     else
@@ -28,7 +28,7 @@ vins_t vcount(str_t *code, vop_t op, varg_t arg) {
 }
 
 // Encode the specified opcode and return its size
-vins_t vencode(str_t *code, vop_t op, varg_t arg) {
+int vencode(str_t *code, vop_t op, varg_t arg) {
     *code++ = op;
 
     if (VOP_ARG & op) {

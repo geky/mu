@@ -1,10 +1,12 @@
 #include "tbl.h"
 
 #include "mem.h"
+#include "str.h"
 
 #include <assert.h>
 #include <string.h>
 
+// TODO check lengths appropriately
 
 // finds capactiy based on load factor of 1.5
 static inline hash_t tbl_ncap(hash_t s) {
@@ -20,12 +22,6 @@ static inline hash_t tbl_npw2(hash_t s) {
 // i = i*5 + 1 to avoid degenerative cases
 static inline hash_t tbl_next(hash_t i) {
     return (i<<2) + i + 1;
-}
-
-// test for if a number is equivalent to its hash
-// if true a key is valid for range representations
-static inline bool tbl_ishash(var_t v, hash_t hash) {
-    return var_isnum(v) && num_equals(v, vnum(hash));
 }
 
 
@@ -53,21 +49,26 @@ void tbl_destroy(void *m) {
     tbl_t *tbl = m;
 
     if (tbl->stride > 0) {
-        int i, entries;
+        int i, cap, entries;
 
-        if (tbl->stride < 2)
+        if (tbl->stride < 2) {
+            cap = tbl->mask + 1;
             entries = tbl->len;
-        else
-            entries = 2 * (tbl->mask+1);
+        } else {
+            cap = 2 * (tbl->mask + 1);
+            entries = cap;
+        }
 
         for (i=0; i < entries; i++)
             var_dec(tbl->array[i]);
 
-        vdealloc(tbl->array);
+        vdealloc(tbl->array, cap * sizeof(var_t));
     }
 
     if (tbl->tail)
         tbl_dec(tbl->tail);
+
+    vref_dealloc(m, sizeof(tbl_t));
 }
 
 
@@ -81,7 +82,7 @@ var_t tbl_lookup(tbl_t *tbl, var_t key) {
 
     for (tbl = tbl_readp(tbl); tbl; tbl = tbl_readp(tbl->tail)) {
         if (tbl->stride < 2) {
-            if (tbl_ishash(key, hash) && hash < tbl->len) {
+            if (num_ishash(key, hash) && hash < tbl->len) {
                 if (tbl->stride == 0)
                     return vnum(hash + tbl->offset);
                 else
@@ -135,10 +136,10 @@ static void tbl_realizekeys(tbl_t *tbl) {
             w[2*i+1] = tbl->array[i];
         }
 
-        vdealloc(tbl->array);
+        vdealloc(tbl->array, cap * sizeof(var_t));
     }
 
-    memset(w + 2*tbl->len, 0, (2*cap - 2*tbl->len) * sizeof(var_t));
+    memset(w + 2*tbl->len, 0, 2*(cap - tbl->len) * sizeof(var_t));
     tbl->array = w;
     tbl->stride = 2;
 }
@@ -150,16 +151,17 @@ static inline void tbl_resize(tbl_t * tbl, len_t size) {
     hash_t mask = cap - 1;
 
     if (tbl->stride < 2) {
-        tbl->mask = mask;
-
-        if (tbl->stride == 0)
+        if (tbl->stride == 0) {
+            tbl->mask = mask;
             return;
+        }
 
         var_t *w = valloc(cap * sizeof(var_t));
         memcpy(w, tbl->array, tbl->len * sizeof(var_t));
 
-        vdealloc(tbl->array);
+        vdealloc(tbl->array, (tbl->mask+1) * sizeof(var_t));
         tbl->array = w;
+        tbl->mask = mask;
     } else {
         var_t *w = valloc(2*cap * sizeof(var_t));
         memset(w, 0, 2*cap * sizeof(var_t));
@@ -184,7 +186,7 @@ static inline void tbl_resize(tbl_t * tbl, len_t size) {
             }
         }
 
-        vdealloc(tbl->array);
+        vdealloc(tbl->array, 2*(tbl->mask+1) * sizeof(var_t));
         tbl->array = w;
         tbl->nils = 0;
         tbl->mask = mask;
@@ -198,7 +200,7 @@ static void tbl_insertnil(tbl_t *tbl, var_t key, var_t val) {
     hash_t i, hash = var_hash(key);
 
     if (tbl->stride < 2) {
-        if (!tbl_ishash(key, hash) || hash >= tbl->len)
+        if (!num_ishash(key, hash) || hash >= tbl->len)
             return;
 
         if (hash == tbl->len - 1) {
@@ -240,14 +242,14 @@ static void tbl_insertval(tbl_t *tbl, var_t key, var_t val) {
         tbl_resize(tbl, tbl->len + 1);
 
     if (tbl->stride < 2) {
-        if (tbl_ishash(key, hash)) {
+        if (num_ishash(key, hash)) {
             if (hash == tbl->len) {
                 if (tbl->stride == 0) {
                     if (var_isnum(val)) {
                         if (tbl->len == 0)
                             tbl->offset = num_hash(val);
 
-                        if (tbl_ishash(val, hash + tbl->offset)) {
+                        if (num_ishash(val, hash + tbl->offset)) {
                             tbl->len++;
                             return;
                         }
@@ -261,7 +263,7 @@ static void tbl_insertval(tbl_t *tbl, var_t key, var_t val) {
                 return;
             } else if (hash < tbl->len) {
                 if (tbl->stride == 0) {
-                    if (tbl_ishash(val, hash + tbl->offset))
+                    if (num_ishash(val, hash + tbl->offset))
                         return;
 
                     tbl_realizevars(tbl);
@@ -332,7 +334,7 @@ static void tbl_assignnil(tbl_t *tbl, var_t key, var_t val) {
             break;
 
         if (tbl->stride < 2) {
-            if (!tbl_ishash(key, hash) || hash >= tbl->len)
+            if (!num_ishash(key, hash) || hash >= tbl->len)
                 continue;
 
             if (hash == tbl->len - 1) {
@@ -377,11 +379,11 @@ static void tbl_assignval(tbl_t *head, var_t key, var_t val) {
             break;
 
         if (tbl->stride < 2) {
-            if (!tbl_ishash(key, hash) || hash >= tbl->len)
+            if (!num_ishash(key, hash) || hash >= tbl->len)
                 continue;
 
             if (tbl->stride == 0) {
-                if (tbl_ishash(val, hash + tbl->offset))
+                if (num_ishash(val, hash + tbl->offset))
                     return;
 
                 tbl_realizevars(tbl);
@@ -417,13 +419,13 @@ static void tbl_assignval(tbl_t *head, var_t key, var_t val) {
         tbl_resize(tbl, tbl->len+1);
 
     if (tbl->stride < 2) {
-        if (tbl_ishash(key, hash) && hash == tbl->len) {
+        if (num_ishash(key, hash) && hash == tbl->len) {
             if (tbl->stride == 0) {
                 if (var_isnum(val)) {
                     if (tbl->len == 0)
                         tbl->offset = num_hash(val);
 
-                    if (tbl_ishash(val, hash + tbl->offset)) {
+                    if (num_ishash(val, hash + tbl->offset)) {
                         tbl->len++;
                         return;
                     }
@@ -476,53 +478,49 @@ void tbl_assign(tbl_t *tbl, var_t key, var_t val) {
 // Returns a string representation of the table
 var_t tbl_repr(var_t v) {
     tbl_t *tbl = tbl_readp(v.tbl);
-    unsigned int size = 2;
 
-    str_t *out, *s;
-
-    var_t *key_repr = valloc(tbl->len * sizeof(var_t));
-    var_t *val_repr = valloc(tbl->len * sizeof(var_t));
-
+    var_t *reprs = valloc(2*tbl->len * sizeof(var_t));
+    int size = 2;
     int i = 0;
-    tbl_for (k, v, tbl, {
-        key_repr[i] = var_repr(k);
-        val_repr[i] = var_repr(v);
-        size += key_repr[i].len + 2;
-        size += val_repr[i].len;
 
-        if (i != tbl->len-1)
-            size += 2;
+    tbl_for (k, v, tbl, {
+        reprs[2*i  ] = var_repr(k);
+        reprs[2*i+1] = var_repr(v);
+        size += reprs[2*i  ].len;
+        size += reprs[2*i+1].len;
+        size += (i == tbl->len-1) ? 2 : 4;
 
         i++;
     })
 
-    out = vref_alloc(size);
-    s = out;
+    assert(size <= VMAXLEN); // TODO error
 
-    *s++ = '[';
+    str_t *out = str_create(size);
+    str_t *res = out;
+
+    *res++ = '[';
 
     for (i=0; i < tbl->len; i++) {
-        memcpy(s, var_str(key_repr[i]), key_repr[i].len);
-        s += key_repr[i].len;
-        var_dec(key_repr[i]);
+        memcpy(res, var_str(reprs[2*i]), reprs[2*i].len);
+        res += reprs[2*i].len;
+        var_dec(reprs[2*i]);
 
-        *s++ = ':';
-        *s++ = ' ';
+        *res++ = ':';
+        *res++ = ' ';
 
-        memcpy(s, var_str(val_repr[i]), val_repr[i].len);
-        s += val_repr[i].len;
-        var_dec(val_repr[i]);
+        memcpy(res, var_str(reprs[2*i+1]), reprs[2*i+1].len);
+        res += reprs[2*i+1].len;
+        var_dec(reprs[2*i+1]);
 
         if (i != tbl->len-1) {
-            *s++ = ',';
-            *s++ = ' ';
+            *res++ = ',';
+            *res++ = ' ';
         }
     }
 
-    *s++ = ']';
+    *res++ = ']';
 
-    vdealloc(key_repr);
-    vdealloc(val_repr);
+    vdealloc(reprs, 2*tbl->len * sizeof(var_t));
 
     return vstr(out, 0, size);
 }
