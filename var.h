@@ -17,16 +17,16 @@
 // Highest bit indicates if reference counted
 typedef enum type {
     TYPE_NIL = 0x0, // nil - nil
-    TYPE_NUM = 0x2, // number - 12.3
+    TYPE_NUM = 0x1, // number - 12.3
+
+    TYPE_BFN = 0x2, // builtin function
+    TYPE_SFN = 0x3, // builtin function with scope
+
+    TYPE_TBL = 0x4, // table - ['a':1, 'b':2, 'c':3]
+    TYPE_OBJ = 0x5, // wrapped table - obj(['a':1, 'b':2])
 
     TYPE_STR = 0x6, // string - "hello"
     TYPE_FN  = 0x7, // function - fn() { return 5 }
-
-    TYPE_BFN = 0x4, // builtin function
-    TYPE_SFN = 0x5, // builtin function with scope
-
-    TYPE_TBL = 0x1, // table - ['a':1, 'b':2, 'c':3]
-    TYPE_OBJ = 0x3, // wrapped table - obj(['a':1, 'b':2])
 } type_t;
 
 
@@ -100,9 +100,9 @@ typedef struct var {
 static inline bool var_isnil(var_t v) { return !v.meta; }
 static inline bool var_isnum(var_t v) { return v.type == TYPE_NUM; }
 static inline bool var_isstr(var_t v) { return v.type == TYPE_STR; }
-static inline bool var_istbl(var_t v) { return (5 & v.meta) == 1; }
+static inline bool var_istbl(var_t v) { return (6 & v.meta) == 4; }
 static inline bool var_isobj(var_t v) { return v.type == TYPE_OBJ; }
-static inline bool var_isfn(var_t v)  { return (6 & v.meta) == 4 || 
+static inline bool var_isfn(var_t v)  { return (6 & v.meta) == 2 || 
                                                v.type == TYPE_FN; }
 
 // definitions for accessing components
@@ -155,6 +155,7 @@ static inline var_t vfn(fn_t *f, tbl_t *s) {
 
 static inline var_t vtbl(tbl_t *t) {
     var_t v;
+    v.ref = (ref_t*)t;
     v.tbl = t;
     v.type = TYPE_TBL;
     return v;
@@ -162,6 +163,7 @@ static inline var_t vtbl(tbl_t *t) {
 
 static inline var_t vobj(tbl_t *t) {
     var_t v;
+    v.ref = (ref_t*)t;
     v.tbl = t;
     v.type = TYPE_OBJ;
     return v;
@@ -199,20 +201,20 @@ extern void str_destroy(void *);
 extern void fn_destroy(void *);
 
 static inline void var_inc(var_t v) {
-    if ((6 & v.meta) == 6)
+    if (4 & v.meta)
         vref_inc(v.ref);
-    if (1 & v.meta && v.tbl)
+    if (!(3 & ~v.meta))
         vref_inc(v.tbl);
 }
 
 static inline void var_dec(var_t v) {
-    static void (* const dtors[2])(void *) = {
-        str_destroy, fn_destroy
+    static void (* const dtors[4])(void *) = {
+        tbl_destroy, 0, str_destroy, fn_destroy
     };
 
-    if ((6 & v.meta) == 6)
-        vref_dec(v.ref, dtors[1 & v.meta]);
-    if (1 & v.meta && v.tbl)
+    if (4 & v.meta)
+        vref_dec(v.ref, dtors[3 & v.meta]);
+    if (!(3 & ~v.meta))
         vref_dec(v.tbl, tbl_destroy);
 }
 
