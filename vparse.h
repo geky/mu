@@ -10,8 +10,9 @@
 
 
 // Parsing type definitions
-typedef struct vstate vstate_t;
 typedef uint8_t vtok_t;
+typedef int vencode_t(str_t *, vop_t, varg_t);
+typedef struct vstate vstate_t;
 
 
 // Representation of parsing product
@@ -21,11 +22,32 @@ enum vproduct {
     VP_VAL  = 2
 };
 
+
+// Specific state structures
+struct vopstate {
+    len_t ins;
+    uint8_t prec;
+};
+
+struct vjstate {
+    len_t ins;
+    tbl_t *tbl;
+};
+
+
 // State of a parse
 struct vstate {
+    ref_t *ref;
+    const str_t *str;
     const str_t *pos;
     const str_t *end;
-    ref_t *ref;
+
+    tbl_t *vars;
+    tbl_t *keys;
+    tbl_t *ops;
+
+    struct vopstate op;
+    struct vjstate j;
 
     uint8_t indirect;
     uint8_t paren;
@@ -34,36 +56,14 @@ struct vstate {
     vtok_t tok;
     var_t val;
 
-    union {
-        struct {
-            uint8_t prec : 8;
-            int opins    : 24;
-        };
-
-        uint32_t opstate;
-    };
-
-    union {
-        struct {
-            int lins;
-            tbl_t *ltbl;
-        };
-
-        uint64_t lstate;
-    };
-
-    tbl_t *vars;
-    tbl_t *keys;
-    tbl_t *ops;
-
     int ins;
     str_t *bcode;
-    int (*encode)(str_t *, vop_t, varg_t);
+    vencode_t *encode;
 };
 
 
 // Parses V source code and evaluates the result
-int vparse(vstate_t *);
+void vparse(vstate_t *);
 
 
 #endif

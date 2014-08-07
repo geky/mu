@@ -13,8 +13,8 @@ static inline varg_t varg(const str_t *pc) {
     return (pc[0] << 8) | pc[1];
 }
 
-static inline varg_t vsarg(const str_t *pc) {
-    return (varg_t)varg(pc);
+static inline vsarg_t vsarg(const str_t *pc) {
+    return (signed)varg(pc);
 }
 
 // Return the size taken by the specified opcode

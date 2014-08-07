@@ -15,6 +15,7 @@ static tbl_t *vopt = 0;
 
 // Creates internal tables for keywords or uses prexisting.
 // Use this to initialize an op table if nescessary.
+__attribute__((pure))
 tbl_t *vkeys(void) {
     if (vkeyt) return vkeyt;
 
@@ -31,6 +32,7 @@ tbl_t *vkeys(void) {
     return vkeyt;
 }
 
+__attribute__((pure))
 tbl_t *vops(void) {
     if (vopt) return vopt;
 
@@ -43,34 +45,38 @@ tbl_t *vops(void) {
 
 
 // Lexer definitions for V's tokens
+extern void (* const vlexs[256])(vstate_t *);
+
 __attribute__((noreturn))
-static vtok_t vl_bad(vstate_t *vs) {
+static void vl_bad(vstate_t *vs);
+static void vl_ws(vstate_t *vs);
+static void vl_com(vstate_t *vs);
+static void vl_op(vstate_t *vs);
+static void vl_kw(vstate_t *vs);
+static void vl_tok(vstate_t *vs);
+static void vl_sep(vstate_t *vs);
+static void vl_set(vstate_t *vs);
+static void vl_nl(vstate_t *vs);
+static void vl_num(vstate_t *vs);
+static void vl_str(vstate_t *vs);
+
+
+__attribute__((noreturn))
+static void vl_bad(vstate_t *vs) {
     assert(false); //TODO: errors: bad parse
 }
 
-static vtok_t vl_ws(vstate_t *vs);
-static vtok_t vl_com(vstate_t *vs);
-static vtok_t vl_op(vstate_t *vs);
-static vtok_t vl_kw(vstate_t *vs);
-static vtok_t vl_tok(vstate_t *vs);
-static vtok_t vl_sep(vstate_t *vs);
-static vtok_t vl_set(vstate_t *vs);
-static vtok_t vl_nl(vstate_t *vs);
-static vtok_t vl_num(vstate_t *vs);
-static vtok_t vl_str(vstate_t *vs);
-
-
-static vtok_t vl_ws(vstate_t *vs) {
+static void vl_ws(vstate_t *vs) {
     vs->pos++;
-    return vlex(vs);
+    vlex(vs);
 }
 
-static vtok_t vl_com(vstate_t *vs) {
+static void vl_com(vstate_t *vs) {
     vs->pos++;
 
     if (vs->pos >= vs->end || *vs->pos != '`') {
         while (vs->pos < vs->end) {
-            unsigned char n = *vs->pos++;
+            str_t n = *vs->pos++;
             if (n == '`' || n == '\n')
                 break;
         }
@@ -93,16 +99,14 @@ static vtok_t vl_com(vstate_t *vs) {
         }
     }
 
-    return vlex(vs);
+    vlex(vs);
 }
 
-static vtok_t vl_op(vstate_t *vs) {
-    const str_t *str = (str_t *)(vs->ref + 1) + 2;
+static void vl_op(vstate_t *vs) {
     const str_t *kw = vs->pos++;
-    var_t op;
 
     while (vs->pos < vs->end) {
-        void *w = vlex_a[*vs->pos];
+        void *w = vlexs[*vs->pos];
 
         if (w != vl_op && w != vl_set)
             break;
@@ -110,27 +114,25 @@ static vtok_t vl_op(vstate_t *vs) {
         vs->pos++;
     };
 
-    vs->val = vstr(str, kw-str, vs->pos-kw);
+    var_t key = vstr(vs->str, kw-vs->str, vs->pos-kw);
 
     while (1) {
-        op = tbl_lookup(vs->ops, vs->val);
+        vs->val = tbl_lookup(vs->ops, key);
 
-        if (!var_isnil(op))
+        if (!var_isnil(vs->val))
             break;
 
         vs->pos--;
-        vs->val.len--;
+        key.len--;
 
-        assert(vs->val.len > 0); // TODO errors
+        assert(key.len > 0); // TODO errors
     }
-
-    vs->val = op;
 
 
     vs->nprec = 0;
 
     while (vs->pos < vs->end) {
-        if (vlex_a[*vs->pos] != vl_ws)
+        if (vlexs[*vs->pos] != vl_ws)
             break;
 
         vs->pos++;
@@ -138,25 +140,22 @@ static vtok_t vl_op(vstate_t *vs) {
     }
 
 
-    if (var_isnum(op) && op.data >= VT_SET
-                      && op.data <= VT_DOT) {
-        return op.data;
-    } else if (vs->pos < vs->end && 
-               vlex_a[*vs->pos] == vl_set) {
+    if (var_isnum(vs->val) && vs->val.data >= VT_SET
+                           && vs->val.data <= VT_DOT) {
+        vs->tok = vs->val.data;
+    } else if (vs->pos < vs->end && vlexs[*vs->pos] == vl_set) {
         vs->pos++;
-        return VT_OPSET;
+        vs->tok = VT_OPSET;
     } else {
-        return VT_OP;
+        vs->tok = VT_OP;
     }
 }
 
-static vtok_t vl_kw(vstate_t *vs) {
-    const str_t *str = (str_t *)(vs->ref + 1) + 2;
+static void vl_kw(vstate_t *vs) {
     const str_t *kw = vs->pos++;
-    var_t key;
 
     while (vs->pos < vs->end) {
-        void *w = vlex_a[*vs->pos];
+        void *w = vlexs[*vs->pos];
 
         if (w != vl_kw && w != vl_num)
             break;
@@ -164,51 +163,51 @@ static vtok_t vl_kw(vstate_t *vs) {
         vs->pos++;
     };
 
-    vs->val = vstr(str, kw-str, vs->pos-kw);
-    key = tbl_lookup(vs->keys, vs->val);
+    vs->val = vstr(vs->str, kw-vs->str, vs->pos-kw);
+    var_t key = tbl_lookup(vs->keys, vs->val);
 
     if (var_isnum(key) && key.data >= VT_NIL
-                       && key.data <= VT_ELSE)
-        return key.data;
-    else
-        return VT_IDENT;
+                       && key.data <= VT_ELSE) {
+        vs->tok = key.data;
+    } else {
+        vs->tok = VT_IDENT;
+    }
 }
 
-static vtok_t vl_tok(vstate_t *vs) {
-    return *vs->pos++;
+static void vl_tok(vstate_t *vs) {
+    vs->tok = *vs->pos++;
 }
 
-static vtok_t vl_sep(vstate_t *vs) {
+static void vl_sep(vstate_t *vs) {
     vs->pos++;
-    return VT_SEP;
+    vs->tok = VT_SEP;
 }
 
-static vtok_t vl_set(vstate_t *vs) {
-    return vl_op(vs);
+static void vl_set(vstate_t *vs) {
+    vl_op(vs);
 }
 
-static vtok_t vl_nl(vstate_t *vs) {
+static void vl_nl(vstate_t *vs) {
     if (vs->paren)
-        return vl_ws(vs);
+        vl_ws(vs);
     else
-        return vl_sep(vs);
+        vl_sep(vs);
 }       
 
-static vtok_t vl_num(vstate_t *vs) {
+static void vl_num(vstate_t *vs) {
     vs->val = num_parse(&vs->pos, vs->end);
-    return VT_NUM;
+    vs->tok = VT_NUM;
 }
 
-static vtok_t vl_str(vstate_t *vs) {
+static void vl_str(vstate_t *vs) {
     vs->val = str_parse(&vs->pos, vs->end);
-    return VT_STR;
+    vs->tok = VT_STR;
 }
-
 
 
 // Lookup table of lex functions based 
 // only on first character of token
-vtok_t (* const vlex_a[256])(vstate_t *) = {
+void (* const vlexs[256])(vstate_t *) = {
 /* 00 01 02 03 */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
 /* 04 05 06 \a */   vl_bad,   vl_bad,   vl_bad,   vl_bad,
 /* \b \t \n \v */   vl_bad,   vl_ws,    vl_nl,    vl_ws,
@@ -278,10 +277,10 @@ vtok_t (* const vlex_a[256])(vstate_t *) = {
 
 // Performs lexical analysis on the passed string
 // Value is stored in lval and its type is returned
-vtok_t vlex(vstate_t *vs) {
+void vlex(vstate_t *vs) {
     if (vs->pos < vs->end)
-        return vlex_a[*vs->pos](vs);
+        vlexs[*vs->pos](vs);
     else
-        return 0;
+        vs->tok = 0;
 }
 

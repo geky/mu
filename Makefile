@@ -8,9 +8,9 @@ SRC += main.c
 OBJ := $(SRC:.c=.o)
 ASM := $(OBJ:.o=.s)
 
-CFLAGS += -O2
+#CFLAGS += -O2
 #CFLAGS += -O2 -pg
-#CFLAGS += -O0 -g3 -gdwarf-2 -ggdb
+CFLAGS += -O0 -g3 -gdwarf-2 -ggdb
 CFLAGS += -include stdio.h
 CFLAGS += -finline -foptimize-sibling-calls -freg-struct-return
 CFLAGS += -m32

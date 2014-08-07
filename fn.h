@@ -11,13 +11,12 @@
 
 struct fn {
     const str_t *bcode; // function bytecode
-
-    len_t acount;   // number of arguments
-    len_t vcount;   // number of stored vars
     len_t bcount;   // length of bytecode
 
     len_t stack;    // amount of stack usage
 
+    len_t acount;   // number of arguments
+    len_t vcount;   // number of stored vars
     var_t *vars;    // stored vars
 };
 

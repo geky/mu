@@ -17,46 +17,45 @@ fn_t *fn_create(tbl_t *args, var_t code, tbl_t *ops, tbl_t *keys) {
 
     fn_t *f = vref_alloc(sizeof(fn_t));
     tbl_t *vars = tbl_create(args->len + 1);
-    int i = 0;
 
-    tbl_insert(vars, code, vnum(i++));
+    tbl_insert(vars, code, vnum(vars->len));
 
     tbl_for(k, v, args, {
-        tbl_insert(vars, v, vnum(i++));
+        tbl_insert(vars, v, vnum(vars->len));
     })
 
     vstate_t *vs = valloc(sizeof(vstate_t));
     vs->ref = var_ref(code);
-    vs->pos = var_str(code);
-    vs->end = vs->pos + code.len;
-    vs->bcode = 0;
-    vs->vars = vars;
-    vs->encode = vcount;
+    vs->str = code.str;
+    vs->end = var_str(code) + code.len;
 
+    vs->vars = vars;
     vs->ops = ops ? tbl_readp(ops) : vops();
     vs->keys = keys ? tbl_readp(keys) : vkeys();
 
-
-    f->bcount = vparse(vs);
+    vs->pos = var_str(code);
+    vs->bcode = 0;
+    vs->encode = vcount;
+    vparse(vs);
 
     vs->pos = var_str(code);
-    vs->bcode = valloc(f->bcount);
+    vs->bcode = valloc(vs->ins);
     vs->encode = vencode;
-
     vparse(vs);
 
     f->bcode = vs->bcode;
+    f->bcount = vs->ins;
+    f->stack = 25; // TODO make this reasonable
     f->acount = args->len;
     f->vcount = vars->len;
-    f->stack = 25; // TODO make this reasonable
 
     f->vars = valloc(f->vcount * sizeof(var_t));
     tbl_for(k, v, vars, {
         f->vars[(len_t)var_num(v)] = k;
     });
     
-    tbl_dec(vars);
     vdealloc(vs, sizeof(vstate_t));
+    tbl_dec(vars);
 
     return f;
 }

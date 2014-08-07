@@ -38,18 +38,13 @@ enum vtok {
 
 // Creates internal tables for keywords or uses prexisting.
 // Use this to initialize an op table if nescessary.
-tbl_t *vkeys(void);
-tbl_t *vops(void);
+__attribute__((pure)) tbl_t *vkeys(void);
+__attribute__((pure)) tbl_t *vops(void);
 
 
-// Performs lexical analysis on the passed string
-// Value is stored in val and a token's type is returned
-vtok_t vlex(vstate_t *);
-
-
-// Lookup table of lex functions based 
-// only on a single character of token
-extern vtok_t (* const vlex_a[256])(vstate_t *);
+// Performs lexical analysis on current location in string
+// Updates position, stores token type in tok, and value in val
+void vlex(vstate_t *);
 
 
 #endif

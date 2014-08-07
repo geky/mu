@@ -26,10 +26,10 @@
  *
  */
 
-// operator types
+// Instruction components
 typedef uint8_t vop_t;
 typedef uint16_t varg_t;
-
+typedef int16_t vsarg_t;
 
 enum {
     VOP_OP    = 0xf8, // Opcode in top 5 bits
