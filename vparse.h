@@ -49,9 +49,9 @@ struct vstate {
     struct vopstate op;
     struct vjstate j;
 
-    uint8_t indirect;
-    uint8_t paren;
-    uint8_t nprec;
+    bool indirect       : 1;
+    unsigned int paren  : 8;
+    unsigned int nprec  : 8;
 
     vtok_t tok;
     var_t val;
