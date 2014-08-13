@@ -106,6 +106,31 @@ var_t tbl_lookup(tbl_t *tbl, var_t key) {
 }
 
 
+// Recursively looks up either a key or index
+// if key is not found
+var_t tbl_lookdn(tbl_t *tbl, var_t key, len_t i) {
+    tbl = tbl_readp(tbl);
+
+    if (!tbl->tail && tbl->stride < 2) {
+        if (i < tbl->len) {
+            if (tbl->stride == 0)
+                return vnum(i + tbl->offset);
+            else
+                return tbl->array[i];
+        }
+
+        return vnil;
+    } else {
+        var_t val = tbl_lookup(tbl, key);
+
+        if (!var_isnil(val))
+            return val;
+
+        return tbl_lookup(tbl, vnum(i));
+    }
+}
+
+
 // converts implicit range to actual array of nums on heap
 static void tbl_realizevars(tbl_t *tbl) {
     hash_t cap = tbl->mask + 1;
@@ -473,6 +498,90 @@ void tbl_assign(tbl_t *tbl, var_t key, var_t val) {
         tbl_assignval(tbl, key, val);
 }
 
+
+
+// Performs iteration on a table
+v_fn var_t tbl_0_iteration(tbl_t *args, tbl_t *scope) {
+    tbl_t *tbl = tbl_lookup(scope, vnum(0)).tbl;
+    tbl_t *ret = tbl_lookup(scope, vnum(1)).tbl;
+    int i = tbl_lookup(scope, vnum(2)).data;
+
+    if (i >= tbl->len)
+        return vnil;
+
+    tbl_insert(ret, vnum(0), vnum(tbl->offset + i));
+    tbl_insert(ret, vnum(1), vnum(i));
+    tbl_insert(ret, vnum(2), vnum(i));
+
+    i += 1;
+    tbl_insert(scope, vnum(2), vraw(i));
+
+    return vtbl(ret);
+}
+
+v_fn var_t tbl_1_iteration(tbl_t *args, tbl_t *scope) {
+    tbl_t *tbl = tbl_lookup(scope, vnum(0)).tbl;
+    tbl_t *ret = tbl_lookup(scope, vnum(1)).tbl;
+    int i = tbl_lookup(scope, vnum(2)).data;
+
+    if (i >= tbl->len)
+        return vnil;
+
+    tbl_insert(ret, vnum(0), tbl->array[i]);
+    tbl_insert(ret, vnum(1), vnum(i));
+    tbl_insert(ret, vnum(2), vnum(i));
+
+    i += 1;
+    tbl_insert(scope, vnum(2), vraw(i));
+
+    return vtbl(ret);
+}
+
+v_fn var_t tbl_2_iteration(tbl_t *args, tbl_t *scope) {
+    tbl_t *tbl = tbl_lookup(scope, vnum(0)).tbl;
+    tbl_t *ret = tbl_lookup(scope, vnum(1)).tbl;
+    int i = tbl_lookup(scope, vnum(2)).data;
+    int j = tbl_lookup(scope, vnum(3)).data;
+    var_t k, v;
+
+    if (i >= tbl->len)
+        return vnil;
+
+    do {
+        k = tbl->array[2*j  ];
+        v = tbl->array[2*j+1];
+
+        j += 1;
+        tbl_insert(scope, vnum(3), vraw(j));
+    } while (var_isnil(k) || var_isnil(v));
+
+    tbl_insert(ret, vnum(0), v);
+    tbl_insert(ret, vnum(1), k);
+    tbl_insert(ret, vnum(2), vnum(i));
+
+    i += 1;
+    tbl_insert(scope, vnum(2), vraw(i));
+
+    return vtbl(ret);
+}
+
+var_t tbl_iter(var_t v) {
+    static sfn_t * const tbl_iters[3] = {
+        tbl_0_iteration,
+        tbl_1_iteration,
+        tbl_2_iteration
+    };
+
+    tbl_t *tbl = tbl_readp(v.tbl);
+
+    tbl_t *scope = tbl_create(3);
+    tbl_insert(scope, vnum(0), vtbl(tbl));
+    tbl_insert(scope, vnum(1), vtbl(tbl_create(3)));
+    tbl_insert(scope, vnum(2), vraw(0));
+
+    return vsfn(tbl_iters[tbl->stride], scope);
+
+}
 
 
 // Returns a string representation of the table

@@ -46,9 +46,9 @@ typedef struct tbl tbl_t;
 typedef struct fn fn_t;
 
 // Base functions
-#define VFN(ret) __attribute__((aligned(8))) ret
-typedef VFN(struct var) bfn_t(tbl_t *a);
-typedef VFN(struct var) sfn_t(tbl_t *a, tbl_t *s);
+#define v_fn __attribute__((aligned(8)))
+typedef v_fn struct var bfn_t(tbl_t *a);
+typedef v_fn struct var sfn_t(tbl_t *a, tbl_t *s);
 
 
 // Actual var type declariation
@@ -226,6 +226,9 @@ bool var_equals(var_t a, var_t b);
 // Returns a hash value of the given variable. 
 hash_t var_hash(var_t var);
 
+// Performs iteration on variables
+var_t var_iter(var_t v);
+
 // Returns a string representation of the variable
 var_t var_repr(var_t v);
 
@@ -234,6 +237,7 @@ void var_print(var_t v);
 
 // Table related functions performed on variables
 var_t var_lookup(var_t v, var_t key);
+var_t var_lookdn(var_t v, var_t key, len_t i);
 void var_assign(var_t v, var_t key, var_t val);
 void var_insert(var_t v, var_t key, var_t val);
 void var_add(var_t v, var_t val);

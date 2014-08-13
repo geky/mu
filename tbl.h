@@ -49,6 +49,10 @@ void tbl_destroy(void *);
 // returns either that value or nil
 var_t tbl_lookup(tbl_t *, var_t key);
 
+// Recursively looks up either a key or index
+// if key is not found
+var_t tbl_lookdn(tbl_t *, var_t key, len_t i);
+
 // Recursively assigns a value in the table with the given key
 // decends down the tail chain until its found
 void tbl_assign(tbl_t *, var_t key, var_t val);
@@ -60,6 +64,9 @@ void tbl_insert(tbl_t *, var_t key, var_t val);
 // Sets the next index in the table with the value
 void tbl_add(tbl_t *, var_t val);
 
+
+// Performs iteration on a table
+var_t tbl_iter(var_t v);
 
 // Returns a string representation of the table
 var_t tbl_repr(var_t v);

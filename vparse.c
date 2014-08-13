@@ -28,17 +28,14 @@ static void _vexpect(vstate_t *vs, vtok_t tok, const char *fn) {
 
 
 // Different encoding calls
-static varg_t vaccvar(vstate_t *vs) {
-    varg_t arg;
-    var_t index = tbl_lookup(vs->vars, vs->val);
+static varg_t vaccvar(vstate_t *vs, var_t v) {
+    var_t index = tbl_lookup(vs->vars, v);
 
-    if (var_isnil(index)) {
-        arg = vs->vars->len;
-        tbl_assign(vs->vars, vs->val, vnum(arg));
-    } else {
-        arg = (varg_t)var_num(index);
-    }
+    if (!var_isnil(index))
+        return index.data;
 
+    varg_t arg = vs->vars->len;
+    tbl_assign(vs->vars, v, vraw(arg));
     return arg;
 }
 
@@ -48,52 +45,72 @@ static void venc(vstate_t *vs, vop_t op) {
     assert(vs->ins <= VMAXLEN); // TODO errors
 }
 
-static void vencarg(vstate_t *vs, vop_t op, varg_t arg) {
+static void venca(vstate_t *vs, vop_t op, varg_t arg) {
     vs->ins += vs->encode(&vs->bcode[vs->ins], op | VOP_ARG, arg);
     assert(vs->ins <= VMAXLEN); // TODO errors
 }
-
-static void vencvar(vstate_t *vs) {
-    vencarg(vs, VVAR, vaccvar(vs));
-}
-
 
 static int vsize(vstate_t *vs, vop_t op) {
     return vcount(0, op, 0);
 }
 
-static int vsizearg(vstate_t *vs, vop_t op, varg_t arg) {
+static int vsizea(vstate_t *vs, vop_t op, varg_t arg) {
     return vcount(0, op | VOP_ARG, arg);
 }
 
-static int vsizevar(vstate_t *vs) {
-    return vsizearg(vs, VVAR, vaccvar(vs));
+static int vinsert(vstate_t *vs, vop_t op, int ins) {
+    return vs->encode(&vs->bcode[ins], op, 0);
+}
+
+static int vinserta(vstate_t *vs, vop_t op, varg_t arg, int ins) {
+    return vs->encode(&vs->bcode[ins], op | VOP_ARG, arg);
 }
 
 
-static int vinsert(vstate_t *vs, vop_t op, int in) {
-    return vs->encode(&vs->bcode[in], op, 0);
-}
-
-static int vinsertarg(vstate_t *vs, vop_t op, varg_t arg, int in) {
-    return vs->encode(&vs->bcode[in], op | VOP_ARG, arg);
-}
-
-static int vinsertvar(vstate_t *vs, int in) {
-    return vinsertarg(vs, VVAR, vaccvar(vs), in);
-}
-
-
-static void vpatch(vstate_t *vs) {
-    int jsize = vsizearg(vs, VJUMP, 0);
-
-    tbl_for(k, v, vs->j.tbl, {
-        vinsertarg(vs, VJUMP, vs->ins - (v.data+jsize), v.data);
+static void vpatch(vstate_t *vs, tbl_t *jtbl, int ins) {
+    tbl_for(k, v, jtbl, {
+        vinserta(vs, VJUMP, ins - (v.data+vs->jsize), v.data);
     });
 
-    tbl_dec(vs->j.tbl);
-    vs->j.tbl = 0;
+    tbl_dec(jtbl);
 }
+
+
+static void vunpack(vstate_t *vs, tbl_t *map) {
+    venc(vs, VSCOPE);
+
+    tbl_for(k, v, map, {
+        if (v.type == TYPE_TBL) {
+            venca(vs, VDUP, 1);
+            venc(vs, VNIL);
+            venca(vs, VLOOKDN, var_num(k));
+            vunpack(vs, v.tbl);
+        } else {
+            venca(vs, VVAR, vaccvar(vs, v));
+            venca(vs, VDUP, 2);
+            venca(vs, VDUP, 1);
+            venca(vs, VLOOKDN, var_num(k));
+            venc(vs, VINSERT);
+        }
+    });
+
+    venc(vs, VDROP);
+    venc(vs, VDROP);
+}
+
+
+static tbl_t *vrevargs(tbl_t *args) {
+    tbl_t *res = tbl_create(0);
+    int i;
+
+    for (i = args->len-1; i >= 0; i--) {
+        tbl_add(res, tbl_lookup(args, vnum(i)));
+    }
+
+    tbl_dec(args);
+    return res;
+}
+
 
 static void venlarge(vstate_t *vs, int in, int count) {
     if (vs->bcode) {
@@ -112,16 +129,21 @@ static void venlarge(vstate_t *vs, int in, int count) {
 static void vp_value(vstate_t *vs);
 static void vp_expr_if(vstate_t *vs);
 static void vp_expr_while(vstate_t *vs);
+static void vp_expr_for(vstate_t *vs);
 static void vp_expr_op(vstate_t *vs);
 static void vp_expr(vstate_t *vs);
-static void vp_table(vstate_t *vs);
+static void vp_args_entry(vstate_t *vs);
+static void vp_args_follow(vstate_t *vs);
+static void vp_args(vstate_t *vs);
 static void vp_table_assign(vstate_t *vs);
-static void vp_table_ident(vstate_t *vs);
-static void vp_table_follow(vstate_t *vs);
 static void vp_table_entry(vstate_t *vs);
+static void vp_table_follow(vstate_t *vs);
+static void vp_table(vstate_t *vs);
 static void vp_stmt_if(vstate_t *vs);
 static void vp_stmt_while(vstate_t *vs);
+static void vp_stmt_for(vstate_t *vs);
 static void vp_stmt_list(vstate_t *vs);
+static void vp_stmt_let_op(vstate_t *vs);
 static void vp_stmt_let(vstate_t *vs);
 static void vp_stmt_assign(vstate_t *vs);
 static void vp_stmt_follow(vstate_t *vs);
@@ -140,53 +162,72 @@ static void vp_expr_if(vstate_t *vs) {
     vp_value(vs);
     vexpect(vs, ')');
 
-    int ifins = vs->ins;
-    vs->ins += vsizearg(vs, VJFALSE, 0);
+    int i_ins = vs->ins;
+    vs->ins += vs->jfsize;
     vp_value(vs);
 
     if (vs->tok == VT_ELSE) {
-        int elins = vs->ins;
-        vs->ins += vsizearg(vs, VJUMP, 0);
+        int e_ins = vs->ins;
+        vs->ins += vs->jsize;
         vlex(vs);
         vp_value(vs);
 
-        vinsertarg(vs, VJFALSE,
-            (elins+vsizearg(vs, VJUMP, 0)) -
-            (ifins+vsizearg(vs, VJFALSE, 0)), ifins);
-        vinsertarg(vs, VJUMP,
-            vs->ins - (elins+vsizearg(vs, VJUMP, 0)), elins);
+        vinserta(vs, VJFALSE, (e_ins+vs->jsize) - (i_ins+vs->jfsize), i_ins);
+        vinserta(vs, VJUMP, vs->ins - (e_ins+vs->jsize), e_ins);
     } else {
-        vencarg(vs, VJUMP, vsize(vs, VNIL));
+        venca(vs, VJUMP, vsize(vs, VNIL));
         venc(vs, VNIL);
-        vinsertarg(vs, VJFALSE,
-            vs->ins - (ifins+vsizearg(vs, VJFALSE, 0)), ifins);
+        vinserta(vs, VJFALSE, vs->ins - (i_ins+vs->jfsize), i_ins);
     }
 }
 
 static void vp_expr_while(vstate_t *vs) {
     venc(vs, VTBL);
-
-    struct vjstate j = vs->j;
-    vs->j.ins = vs->ins;
-    vs->j.tbl = tbl_create(0);
+    int w_ins = vs->ins;
 
     vexpect(vs, '(');
     vp_value(vs);
     vexpect(vs, ')');
 
-    int whins = vs->ins;
-    vs->ins += vsizearg(vs, VJFALSE, 0);
+    int j_ins = vs->ins;
+    vs->ins += vs->jfsize;
     vp_value(vs);
     venc(vs, VADD);
 
-    vinsertarg(vs, VJFALSE,
-        (vs->ins+vsizearg(vs, VJUMP, 0)) -
-        (whins+vsizearg(vs, VJFALSE, 0)), whins);
-    vencarg(vs, VJUMP,
-        vs->j.ins - (vs->ins+vsizearg(vs, VJUMP, 0)));
+    vinserta(vs, VJFALSE, (vs->ins+vs->jsize) - (j_ins+vs->jfsize), j_ins);
+    venca(vs, VJUMP, w_ins - (vs->ins+vs->jsize));
+}
 
-    vpatch(vs);
-    vs->j = j;
+static void vp_expr_for(vstate_t *vs) {
+    venc(vs, VTBL);
+
+    vexpect(vs, '(');
+    vp_args(vs);
+    tbl_t *args = vrevargs(vs->args);
+    vexpect(vs, VT_SET);
+    vp_value(vs);
+    venc(vs, VITER);
+    vexpect(vs, ')');
+
+    int f_ins = vs->ins;
+    vs->ins += vs->jsize;
+
+    vunpack(vs, args);
+    venca(vs, VDUP, 1);
+    vp_value(vs);
+    venc(vs, VADD);
+    venc(vs, VDROP);
+
+    vinserta(vs, VJUMP, vs->ins - (f_ins+vs->jsize), f_ins);
+
+    venca(vs, VDUP, 0);
+    venc(vs, VTBL);
+    venc(vs, VCALL);
+    venca(vs, VDUP, 0);
+
+    venca(vs, VJTRUE, (f_ins+vs->jsize) - (vs->ins+vs->jtsize));
+    venc(vs, VDROP);
+    venc(vs, VDROP);
 }
 
 static void vp_expr_op(vstate_t *vs) {
@@ -194,7 +235,7 @@ static void vp_expr_op(vstate_t *vs) {
         case VT_DOT:    if (vs->indirect) venc(vs, VLOOKUP);
                         vlex(vs);
                         if (!vs->tok == VT_IDENT) vunexpected(vs);
-                        vencvar(vs);
+                        venca(vs, VVAR, vaccvar(vs, vs->val));
                         vlex(vs);
                         vs->indirect = true;
                         return vp_expr_op(vs);
@@ -223,9 +264,10 @@ static void vp_expr_op(vstate_t *vs) {
                         if (vs->indirect) venc(vs, VLOOKUP);
                         venc(vs, VADD);
                         {   struct vopstate op = vs->op;
-                            venlarge(vs, vs->op.ins, vsizevar(vs)
-                                                   + vsize(vs, VTBL));
-                            vs->op.ins += vinsertvar(vs, vs->op.ins);
+                            varg_t arg = vaccvar(vs, vs->val);
+                            venlarge(vs, vs->op.ins, vsizea(vs, VVAR, arg) +
+                                                     vsize(vs, VTBL));
+                            vs->op.ins += vinserta(vs, VVAR, arg, vs->op.ins);
                             vs->op.ins += vinsert(vs, VTBL, vs->op.ins);
                             vs->op.prec = vs->nprec;
                             vlex(vs);
@@ -246,7 +288,7 @@ static void vp_expr(vstate_t *vs) {
 
     switch (vs->tok) {
         case VT_IDENT:  venc(vs, VSCOPE);
-                        vencvar(vs);
+                        venca(vs, VVAR, vaccvar(vs, vs->val));
                         vs->indirect = true;
                         vlex(vs);
                         return vp_expr_op(vs);
@@ -257,7 +299,7 @@ static void vp_expr(vstate_t *vs) {
                         return vp_expr_op(vs);
 
         case VT_NUM:
-        case VT_STR:    vencvar(vs);
+        case VT_STR:    venca(vs, VVAR, vaccvar(vs, vs->val));
                         vs->indirect = false;
                         vlex(vs);
                         return vp_expr_op(vs);
@@ -282,7 +324,7 @@ static void vp_expr(vstate_t *vs) {
                         vexpect(vs, ')');
                         return vp_expr_op(vs);
 
-        case VT_OP:     vencvar(vs);
+        case VT_OP:     venca(vs, VVAR, vaccvar(vs, vs->val));
                         venc(vs, VTBL);
                         {   struct vopstate op = vs->op;
                             vs->op.prec = vs->nprec;
@@ -305,42 +347,91 @@ static void vp_expr(vstate_t *vs) {
                         vs->indirect = false;
                         return vp_expr_op(vs); 
 
+        case VT_FOR:    vlex(vs);
+                        vp_expr_for(vs);
+                        vs->indirect = false;
+                        return vp_expr_op(vs);
+
         default:        vunexpected(vs);
     }
 }
 
 
-static void vp_table(vstate_t *vs) {
-    vp_table_entry(vs);
-    return vp_table_follow(vs);
+static void vp_args_entry(vstate_t *vs) {
+    switch (vs->tok) {
+        case VT_IDENT:  tbl_add(vs->args, vs->val);
+                        vlex(vs);
+                        return vp_args_follow(vs);
+
+        case VT_NUM:    tbl_add(vs->args, vs->val);
+                        vlex(vs);
+                        return vp_args_follow(vs);
+
+        case '[':       {   tbl_t *args = vs->args;
+                            vlex(vs);
+                            vp_args(vs);
+                            tbl_add(args, vtbl(vs->args));
+                            vs->args = args;
+                        }
+                        vexpect(vs, ']');
+                        return vp_args_follow(vs);
+
+        default:        return vp_args_follow(vs);
+    }
 }
+
+static void vp_args_follow(vstate_t *vs) {
+    switch (vs->tok) {
+        case VT_SEP:    vlex(vs);
+                        return vp_args_entry(vs);
+
+        default:        return;
+    }
+}
+
+static void vp_args(vstate_t *vs) {
+    vs->args = tbl_create(0);
+
+    return vp_args_entry(vs);
+}
+
 
 static void vp_table_assign(vstate_t *vs) {
     switch (vs->tok) {
         case VT_SET:    vlex(vs);
                         vp_value(vs);
                         venc(vs, VINSERT);
-                        return;
+                        return vp_table_follow(vs);
 
         default:        venc(vs, VADD);
-                        return;
+                        return vp_table_follow(vs);
     }
 }
 
-static void vp_table_ident(vstate_t *vs) {
-    int ins = vs->ins;
-    vencvar(vs);
-    vlex(vs);
-
+static void vp_table_entry(vstate_t *vs) {
     switch (vs->tok) {
-        case VT_SET:    return vp_table_assign(vs);
-
-        default:        venlarge(vs, ins, vsize(vs, VSCOPE));
-                        vinsert(vs, VSCOPE, ins);
-                        vs->indirect = true;
-                        vp_expr_op(vs);
-                        if (vs->indirect) venc(vs, VLOOKUP);
+        case VT_IDENT:  {   varg_t arg = vaccvar(vs, vs->val);
+                            vlex(vs);
+                            if (vs->tok == VT_SET) {
+                                venca(vs, VVAR, arg);
+                            } else {
+                                venc(vs, VSCOPE);
+                                venca(vs, VVAR, arg);
+                                vs->indirect = true;
+                                vp_expr_op(vs);
+                                if (vs->indirect) venc(vs, VLOOKUP);
+                            }
+                        }
                         return vp_table_assign(vs);
+                                
+        case VT_NUM:
+        case VT_STR:
+        case '[':
+        case '(':       
+        case VT_OP:     vp_value(vs);
+                        return vp_table_assign(vs);
+
+        default:        return vp_table_follow(vs);
     }
 }
 
@@ -353,73 +444,102 @@ static void vp_table_follow(vstate_t *vs) {
     }
 }
 
-static void vp_table_entry(vstate_t *vs) {
-    switch (vs->tok) {
-        case VT_IDENT:  return vp_table_ident(vs);
-
-        case VT_NUM:
-        case VT_STR:
-        case '[':
-        case '(':       
-        case VT_OP:     vp_value(vs);
-                        return vp_table_assign(vs);
-
-        default:        return;
-    }
+static void vp_table(vstate_t *vs) {
+    return vp_table_entry(vs);
 }
+
 
 static void vp_stmt_if(vstate_t *vs) {
     vexpect(vs, '(');
     vp_value(vs);
     vexpect(vs, ')');
 
-    int ifins = vs->ins;
-    vs->ins += vsizearg(vs, VJFALSE, 0);
-    vp_stmt(vs); 
+    int i_ins = vs->ins;
+    vs->ins += vs->jfsize;
+    vp_stmt(vs);
 
     if (vs->tok == VT_ELSE) {
-        int elins = vs->ins;
-        vs->ins += vsizearg(vs, VJUMP, 0);
+        int e_ins = vs->ins;
+        vs->ins += vs->jsize;
         vlex(vs);
         vp_stmt(vs);
 
-        vinsertarg(vs, VJFALSE,
-            (elins+vsizearg(vs, VJUMP, 0)) -
-            (ifins+vsizearg(vs, VJFALSE, 0)), ifins);
-        vinsertarg(vs, VJUMP,
-            vs->ins - (elins+vsizearg(vs, VJUMP, 0)), elins);
+        vinserta(vs, VJFALSE, (e_ins+vs->jsize) - (i_ins+vs->jfsize), i_ins);
+        vinserta(vs, VJUMP, vs->ins - (e_ins+vs->jsize), e_ins);
     } else {
-        vinsertarg(vs, VJFALSE,
-            vs->ins - (ifins+vsizearg(vs, VJFALSE, 0)), ifins);
+        vinserta(vs, VJFALSE, vs->ins - (i_ins+vs->jfsize), i_ins);
     }
 }
 
 static void vp_stmt_while(vstate_t *vs) {
     struct vjstate j = vs->j;
-    vs->j.ins = vs->ins;
-    vs->j.tbl = tbl_create(0);
+    vs->j.ctbl = tbl_create(0);
+    vs->j.btbl = tbl_create(0);
+    int w_ins = vs->ins;
 
     vexpect(vs, '(');
     vp_value(vs);
     vexpect(vs, ')');
 
-    int whins = vs->ins;
-    vs->ins += vsizearg(vs, VJFALSE, 0);
+    int j_ins = vs->ins;
+    vs->ins += vs->jfsize;
     vp_stmt(vs);
 
-    vinsertarg(vs, VJFALSE,
-        (vs->ins+vsizearg(vs, VJUMP, 0)) -
-        (whins+vsizearg(vs, VJFALSE, 0)), whins);
-    vencarg(vs, VJUMP,
-        vs->j.ins - (vs->ins+vsizearg(vs, VJUMP, 0)));
+    vinserta(vs, VJFALSE, (vs->ins+vs->jsize) - (j_ins+vs->jfsize), j_ins);
+    venca(vs, VJUMP, w_ins - (vs->ins+vs->jsize));
+
+    vpatch(vs, vs->j.ctbl, w_ins);
+    tbl_t *btbl = vs->j.btbl;
+    vs->j = j;
 
     if (vs->tok == VT_ELSE) {
         vlex(vs);
         vp_stmt(vs);
     }
 
-    vpatch(vs);
+    vpatch(vs, btbl, vs->ins);
+}
+
+static void vp_stmt_for(vstate_t *vs) {
+    struct vjstate j = vs->j;
+    vs->j.ctbl = tbl_create(0);
+    vs->j.btbl = tbl_create(0);
+
+    vexpect(vs, '(');
+    vp_args(vs);
+    tbl_t *args = vrevargs(vs->args);
+    vexpect(vs, VT_SET);
+    vp_value(vs);
+    venc(vs, VITER);
+    vexpect(vs, ')');
+
+    int f_ins = vs->ins;
+    vs->ins += vs->jsize;
+
+    vunpack(vs, args);
+    vp_stmt(vs);
+
+    vinserta(vs, VJUMP, vs->ins - (f_ins+vs->jsize), f_ins);
+    vpatch(vs, vs->j.ctbl, vs->ins);
+
+    venca(vs, VDUP, 0);
+    venc(vs, VTBL);
+    venc(vs, VCALL);
+    venca(vs, VDUP, 0);
+
+    venca(vs, VJTRUE, (f_ins+vs->jsize) - (vs->ins+vs->jtsize));
+    venc(vs, VDROP);
+
+    tbl_t *btbl = vs->j.btbl;
     vs->j = j;
+
+    if (vs->tok == VT_ELSE) {
+        vlex(vs);
+        vp_stmt(vs);
+    }
+
+    vpatch(vs, btbl, vs->ins);
+    venc(vs, VDROP);
 }
 
 static void vp_stmt_list(vstate_t *vs) {
@@ -427,7 +547,7 @@ static void vp_stmt_list(vstate_t *vs) {
     return vp_stmt_follow(vs);
 }
 
-static void vp_stmt_let(vstate_t *vs) {
+static void vp_stmt_let_op(vstate_t *vs) {
     switch (vs->tok) {
         case VT_SET:    if (!vs->indirect) vunexpected(vs);
                         vlex(vs);
@@ -440,6 +560,21 @@ static void vp_stmt_let(vstate_t *vs) {
     }
 }
 
+static void vp_stmt_let(vstate_t *vs) {
+    switch (vs->tok) {
+        case '[':       vlex(vs);
+                        vp_args(vs);
+                        vexpect(vs, ']');
+                        vexpect(vs, VT_SET);
+                        vp_value(vs);
+                        vunpack(vs, vs->args);
+                        return;
+
+        default:        vp_expr(vs);
+                        return vp_stmt_let_op(vs);
+    }
+}
+
 static void vp_stmt_assign(vstate_t *vs) {
     switch (vs->tok) {
         case VT_SET:    if (!vs->indirect) vunexpected(vs);
@@ -449,10 +584,10 @@ static void vp_stmt_assign(vstate_t *vs) {
                         return;
 
         case VT_OPSET:  if (!vs->indirect) vunexpected(vs);
-                        vencvar(vs);
+                        venca(vs, VVAR, vaccvar(vs, vs->val));
                         venc(vs, VTBL);
-                        vencarg(vs, VDUP, 3);
-                        vencarg(vs, VDUP, 3);
+                        venca(vs, VDUP, 3);
+                        venca(vs, VDUP, 3);
                         venc(vs, VLOOKUP);
                         venc(vs, VADD);
                         vlex(vs);
@@ -490,7 +625,6 @@ static void vp_stmt(vstate_t *vs) {
                         return;
 
         case VT_LET:    vlex(vs);
-                        vp_expr(vs);
                         return vp_stmt_let(vs);
 
         case VT_IF:     vlex(vs);
@@ -499,16 +633,19 @@ static void vp_stmt(vstate_t *vs) {
         case VT_WHILE:  vlex(vs);
                         return vp_stmt_while(vs); 
 
-        case VT_CONT:   if (!vs->j.tbl) vunexpected(vs);
+        case VT_FOR:    vlex(vs);
+                        return vp_stmt_for(vs);
+
+        case VT_CONT:   if (!vs->j.ctbl) vunexpected(vs);
                         vlex(vs);
-                        vencarg(vs, VJUMP,
-                            vs->j.ins - (vs->ins + vsizearg(vs, VJUMP, 0)));
+                        tbl_add(vs->j.ctbl, vraw(vs->ins));
+                        vs->ins += vs->jsize;
                         return;
 
-        case VT_BREAK:  if (!vs->j.tbl) vunexpected(vs);
+        case VT_BREAK:  if (!vs->j.btbl) vunexpected(vs);
                         vlex(vs);
-                        tbl_add(vs->j.tbl, vraw(vs->ins));
-                        vs->ins += vsizearg(vs, VJUMP, 0);
+                        tbl_add(vs->j.btbl, vraw(vs->ins));
+                        vs->ins += vs->jsize;
                         return;
 
         case VT_IDENT:
@@ -530,7 +667,11 @@ void vparse(vstate_t *vs) {
     vs->ins = 0;
     vs->paren = 0;
     vs->op.prec = -1;
-    vs->j.tbl = 0;
+    vs->j = (struct vjstate){0};
+
+    vs->jsize = vsizea(vs, VJUMP, 0);
+    vs->jtsize = vsizea(vs, VJTRUE, 0);
+    vs->jfsize = vsizea(vs, VJFALSE, 0);
 
     vlex(vs);
     vp_stmt_list(vs);
@@ -538,6 +679,6 @@ void vparse(vstate_t *vs) {
     if (vs->tok != 0)
         vunexpected(vs);
 
-    venc(vs, VRETN | VOP_END);
+    venc(vs, VRETN);
 }
 

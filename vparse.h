@@ -30,8 +30,8 @@ struct vopstate {
 };
 
 struct vjstate {
-    len_t ins;
-    tbl_t *tbl;
+    tbl_t *ctbl;
+    tbl_t *btbl;
 };
 
 
@@ -46,12 +46,18 @@ struct vstate {
     tbl_t *keys;
     tbl_t *ops;
 
+    tbl_t *args;
+
     struct vopstate op;
     struct vjstate j;
 
-    bool indirect       : 1;
-    unsigned int paren  : 8;
-    unsigned int nprec  : 8;
+    uint8_t indirect;
+    uint8_t paren;
+    uint8_t nprec;
+
+    uint8_t jsize;
+    uint8_t jtsize;
+    uint8_t jfsize;
 
     vtok_t tok;
     var_t val;

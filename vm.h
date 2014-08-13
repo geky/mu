@@ -56,9 +56,13 @@ enum vop {
     VJTRUE  = 0x1b << 3, // offset      -1      -           jump if top of stack is not nil
 
     VLOOKUP = 0x04 << 3, // -           -1      s1[s0]      looks up s1[s0] onto stack
-    VASSIGN = 0x05 << 3, // -           -3      -           assigns s2[s1] with s0 recursively
-    VINSERT = 0x06 << 3, // -           -2      s2          inserts s2[s1] with s0 nonrecursively
-    VADD    = 0x07 << 3, // -           -1      s1          adds s0 to s1
+    VLOOKDN = 0x05 << 3, // index       -1      s1[s0|i]    looks up either s2[s1] or index s2[s0]
+
+    VASSIGN = 0x08 << 3, // -           -3      -           assigns s2[s1] with s0 recursively
+    VINSERT = 0x09 << 3, // -           -2      s2          inserts s2[s1] with s0 nonrecursively
+    VADD    = 0x0a << 3, // -           -1      s1          adds s0 to s1
+
+    VITER   = 0x0c << 3, // -           -       iter(s0)    obtains iterator onto stack
 
     VCALL   = 0x03 << 3, // -           -1      s1(s0)      calls function s1(s0) onto stack
     VTCALL  = 0x02 << 3, // -           -2      ret s1(s0)  returns tailcall of function s1(s0)   

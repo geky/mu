@@ -29,6 +29,9 @@ fn_t *fn_create(tbl_t *args, var_t code, tbl_t *ops, tbl_t *keys);
 void fn_destroy(void *);
 
 
+// Mapping of parameters to arguments
+v_fn var_t fn_unpack(tbl_t *args, tbl_t *scope);
+
 // Call a function. Each function takes a table
 // of arguments, and returns a single variable.
 var_t fn_call(fn_t *, tbl_t *args, tbl_t *scope);

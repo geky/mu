@@ -46,6 +46,19 @@ hash_t var_hash(var_t v) {
     return var_hashs[v.type](v);
 }
 
+// Performs iteration on variables
+static var_t nil_iter(var_t v) { assert(false); } // TODO error
+
+var_t var_iter(var_t v) {
+    static var_t (* const var_iters[8])(var_t) = {
+        nil_iter, nil_iter, nil_iter, nil_iter,
+        tbl_iter, nil_iter, nil_iter, nil_iter
+    };
+
+    return var_iters[v.type](v);
+}
+    
+
 
 // Returns a string representation of the variable
 static var_t nil_repr(var_t v) { return vcstr("nil"); }
@@ -81,17 +94,16 @@ var_t var_lookup(var_t v, var_t key) {
     return var_lookups[v.type](v, key);
 }
 
+static var_t nil_lookdn(var_t t, var_t k, len_t i) { assert(false); } // TODO errors
+static var_t vtbl_lookdn(var_t t, var_t k, len_t i) { return tbl_lookdn(t.tbl, k, i); }
 
-static void nil_assign(var_t t, var_t k, var_t v) { assert(false); } // TODO error
-static void vtbl_assign(var_t t, var_t k, var_t v) { tbl_assign(t.tbl, k, v); }
-
-void var_assign(var_t v, var_t key, var_t val) {
-    static void (* const var_assigns[8])(var_t, var_t, var_t) = {
-        nil_assign, nil_assign, nil_assign, nil_assign,
-        vtbl_assign, nil_assign, nil_assign, nil_assign
+var_t var_lookdn(var_t v, var_t key, len_t i) {
+    static var_t (* const var_lookdns[8])(var_t, var_t, len_t) = {
+        nil_lookdn, nil_lookdn, nil_lookdn, nil_lookdn,
+        vtbl_lookdn, nil_lookdn, nil_lookdn, nil_lookdn
     };
 
-    var_assigns[v.type](v, key, val);
+    return var_lookdns[v.type](v, key, i);
 }
 
 
@@ -105,6 +117,19 @@ void var_insert(var_t v, var_t key, var_t val) {
     };
 
     var_inserts[v.type](v, key, val);
+}
+
+
+static void nil_assign(var_t t, var_t k, var_t v) { assert(false); } // TODO error
+static void vtbl_assign(var_t t, var_t k, var_t v) { tbl_assign(t.tbl, k, v); }
+
+void var_assign(var_t v, var_t key, var_t val) {
+    static void (* const var_assigns[8])(var_t, var_t, var_t) = {
+        nil_assign, nil_assign, nil_assign, nil_assign,
+        vtbl_assign, nil_assign, nil_assign, nil_assign
+    };
+
+    var_assigns[v.type](v, key, val);
 }
 
 

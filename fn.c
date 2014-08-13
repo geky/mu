@@ -18,10 +18,10 @@ fn_t *fn_create(tbl_t *args, var_t code, tbl_t *ops, tbl_t *keys) {
     fn_t *f = vref_alloc(sizeof(fn_t));
     tbl_t *vars = tbl_create(args->len + 1);
 
-    tbl_insert(vars, code, vnum(vars->len));
+    tbl_insert(vars, code, vraw(vars->len));
 
     tbl_for(k, v, args, {
-        tbl_insert(vars, v, vnum(vars->len));
+        tbl_insert(vars, v, vraw(vars->len));
     })
 
     vstate_t *vs = valloc(sizeof(vstate_t));
@@ -51,7 +51,7 @@ fn_t *fn_create(tbl_t *args, var_t code, tbl_t *ops, tbl_t *keys) {
 
     f->vars = valloc(f->vcount * sizeof(var_t));
     tbl_for(k, v, vars, {
-        f->vars[(len_t)var_num(v)] = k;
+        f->vars[v.data] = k;
     });
     
     vdealloc(vs, sizeof(vstate_t));
@@ -67,7 +67,6 @@ void fn_destroy(void *m) {
     fn_t *f = m;
     int i;
 
-    f->vars -= 1;
     for (i=0; i < f->vcount; i++) {
         var_dec(f->vars[i]);
     }

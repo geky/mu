@@ -30,16 +30,17 @@ enum vtok {
     VT_RETURN   = 12,
     VT_IF       = 13,
     VT_WHILE    = 14,
-    VT_CONT     = 15,
-    VT_BREAK    = 16,
-    VT_ELSE     = 17
+    VT_FOR      = 15,
+    VT_CONT     = 16,
+    VT_BREAK    = 17,
+    VT_ELSE     = 18
 };
 
 
 // Creates internal tables for keywords or uses prexisting.
 // Use this to initialize an op table if nescessary.
-__attribute__((pure)) tbl_t *vkeys(void);
-__attribute__((pure)) tbl_t *vops(void);
+__attribute__((const)) tbl_t *vkeys(void);
+__attribute__((const)) tbl_t *vops(void);
 
 
 // Performs lexical analysis on current location in string

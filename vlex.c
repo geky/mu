@@ -15,7 +15,7 @@ static tbl_t *vopt = 0;
 
 // Creates internal tables for keywords or uses prexisting.
 // Use this to initialize an op table if nescessary.
-__attribute__((pure))
+__attribute__((const))
 tbl_t *vkeys(void) {
     if (vkeyt) return vkeyt;
 
@@ -26,13 +26,14 @@ tbl_t *vkeys(void) {
     tbl_insert(vkeyt, vcstr("return"), vraw(VT_RETURN));
     tbl_insert(vkeyt, vcstr("if"), vraw(VT_IF));
     tbl_insert(vkeyt, vcstr("while"), vraw(VT_WHILE));
+    tbl_insert(vkeyt, vcstr("for"), vraw(VT_FOR));
     tbl_insert(vkeyt, vcstr("continue"), vraw(VT_CONT));
     tbl_insert(vkeyt, vcstr("break"), vraw(VT_BREAK));
     tbl_insert(vkeyt, vcstr("else"), vraw(VT_ELSE));
     return vkeyt;
 }
 
-__attribute__((pure))
+__attribute__((const))
 tbl_t *vops(void) {
     if (vopt) return vopt;
 

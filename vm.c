@@ -70,9 +70,14 @@ var_t vexec(fn_t *f, tbl_t *scope) {
             case VJTRUE:    pc += !var_isnil(*sp++) ? vsarg(pc)+2 : 2;      break;
 
             case VLOOKUP:   sp += 1; *sp = var_lookup(sp[0], sp[-1]);       break;
+            case VLOOKDN:   sp += 1; *sp = var_lookdn(sp[0], sp[-1], varg(pc)); 
+                            pc += 2;                                        break;
+
             case VASSIGN:   sp += 3; var_assign(sp[-1], sp[-2], sp[-3]);    break;
             case VINSERT:   sp += 2; var_insert(sp[0], sp[-1], sp[-2]);     break;
             case VADD:      sp += 1; var_add(sp[0], sp[-1]) ;               break;
+
+            case VITER:     *sp = var_iter(*sp);                            break;
             
             case VCALL:     sp += 1; *sp = var_call(sp[0], sp[-1].tbl);     break;
             case VTCALL:    sp += 2; return var_call(sp[-1], sp[-2].tbl); // TODO make sure this is tail calling
