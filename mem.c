@@ -22,6 +22,16 @@ void *valloc(size_t size) {
     return m;
 }
 
+void *vrealloc(void *m, size_t prev, size_t size) {
+    m = realloc(m, size);
+
+    assert(m != 0); // TODO error on out of memory
+    assert(sizeof m == sizeof(uint32_t)); // garuntee address width
+    assert((0x7 & (uint32_t)m) == 0); // garuntee alignment
+
+    return m;
+}
+
 void vdealloc(void *m, size_t size) {
 //    free(m);
 }

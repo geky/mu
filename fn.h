@@ -11,12 +11,13 @@
 
 struct fn {
     const str_t *bcode; // function bytecode
-    len_t bcount;   // length of bytecode
 
     len_t stack;    // amount of stack usage
-
-    len_t acount;   // number of arguments
+    len_t bcount;   // length of bytecode
+    len_t fcount;   // number of stored functions
     len_t vcount;   // number of stored vars
+
+    fn_t **fns;      // nested functions
     var_t *vars;    // stored vars
 };
 
@@ -24,6 +25,7 @@ struct fn {
 // Each function is preceded with a reference count
 // which is used as its handle in a var
 fn_t *fn_create(tbl_t *args, var_t code, tbl_t *ops, tbl_t *keys);
+fn_t *fn_create_nested(tbl_t *args, void *vs);
 
 // Called by garbage collector to clean up
 void fn_destroy(void *);
@@ -39,6 +41,11 @@ var_t fn_call(fn_t *, tbl_t *args, tbl_t *scope);
 
 // Returns a string representation of a function
 var_t fn_repr(var_t v);
+
+
+// Function reference counting
+static inline void fn_inc(void *m) { vref_inc(m); }
+static inline void fn_dec(void *m) { vref_dec(m, fn_destroy); }
 
 
 #endif

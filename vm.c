@@ -20,7 +20,7 @@ static inline vsarg_t vsarg(const str_t *pc) {
 // Return the size taken by the specified opcode
 // Note: size of the jump opcode currently can not change
 // based on argument, because this is not handled by the parser
-int vcount(str_t *code, vop_t op, varg_t arg) {
+int vcount(vop_t op, varg_t arg) {
     if (VOP_ARG & op)
         return 3;
     else
@@ -28,20 +28,17 @@ int vcount(str_t *code, vop_t op, varg_t arg) {
 }
 
 // Encode the specified opcode and return its size
-int vencode(str_t *code, vop_t op, varg_t arg) {
+void vencode(str_t *code, vop_t op, varg_t arg) {
     *code++ = op;
 
     if (VOP_ARG & op) {
         *code++ = arg >> 8;
         *code++ = 0xff & arg;
-        return 3;
-    } else {
-        return 1;
     }
 }
 
 // Execute the bytecode
-var_t vexec(fn_t *f, tbl_t *scope) {
+var_t vexec(fn_t *f, tbl_t *args, tbl_t *scope) {
     var_t stack[f->stack]; // TODO check for overflow
 
     register const str_t *pc = f->bcode;
@@ -58,9 +55,11 @@ var_t vexec(fn_t *f, tbl_t *scope) {
 
         switch (VOP_OP & *pc++) {
             case VVAR:      *--sp = f->vars[varg(pc)]; pc += 2;             break;
+            case VFN:       *--sp = vfn(f->fns[varg(pc)], scope); pc += 2; break;
             case VNIL:      *--sp = vnil;                                   break;
             case VTBL:      *--sp = vtbl(tbl_create(0));                    break;
             case VSCOPE:    *--sp = vtbl(scope);                            break;
+            case VARGS:     *--sp = vtbl(args);                             break;
             
             case VDUP:      sp[-1] = sp[varg(pc)]; sp--; pc += 2;           break;
             case VDROP:     sp++;                                           break;

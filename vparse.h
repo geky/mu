@@ -11,7 +11,6 @@
 
 // Parsing type definitions
 typedef uint8_t vtok_t;
-typedef int vencode_t(str_t *, vop_t, varg_t);
 typedef struct vstate vstate_t;
 
 
@@ -34,22 +33,27 @@ struct vjstate {
     tbl_t *btbl;
 };
 
+struct vfnstate {
+    str_t *bcode;
+
+    len_t stack;
+    len_t len;
+    len_t ins;
+
+    tbl_t *fns;
+    tbl_t *vars;
+};
+
 
 // State of a parse
 struct vstate {
-    ref_t *ref;
-    const str_t *str;
-    const str_t *pos;
-    const str_t *end;
-
-    tbl_t *vars;
-    tbl_t *keys;
-    tbl_t *ops;
-
+    struct vfnstate *fn;
+    struct vjstate j;
+    struct vopstate op;
     tbl_t *args;
 
-    struct vopstate op;
-    struct vjstate j;
+    tbl_t *keys;
+    tbl_t *ops;
 
     uint8_t indirect;
     uint8_t paren;
@@ -62,14 +66,17 @@ struct vstate {
     vtok_t tok;
     var_t val;
 
-    int ins;
-    str_t *bcode;
-    vencode_t *encode;
+    ref_t *ref;
+    const str_t *str;
+    const str_t *pos;
+    const str_t *end;
 };
 
 
-// Parses V source code and evaluates the result
-void vparse(vstate_t *);
-
+// Parses V source into bytecode
+void vparse_init(vstate_t *vs, var_t code);
+void vparse_args(vstate_t *vs, tbl_t *args);
+void vparse_top(vstate_t *vs);
+void vparse_nested(vstate_t *vs);
 
 #endif

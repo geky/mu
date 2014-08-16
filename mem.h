@@ -18,6 +18,7 @@ __attribute__((aligned(8)));
 // simple wrapper over malloc and free if available
 // returns 0 when size == 0
 void *valloc(size_t size);
+void *vrealloc(void *, size_t prev, size_t size);
 void vdealloc(void *, size_t size);
 
 

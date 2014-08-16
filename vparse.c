@@ -27,45 +27,73 @@ static void _vexpect(vstate_t *vs, vtok_t tok, const char *fn) {
 }
 
 
+// Allocation functions for managing bytecode space
+static void venlarge(vstate_t *vs, int count) {
+    struct vfnstate *fn = vs->fn;
+    fn->ins += count;
+
+    while (fn->ins > fn->len) {
+        assert(((int)fn->len << 1) <= VMAXLEN); // TODO errors
+
+        fn->bcode = vrealloc(fn->bcode, fn->len, fn->len << 1);
+        fn->len <<= 1;
+    }
+}
+
+static void venlargein(vstate_t *vs, int count, int ins) {
+    venlarge(vs, count);
+
+    memmove(&vs->fn->bcode[ins] + count,
+            &vs->fn->bcode[ins], 
+            vs->fn->ins-count - ins);
+}
+
+
 // Different encoding calls
+static void venc(vstate_t *vs, vop_t op) {
+    int count = vcount(op, 0);
+    venlarge(vs, count);
+    vencode(&vs->fn->bcode[vs->fn->ins-count], op, 0);
+}
+
+static void venca(vstate_t *vs, vop_t op, varg_t arg) {
+    int count = vcount(op | VOP_ARG, arg);
+    venlarge(vs, count);
+    vencode(&vs->fn->bcode[vs->fn->ins-count], op | VOP_ARG, arg);
+}
+
+__attribute__((const))
+static int vsize(vstate_t *vs, vop_t op) {
+    return vcount(op, 0);
+}
+
+__attribute__((const))
+static int vsizea(vstate_t *vs, vop_t op, varg_t arg) {
+    return vcount(op | VOP_ARG, arg);
+}
+
+static int vinsert(vstate_t *vs, vop_t op, int ins) {
+    vencode(&vs->fn->bcode[ins], op, 0);
+    return vcount(op, 0);
+}
+
+static int vinserta(vstate_t *vs, vop_t op, varg_t arg, int ins) {
+    vencode(&vs->fn->bcode[ins], op | VOP_ARG, arg);
+    return vcount(VOP_ARG, arg);
+}
+
+
+// Helping functions for code generation
 static varg_t vaccvar(vstate_t *vs, var_t v) {
-    var_t index = tbl_lookup(vs->vars, v);
+    var_t index = tbl_lookup(vs->fn->vars, v);
 
     if (!var_isnil(index))
         return index.data;
 
-    varg_t arg = vs->vars->len;
-    tbl_assign(vs->vars, v, vraw(arg));
+    varg_t arg = vs->fn->vars->len;
+    tbl_assign(vs->fn->vars, v, vraw(arg));
     return arg;
 }
-
-
-static void venc(vstate_t *vs, vop_t op) {
-    vs->ins += vs->encode(&vs->bcode[vs->ins], op, 0);
-    assert(vs->ins <= VMAXLEN); // TODO errors
-}
-
-static void venca(vstate_t *vs, vop_t op, varg_t arg) {
-    vs->ins += vs->encode(&vs->bcode[vs->ins], op | VOP_ARG, arg);
-    assert(vs->ins <= VMAXLEN); // TODO errors
-}
-
-static int vsize(vstate_t *vs, vop_t op) {
-    return vcount(0, op, 0);
-}
-
-static int vsizea(vstate_t *vs, vop_t op, varg_t arg) {
-    return vcount(0, op | VOP_ARG, arg);
-}
-
-static int vinsert(vstate_t *vs, vop_t op, int ins) {
-    return vs->encode(&vs->bcode[ins], op, 0);
-}
-
-static int vinserta(vstate_t *vs, vop_t op, varg_t arg, int ins) {
-    return vs->encode(&vs->bcode[ins], op | VOP_ARG, arg);
-}
-
 
 static void vpatch(vstate_t *vs, tbl_t *jtbl, int ins) {
     tbl_for(k, v, jtbl, {
@@ -75,6 +103,17 @@ static void vpatch(vstate_t *vs, tbl_t *jtbl, int ins) {
     tbl_dec(jtbl);
 }
 
+static tbl_t *vrevargs(tbl_t *args) {
+    tbl_t *res = tbl_create(0);
+    int i;
+
+    for (i = args->len-1; i >= 0; i--) {
+        tbl_add(res, tbl_lookup(args, vnum(i)));
+    }
+
+    tbl_dec(args);
+    return res;
+}
 
 static void vunpack(vstate_t *vs, tbl_t *map) {
     venc(vs, VSCOPE);
@@ -99,34 +138,10 @@ static void vunpack(vstate_t *vs, tbl_t *map) {
 }
 
 
-static tbl_t *vrevargs(tbl_t *args) {
-    tbl_t *res = tbl_create(0);
-    int i;
 
-    for (i = args->len-1; i >= 0; i--) {
-        tbl_add(res, tbl_lookup(args, vnum(i)));
-    }
-
-    tbl_dec(args);
-    return res;
-}
-
-
-static void venlarge(vstate_t *vs, int in, int count) {
-    if (vs->bcode) {
-        memmove(&vs->bcode[in] + count,
-                &vs->bcode[in], 
-                vs->ins - in);
-    }
-
-    vs->ins += count;
-    assert(vs->ins <= VMAXLEN); // TODO errors
-}
-
-
-
-// Parser for V's grammar
+// Rules for V's grammar
 static void vp_value(vstate_t *vs);
+static void vp_fn(vstate_t *vs);
 static void vp_expr_if(vstate_t *vs);
 static void vp_expr_while(vstate_t *vs);
 static void vp_expr_for(vstate_t *vs);
@@ -143,7 +158,7 @@ static void vp_stmt_if(vstate_t *vs);
 static void vp_stmt_while(vstate_t *vs);
 static void vp_stmt_for(vstate_t *vs);
 static void vp_stmt_list(vstate_t *vs);
-static void vp_stmt_let_op(vstate_t *vs);
+static void vp_stmt_fn(vstate_t *vs);
 static void vp_stmt_let(vstate_t *vs);
 static void vp_stmt_assign(vstate_t *vs);
 static void vp_stmt_follow(vstate_t *vs);
@@ -157,45 +172,63 @@ static void vp_value(vstate_t *vs) {
         venc(vs, VLOOKUP);
 }
 
+static void vp_fn(vstate_t *vs) {
+    vexpect(vs, '(');
+    vp_args(vs);
+    tbl_t *args = vs->args;
+    vexpect(vs, ')');
+
+    struct vfnstate *f = vs->fn;
+    struct vjstate j = vs->j;
+
+    fn_t *fn = fn_create_nested(args, vs);
+    tbl_add(f->fns, vraw((uint32_t)fn));
+
+    vs->j = j;
+    vs->fn = f;
+
+    venca(vs, VFN, f->fns->len-1);
+}
+
 static void vp_expr_if(vstate_t *vs) {
     vexpect(vs, '(');
     vp_value(vs);
     vexpect(vs, ')');
 
-    int i_ins = vs->ins;
-    vs->ins += vs->jfsize;
+    int i_ins = vs->fn->ins;
+    venlarge(vs, vs->jfsize);
     vp_value(vs);
 
     if (vs->tok == VT_ELSE) {
-        int e_ins = vs->ins;
-        vs->ins += vs->jsize;
+        int e_ins = vs->fn->ins;
+        venlarge(vs, vs->jsize);
         vlex(vs);
         vp_value(vs);
 
         vinserta(vs, VJFALSE, (e_ins+vs->jsize) - (i_ins+vs->jfsize), i_ins);
-        vinserta(vs, VJUMP, vs->ins - (e_ins+vs->jsize), e_ins);
+        vinserta(vs, VJUMP, vs->fn->ins - (e_ins+vs->jsize), e_ins);
     } else {
         venca(vs, VJUMP, vsize(vs, VNIL));
         venc(vs, VNIL);
-        vinserta(vs, VJFALSE, vs->ins - (i_ins+vs->jfsize), i_ins);
+        vinserta(vs, VJFALSE, vs->fn->ins - (i_ins+vs->jfsize), i_ins);
     }
 }
 
 static void vp_expr_while(vstate_t *vs) {
     venc(vs, VTBL);
-    int w_ins = vs->ins;
+    int w_ins = vs->fn->ins;
 
     vexpect(vs, '(');
     vp_value(vs);
     vexpect(vs, ')');
 
-    int j_ins = vs->ins;
-    vs->ins += vs->jfsize;
+    int j_ins = vs->fn->ins;
+    venlarge(vs, vs->jfsize);
     vp_value(vs);
     venc(vs, VADD);
 
-    vinserta(vs, VJFALSE, (vs->ins+vs->jsize) - (j_ins+vs->jfsize), j_ins);
-    venca(vs, VJUMP, w_ins - (vs->ins+vs->jsize));
+    vinserta(vs, VJFALSE, (vs->fn->ins+vs->jsize) - (j_ins+vs->jfsize), j_ins);
+    venca(vs, VJUMP, w_ins - (vs->fn->ins+vs->jsize));
 }
 
 static void vp_expr_for(vstate_t *vs) {
@@ -209,8 +242,8 @@ static void vp_expr_for(vstate_t *vs) {
     venc(vs, VITER);
     vexpect(vs, ')');
 
-    int f_ins = vs->ins;
-    vs->ins += vs->jsize;
+    int f_ins = vs->fn->ins;
+    venlarge(vs, vs->jsize);
 
     vunpack(vs, args);
     venca(vs, VDUP, 1);
@@ -218,14 +251,14 @@ static void vp_expr_for(vstate_t *vs) {
     venc(vs, VADD);
     venc(vs, VDROP);
 
-    vinserta(vs, VJUMP, vs->ins - (f_ins+vs->jsize), f_ins);
+    vinserta(vs, VJUMP, vs->fn->ins - (f_ins+vs->jsize), f_ins);
 
     venca(vs, VDUP, 0);
     venc(vs, VTBL);
     venc(vs, VCALL);
     venca(vs, VDUP, 0);
 
-    venca(vs, VJTRUE, (f_ins+vs->jsize) - (vs->ins+vs->jtsize));
+    venca(vs, VJTRUE, (f_ins+vs->jsize) - (vs->fn->ins+vs->jtsize));
     venc(vs, VDROP);
     venc(vs, VDROP);
 }
@@ -265,8 +298,8 @@ static void vp_expr_op(vstate_t *vs) {
                         venc(vs, VADD);
                         {   struct vopstate op = vs->op;
                             varg_t arg = vaccvar(vs, vs->val);
-                            venlarge(vs, vs->op.ins, vsizea(vs, VVAR, arg) +
-                                                     vsize(vs, VTBL));
+                            venlargein(vs, vsizea(vs, VVAR, arg) +
+                                           vsize(vs, VTBL), vs->op.ins);
                             vs->op.ins += vinserta(vs, VVAR, arg, vs->op.ins);
                             vs->op.ins += vinsert(vs, VTBL, vs->op.ins);
                             vs->op.prec = vs->nprec;
@@ -284,7 +317,7 @@ static void vp_expr_op(vstate_t *vs) {
 }
 
 static void vp_expr(vstate_t *vs) {
-    vs->op.ins = vs->ins;
+    vs->op.ins = vs->fn->ins;
 
     switch (vs->tok) {
         case VT_IDENT:  venc(vs, VSCOPE);
@@ -349,6 +382,11 @@ static void vp_expr(vstate_t *vs) {
 
         case VT_FOR:    vlex(vs);
                         vp_expr_for(vs);
+                        vs->indirect = false;
+                        return vp_expr_op(vs);
+
+        case VT_FN:     vlex(vs);
+                        vp_fn(vs);
                         vs->indirect = false;
                         return vp_expr_op(vs);
 
@@ -454,20 +492,20 @@ static void vp_stmt_if(vstate_t *vs) {
     vp_value(vs);
     vexpect(vs, ')');
 
-    int i_ins = vs->ins;
-    vs->ins += vs->jfsize;
+    int i_ins = vs->fn->ins;
+    venlarge(vs, vs->jfsize);
     vp_stmt(vs);
 
     if (vs->tok == VT_ELSE) {
-        int e_ins = vs->ins;
-        vs->ins += vs->jsize;
+        int e_ins = vs->fn->ins;
+        venlarge(vs, vs->jsize);
         vlex(vs);
         vp_stmt(vs);
 
         vinserta(vs, VJFALSE, (e_ins+vs->jsize) - (i_ins+vs->jfsize), i_ins);
-        vinserta(vs, VJUMP, vs->ins - (e_ins+vs->jsize), e_ins);
+        vinserta(vs, VJUMP, vs->fn->ins - (e_ins+vs->jsize), e_ins);
     } else {
-        vinserta(vs, VJFALSE, vs->ins - (i_ins+vs->jfsize), i_ins);
+        vinserta(vs, VJFALSE, vs->fn->ins - (i_ins+vs->jfsize), i_ins);
     }
 }
 
@@ -475,18 +513,18 @@ static void vp_stmt_while(vstate_t *vs) {
     struct vjstate j = vs->j;
     vs->j.ctbl = tbl_create(0);
     vs->j.btbl = tbl_create(0);
-    int w_ins = vs->ins;
+    int w_ins = vs->fn->ins;
 
     vexpect(vs, '(');
     vp_value(vs);
     vexpect(vs, ')');
 
-    int j_ins = vs->ins;
-    vs->ins += vs->jfsize;
+    int j_ins = vs->fn->ins;
+    venlarge(vs, vs->jfsize);
     vp_stmt(vs);
 
-    vinserta(vs, VJFALSE, (vs->ins+vs->jsize) - (j_ins+vs->jfsize), j_ins);
-    venca(vs, VJUMP, w_ins - (vs->ins+vs->jsize));
+    vinserta(vs, VJFALSE, (vs->fn->ins+vs->jsize) - (j_ins+vs->jfsize), j_ins);
+    venca(vs, VJUMP, w_ins - (vs->fn->ins+vs->jsize));
 
     vpatch(vs, vs->j.ctbl, w_ins);
     tbl_t *btbl = vs->j.btbl;
@@ -497,7 +535,7 @@ static void vp_stmt_while(vstate_t *vs) {
         vp_stmt(vs);
     }
 
-    vpatch(vs, btbl, vs->ins);
+    vpatch(vs, btbl, vs->fn->ins);
 }
 
 static void vp_stmt_for(vstate_t *vs) {
@@ -513,21 +551,21 @@ static void vp_stmt_for(vstate_t *vs) {
     venc(vs, VITER);
     vexpect(vs, ')');
 
-    int f_ins = vs->ins;
-    vs->ins += vs->jsize;
+    int f_ins = vs->fn->ins;
+    venlarge(vs, vs->jsize);
 
     vunpack(vs, args);
     vp_stmt(vs);
 
-    vinserta(vs, VJUMP, vs->ins - (f_ins+vs->jsize), f_ins);
-    vpatch(vs, vs->j.ctbl, vs->ins);
+    vinserta(vs, VJUMP, vs->fn->ins - (f_ins+vs->jsize), f_ins);
+    vpatch(vs, vs->j.ctbl, vs->fn->ins);
 
     venca(vs, VDUP, 0);
     venc(vs, VTBL);
     venc(vs, VCALL);
     venca(vs, VDUP, 0);
 
-    venca(vs, VJTRUE, (f_ins+vs->jsize) - (vs->ins+vs->jtsize));
+    venca(vs, VJTRUE, (f_ins+vs->jsize) - (vs->fn->ins+vs->jtsize));
     venc(vs, VDROP);
 
     tbl_t *btbl = vs->j.btbl;
@@ -538,7 +576,7 @@ static void vp_stmt_for(vstate_t *vs) {
         vp_stmt(vs);
     }
 
-    vpatch(vs, btbl, vs->ins);
+    vpatch(vs, btbl, vs->fn->ins);
     venc(vs, VDROP);
 }
 
@@ -547,16 +585,19 @@ static void vp_stmt_list(vstate_t *vs) {
     return vp_stmt_follow(vs);
 }
 
-static void vp_stmt_let_op(vstate_t *vs) {
+static void vp_stmt_fn(vstate_t *vs) {
     switch (vs->tok) {
-        case VT_SET:    if (!vs->indirect) vunexpected(vs);
+        case VT_IDENT:  venc(vs, VSCOPE);
+                        venca(vs, VVAR, vaccvar(vs, vs->val));
                         vlex(vs);
-                        vp_value(vs);
+                        vp_fn(vs);
                         venc(vs, VINSERT);
                         venc(vs, VDROP);
                         return;
 
-        default:        vunexpected(vs);
+        default:        vp_fn(vs);
+                        venc(vs, VDROP);
+                        return;
     }
 }
 
@@ -571,7 +612,12 @@ static void vp_stmt_let(vstate_t *vs) {
                         return;
 
         default:        vp_expr(vs);
-                        return vp_stmt_let_op(vs);
+                        if (!vs->indirect) vunexpected(vs);
+                        vexpect(vs, VT_SET);
+                        vp_value(vs);
+                        venc(vs, VINSERT);
+                        venc(vs, VDROP);
+                        return;
     }
 }
 
@@ -636,16 +682,19 @@ static void vp_stmt(vstate_t *vs) {
         case VT_FOR:    vlex(vs);
                         return vp_stmt_for(vs);
 
+        case VT_FN:     vlex(vs);
+                        return vp_stmt_fn(vs);
+
         case VT_CONT:   if (!vs->j.ctbl) vunexpected(vs);
                         vlex(vs);
-                        tbl_add(vs->j.ctbl, vraw(vs->ins));
-                        vs->ins += vs->jsize;
+                        tbl_add(vs->j.ctbl, vraw(vs->fn->ins));
+                        venlarge(vs, vs->jsize);
                         return;
 
         case VT_BREAK:  if (!vs->j.btbl) vunexpected(vs);
                         vlex(vs);
-                        tbl_add(vs->j.btbl, vraw(vs->ins));
-                        vs->ins += vs->jsize;
+                        tbl_add(vs->j.btbl, vraw(vs->fn->ins));
+                        venlarge(vs, vs->jsize);
                         return;
 
         case VT_IDENT:
@@ -661,23 +710,45 @@ static void vp_stmt(vstate_t *vs) {
 }
 
 
+// Parses V source into bytecode
+void vparse_init(vstate_t *vs, var_t code) {
+    vs->ref = var_ref(code);
+    vs->str = code.str;
+    vs->pos = code.str + code.off;
+    vs->end = code.str + code.off + code.len;
 
-// Parses V source code and evaluates the result
-void vparse(vstate_t *vs) {
-    vs->ins = 0;
     vs->paren = 0;
     vs->op.prec = -1;
-    vs->j = (struct vjstate){0};
 
     vs->jsize = vsizea(vs, VJUMP, 0);
     vs->jtsize = vsizea(vs, VJTRUE, 0);
     vs->jfsize = vsizea(vs, VJFALSE, 0);
 
     vlex(vs);
+}
+
+void vparse_args(vstate_t *vs, tbl_t *args) {
+    if (args && args->len > 0) {
+        venc(vs, VARGS);
+        vunpack(vs, args);
+    }
+}
+
+void vparse_top(vstate_t *vs) {
+    vs->j = (struct vjstate){0};
+
     vp_stmt_list(vs);
 
     if (vs->tok != 0)
         vunexpected(vs);
+
+    venc(vs, VRETN);
+}
+
+void vparse_nested(vstate_t *vs) {
+    vs->j = (struct vjstate){0};
+
+    vp_stmt(vs);
 
     venc(vs, VRETN);
 }

@@ -211,8 +211,8 @@ var_t str_repr(var_t v) {
                 case '\0': *res++ = '0'; break;
                 default:
                     *res++ = 'x';
-                    *res++ = (*str/16 < 10) ? ('0'+*str/16) : ('a'-10+*str/16);
-                    *res++ = (*str%16 < 10) ? ('0'+*str%16) : ('a'-10+*str%16);
+                    *res++ = num_ascii(*str / 16);
+                    *res++ = num_ascii(*str % 16);
                     break;
             }
         } else {

@@ -186,7 +186,7 @@ var_t num_repr(var_t v) {
                 *res++ = '.';
 
             num_t d = floor(v.num / digit);
-            *res++ = '0' + (str_t)d;
+            *res++ = num_ascii(d);
 
             v.num -= d * digit;
             digit /= 10.0;
@@ -202,11 +202,11 @@ var_t num_repr(var_t v) {
             }
 
             if (exp > 100)
-                *res++ = '0' + ((str_t)exp / 100);
+                *res++ = num_ascii(((int)exp) / 100);
 
             // exp will always be greater than 10 here
-            *res++ = '0' + ((str_t)exp / 10) % 10;
-            *res++ = '0' + ((str_t)exp / 1) % 10;  
+            *res++ = num_ascii(((int)exp / 10) % 10);
+            *res++ = num_ascii(((int)exp / 1) % 10);
         }
 
         return vstr(out, 0, res - out);

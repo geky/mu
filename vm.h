@@ -36,20 +36,21 @@ enum {
     VOP_FLAGS = 0x07, // Flags in bottom 3 bits
 
     VOP_ARG   = 0x01, // Indicates this opcode uses an argument
-    VOP_END   = 0x04, // Indicates the end of code generation, 
-};                    // will only occur in a return opcode
+};
 
 
 enum vop {
 /*  opcode    encoding      arg         stack   result      description                                     */
 
     VVAR    = 0x10 << 3, // var index   +1      var[i]      places constant variable on stack
-    VNIL    = 0x11 << 3, // -           +1      nil         places nil on the stack
-    VTBL    = 0x12 << 3, // -           +1      []          creates a new table on the stack
-    VSCOPE  = 0x13 << 3, // -           +1      scope       places the scope on the stack
+    VFN     = 0x11 << 3, // var index   +1      fn(var[i])  places function bound with scope on the stack
+    VNIL    = 0x12 << 3, // -           +1      nil         places nil on the stack
+    VTBL    = 0x13 << 3, // -           +1      []          creates a new table on the stack
+    VSCOPE  = 0x14 << 3, // -           +1      scope       places the scope on the stack
+    VARGS   = 0x15 << 3, // -           +1      args        places the args on the stack
 
-    VDUP    = 0x14 << 3, // stack index +1      s[i]        duplicates the specified element on the stack
-    VDROP   = 0x15 << 3, // -           -1      -           pops element off the stack
+    VDUP    = 0x16 << 3, // stack index +1      s[i]        duplicates the specified element on the stack
+    VDROP   = 0x17 << 3, // -           -1      -           pops element off the stack
 
     VJUMP   = 0x18 << 3, // offset      -       -           adds signed offset to pc
     VJFALSE = 0x1a << 3, // offset      -1      -           jump if top of stack is nil
@@ -78,13 +79,13 @@ enum vop {
 // Return the size taken by the specified opcode
 // Note: size of the jump opcode currently can not change
 // based on argument, because this is not handled by the parser
-int vcount(str_t *code, vop_t op, varg_t arg);
+int vcount(vop_t op, varg_t arg);
 
 // Encode the specified opcode and return its size
-int vencode(str_t *code, vop_t op, varg_t arg);
+void vencode(str_t *code, vop_t op, varg_t arg);
 
 // Execute the bytecode
-var_t vexec(fn_t *f, tbl_t *scope);
+var_t vexec(fn_t *f, tbl_t *args, tbl_t *scope);
 
 
 #endif

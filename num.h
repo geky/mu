@@ -42,5 +42,11 @@ static inline int num_val(str_t s) {
         return 0xff;
 }
 
+static inline str_t num_ascii(int i) {
+    if (i < 10)
+        return '0' + i;
+    else
+        return 'a' + (i-10);
+}
 
 #endif

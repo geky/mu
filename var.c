@@ -62,12 +62,11 @@ var_t var_iter(var_t v) {
 
 // Returns a string representation of the variable
 static var_t nil_repr(var_t v) { return vcstr("nil"); }
-static var_t bfn_repr(var_t v) { return vcstr("fn() <builtin>"); }
 static var_t bad_repr(var_t v) { return vcstr("<bad var>"); }
 
 var_t var_repr(var_t v) {
     static var_t (* const var_reprs[8])(var_t) = {
-        nil_repr, num_repr, bfn_repr, bfn_repr, 
+        nil_repr, num_repr, fn_repr, fn_repr, 
         tbl_repr, bad_repr, str_repr, fn_repr
     };
 
@@ -148,9 +147,9 @@ void var_add(var_t v, var_t val) {
 
 // Function calls performed on variables
 static var_t nil_call(var_t f, tbl_t *a)  { assert(false); } // TODO error
-static var_t vfn_call(var_t f, tbl_t *a)  { return fn_call(var_fn(f), a, f.tbl); }
-static var_t vbfn_call(var_t f, tbl_t *a) { f.meta &= ~7; return f.bfn(a); }
-static var_t vsfn_call(var_t f, tbl_t *a) { f.meta &= ~7; return f.sfn(a, f.tbl); }
+static var_t vfn_call(var_t f, tbl_t *a)  { f.meta &= ~3; return fn_call(f.fn, a, f.tbl); }
+static var_t vbfn_call(var_t f, tbl_t *a) { f.meta &= ~3; return f.bfn(a); }
+static var_t vsfn_call(var_t f, tbl_t *a) { f.meta &= ~3; return f.sfn(a, f.tbl); }
 
 var_t var_call(var_t v, tbl_t *args) {
     static var_t (* const var_calls[8])(var_t, tbl_t *) = {
