@@ -8,15 +8,14 @@
 #include <assert.h>
 
 
-// Currently these are initialized at runtime
-// TODO compile them?
-static tbl_t *vkeyt = 0;
-static tbl_t *vopt = 0;
-
 // Creates internal tables for keywords or uses prexisting.
 // Use this to initialize an op table if nescessary.
 __attribute__((const))
 tbl_t *vkeys(void) {
+    // Currently this is initialized at runtime
+    // TODO compile them?
+    static tbl_t *vkeyt = 0;
+
     if (vkeyt) return vkeyt;
 
     vkeyt = tbl_create(0);
@@ -30,18 +29,10 @@ tbl_t *vkeys(void) {
     tbl_insert(vkeyt, vcstr("continue"), vraw(VT_CONT));
     tbl_insert(vkeyt, vcstr("break"), vraw(VT_BREAK));
     tbl_insert(vkeyt, vcstr("else"), vraw(VT_ELSE));
+    tbl_insert(vkeyt, vcstr("and"), vraw(VT_AND));
+    tbl_insert(vkeyt, vcstr("or"), vraw(VT_OR));
+    
     return vkeyt;
-}
-
-__attribute__((const))
-tbl_t *vops(void) {
-    if (vopt) return vopt;
-
-    vopt = tbl_create(0);
-    tbl_insert(vopt, vcstr("="), vraw(VT_SET));
-    tbl_insert(vopt, vcstr(":"), vraw(VT_SET));
-    tbl_insert(vopt, vcstr("."), vraw(VT_DOT));
-    return vopt;
 }
 
 
@@ -55,11 +46,52 @@ static void vl_com(vstate_t *vs);
 static void vl_op(vstate_t *vs);
 static void vl_kw(vstate_t *vs);
 static void vl_tok(vstate_t *vs);
-static void vl_sep(vstate_t *vs);
 static void vl_set(vstate_t *vs);
+static void vl_sep(vstate_t *vs);
 static void vl_nl(vstate_t *vs);
 static void vl_num(vstate_t *vs);
 static void vl_str(vstate_t *vs);
+
+
+// Helper function for skipping whitespace
+static void vskip(vstate_t *vs) {
+    while (vs->pos < vs->end) {
+        if ((vlexs[*vs->pos] == vl_ws) || 
+            (vs->paren && *vs->pos == '\n')) {
+            vs->pos++;
+        } else if (*vs->pos == '`') {
+            vs->pos++;
+
+            if (vs->pos < vs->end && *vs->pos == '`') {
+                int count = 1;
+                int seen = 0;
+
+                while (vs->pos < vs->end) {
+                    if (*vs->pos++ != '`')
+                        break;
+
+                    count++;
+                }
+
+                while (vs->pos < vs->end && seen < count) {
+                    if (*vs->pos++ == '`')
+                        seen++;
+                    else
+                        seen = 0;
+                }
+            } else {
+                while (vs->pos < vs->end) {
+                    if (*vs->pos == '`' || *vs->pos == '\n')
+                        break;
+
+                    vs->pos++;
+                }
+            }
+        } else {
+            return;
+        }
+    }
+}
 
 
 __attribute__((noreturn))
@@ -68,85 +100,33 @@ static void vl_bad(vstate_t *vs) {
 }
 
 static void vl_ws(vstate_t *vs) {
-    vs->pos++;
-    vlex(vs);
+    vskip(vs);
+    return vlex(vs);
 }
 
 static void vl_com(vstate_t *vs) {
-    vs->pos++;
-
-    if (vs->pos >= vs->end || *vs->pos != '`') {
-        while (vs->pos < vs->end) {
-            str_t n = *vs->pos++;
-            if (n == '`' || n == '\n')
-                break;
-        }
-    } else {
-        int count = 1;
-        int seen = 0;
-
-        while (vs->pos < vs->end) {
-            if (*vs->pos++ != '`')
-                break;
-
-            count++;
-        }
-
-        while (vs->pos < vs->end && seen < count) {
-            if (*vs->pos++ == '`')
-                seen++;
-            else
-                seen = 0;
-        }
-    }
-
-    vlex(vs);
+    vskip(vs);
+    return vlex(vs);
 }
 
 static void vl_op(vstate_t *vs) {
     const str_t *kw = vs->pos++;
 
-    while (vs->pos < vs->end) {
-        void *w = vlexs[*vs->pos];
-
-        if (w != vl_op && w != vl_set)
-            break;
-
+    while (vs->pos < vs->end && (vlexs[*vs->pos] == vl_op ||
+                                 vlexs[*vs->pos] == vl_set))
         vs->pos++;
-    };
 
-    var_t key = vstr(vs->str, kw-vs->str, vs->pos-kw);
+    vs->val = vstr(vs->str, kw-vs->str, vs->pos-kw);
 
-    while (1) {
-        vs->val = tbl_lookup(vs->ops, key);
+    kw = vs->pos;
+    vskip(vs);
+    vs->op.rprec = vs->pos - kw;
 
-        if (!var_isnil(vs->val))
-            break;
-
-        vs->pos--;
-        key.len--;
-
-        assert(key.len > 0); // TODO errors
-    }
-
-
-    vs->nprec = 0;
-
-    while (vs->pos < vs->end) {
-        if (vlexs[*vs->pos] != vl_ws)
-            break;
-
-        vs->pos++;
-        vs->nprec++;
-    }
-
-
-    if (var_isnum(vs->val) && vs->val.data >= VT_SET
-                           && vs->val.data <= VT_DOT) {
-        vs->tok = vs->val.data;
-    } else if (vs->pos < vs->end && vlexs[*vs->pos] == vl_set) {
-        vs->pos++;
+    if (str_equals(vs->val, vcstr(".")) && vlexs[*vs->pos] == vl_kw) {
+        vs->tok = VT_KEY;
+    } else if (vs->left && vlexs[kw[-1]] == vl_set) {
         vs->tok = VT_OPSET;
+        vs->val.len -= 1;
     } else {
         vs->tok = VT_OP;
     }
@@ -155,23 +135,25 @@ static void vl_op(vstate_t *vs) {
 static void vl_kw(vstate_t *vs) {
     const str_t *kw = vs->pos++;
 
-    while (vs->pos < vs->end) {
-        void *w = vlexs[*vs->pos];
-
-        if (w != vl_kw && w != vl_num)
-            break;
-
+    while (vs->pos < vs->end && (vlexs[*vs->pos] == vl_kw ||
+                                 vlexs[*vs->pos] == vl_num))
         vs->pos++;
-    };
 
     vs->val = vstr(vs->str, kw-vs->str, vs->pos-kw);
-    var_t key = tbl_lookup(vs->keys, vs->val);
+    var_t tok = tbl_lookup(vs->keys, vs->val);
 
-    if (var_isnum(key) && key.data >= VT_NIL
-                       && key.data <= VT_ELSE) {
-        vs->tok = key.data;
-    } else {
+    kw = vs->pos;
+    vskip(vs);
+    vs->op.rprec = vs->pos - kw;
+
+    if (vs->key && vlexs[*vs->pos] == vl_set) {
+        vs->tok = VT_IDSET;
+    } else if (var_isnil(tok)) {
         vs->tok = VT_IDENT;
+    } else if (tok.data == VT_FN && vlexs[*vs->pos] == vl_kw) {
+        vs->tok = VT_FNSET;
+    } else {
+        vs->tok = tok.data;
     }
 }
 
@@ -179,30 +161,34 @@ static void vl_tok(vstate_t *vs) {
     vs->tok = *vs->pos++;
 }
 
-static void vl_sep(vstate_t *vs) {
+static void vl_set(vstate_t *vs) {
+    if (!vs->left)
+        return vl_op(vs);
+
+    vs->tok = VT_SET;
     vs->pos++;
-    vs->tok = VT_SEP;
 }
 
-static void vl_set(vstate_t *vs) {
-    vl_op(vs);
+static void vl_sep(vstate_t *vs) {
+    vs->tok = VT_SEP;
+    vs->pos++;
 }
 
 static void vl_nl(vstate_t *vs) {
     if (vs->paren)
-        vl_ws(vs);
+        return vl_ws(vs);
     else
-        vl_sep(vs);
+        return vl_sep(vs);
 }       
 
 static void vl_num(vstate_t *vs) {
+    vs->tok = VT_LIT;
     vs->val = num_parse(&vs->pos, vs->end);
-    vs->tok = VT_NUM;
 }
 
 static void vl_str(vstate_t *vs) {
+    vs->tok = VT_LIT;
     vs->val = str_parse(&vs->pos, vs->end);
-    vs->tok = VT_STR;
 }
 
 
@@ -280,7 +266,7 @@ void (* const vlexs[256])(vstate_t *) = {
 // Value is stored in lval and its type is returned
 void vlex(vstate_t *vs) {
     if (vs->pos < vs->end)
-        vlexs[*vs->pos](vs);
+        return vlexs[*vs->pos](vs);
     else
         vs->tok = 0;
 }

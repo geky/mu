@@ -41,7 +41,7 @@ static fn_t *fn_realize(struct vfnstate *fnstate) {
 }
 
 
-fn_t *fn_create(tbl_t *args, var_t code, tbl_t *ops, tbl_t *keys) {
+fn_t *fn_create(tbl_t *args, var_t code) {
     args = tbl_readp(args);
 
     vstate_t *vs = valloc(sizeof(vstate_t));
@@ -52,9 +52,6 @@ fn_t *fn_create(tbl_t *args, var_t code, tbl_t *ops, tbl_t *keys) {
 
     vs->fn->vars = tbl_create(args ? args->len : 0);
     vs->fn->fns = tbl_create(0);
-
-    vs->ops = ops ? tbl_readp(ops) : vops();
-    vs->keys = keys ? tbl_readp(keys) : vkeys();
 
     vparse_init(vs, code);
     vparse_args(vs, args);

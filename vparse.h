@@ -25,7 +25,8 @@ enum vproduct {
 // Specific state structures
 struct vopstate {
     len_t ins;
-    uint8_t prec;
+    uint8_t lprec;
+    uint8_t rprec;
 };
 
 struct vjstate {
@@ -44,7 +45,6 @@ struct vfnstate {
     tbl_t *vars;
 };
 
-
 // State of a parse
 struct vstate {
     struct vfnstate *fn;
@@ -53,11 +53,12 @@ struct vstate {
     tbl_t *args;
 
     tbl_t *keys;
-    tbl_t *ops;
 
     uint8_t indirect;
+    uint8_t stmt;
+    uint8_t left;
+    uint8_t key;
     uint8_t paren;
-    uint8_t nprec;
 
     uint8_t jsize;
     uint8_t jtsize;

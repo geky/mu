@@ -24,7 +24,7 @@ struct fn {
 // Functions for managing functions
 // Each function is preceded with a reference count
 // which is used as its handle in a var
-fn_t *fn_create(tbl_t *args, var_t code, tbl_t *ops, tbl_t *keys);
+fn_t *fn_create(tbl_t *args, var_t code);
 fn_t *fn_create_nested(tbl_t *args, void *vs);
 
 // Called by garbage collector to clean up
