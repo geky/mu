@@ -85,7 +85,7 @@ int vcount(vop_t op, varg_t arg);
 void vencode(str_t *code, vop_t op, varg_t arg);
 
 // Execute the bytecode
-var_t vexec(fn_t *f, tbl_t *args, tbl_t *scope);
+var_t vexec(fn_t *f, tbl_t *args, tbl_t *scope, veh_t *eh);
 
 
 #endif

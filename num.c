@@ -28,8 +28,7 @@ hash_t num_hash(var_t v) {
 }
 
 
-// TODO check this
-// TODO add bounds checking
+// Parses a string and returns a number
 var_t num_parse(const str_t **off, const str_t *end) {
     const str_t *str = *off;
     num_t res = 0;
@@ -138,7 +137,7 @@ done:       // return the result
 
 
 // Obtains a string representation of a number
-var_t num_repr(var_t v) {
+var_t num_repr(var_t v, veh_t *eh) {
     v.type = 0;
 
     if (v.num == 0) {
@@ -155,7 +154,7 @@ var_t num_repr(var_t v) {
 
         return s;
     } else {
-        str_t *out = str_create(VNUMLEN);
+        str_t *out = str_create(VNUMLEN, eh);
         str_t *res = out;
 
         if (v.num < 0.0) {

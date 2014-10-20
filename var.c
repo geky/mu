@@ -6,7 +6,6 @@
 #include "fn.h"
 
 #include <string.h>
-#include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
@@ -47,116 +46,115 @@ hash_t var_hash(var_t v) {
 }
 
 // Performs iteration on variables
-static var_t nil_iter(var_t v) { assert(false); } // TODO error
+static var_t nil_iter(var_t v, veh_t *eh) { err_undefined(eh); }
 
-var_t var_iter(var_t v) {
-    static var_t (* const var_iters[8])(var_t) = {
+var_t var_iter(var_t v, veh_t *eh) {
+    static var_t (* const var_iters[8])(var_t, veh_t *) = {
         nil_iter, nil_iter, nil_iter, nil_iter,
         tbl_iter, nil_iter, nil_iter, nil_iter
     };
 
-    return var_iters[v.type](v);
+    return var_iters[v.type](v, eh);
 }
     
 
-
 // Returns a string representation of the variable
-static var_t nil_repr(var_t v) { return vcstr("nil"); }
-static var_t bad_repr(var_t v) { return vcstr("<bad var>"); }
+static var_t bad_repr(var_t v, veh_t *eh) { err_undefined(eh); }
+static var_t nil_repr(var_t v, veh_t *eh) { return vcstr("nil"); }
 
-var_t var_repr(var_t v) {
-    static var_t (* const var_reprs[8])(var_t) = {
+var_t var_repr(var_t v, veh_t *eh) {
+    static var_t (* const var_reprs[8])(var_t, veh_t *) = {
         nil_repr, num_repr, fn_repr, fn_repr, 
         tbl_repr, bad_repr, str_repr, fn_repr
     };
 
-    return var_reprs[v.type](v);
+    return var_reprs[v.type](v, eh);
 }
 
 // Prints variable to stdout for debugging
-void var_print(var_t v) {
-    var_t repr = var_repr(v);
+void var_print(var_t v, veh_t *eh) {
+    var_t repr = var_repr(v, eh);
     printf("%.*s", repr.len, var_str(repr));
 }
 
 
 // Table related functions performed on variables
-static var_t nil_lookup(var_t t, var_t k) { assert(false); } // TODO error
-static var_t vtbl_lookup(var_t t, var_t k) { return tbl_lookup(t.tbl, k); }
+static var_t nil_lookup(var_t t, var_t k, veh_t *eh)  { err_undefined(eh); }
+static var_t vtbl_lookup(var_t t, var_t k, veh_t *eh) { return tbl_lookup(t.tbl, k); }
 
-var_t var_lookup(var_t v, var_t key) {
-    static var_t (* const var_lookups[8])(var_t, var_t) = {
+var_t var_lookup(var_t v, var_t key, veh_t *eh) {
+    static var_t (* const var_lookups[8])(var_t, var_t, veh_t *) = {
         nil_lookup, nil_lookup, nil_lookup, nil_lookup,
         vtbl_lookup, nil_lookup, nil_lookup, nil_lookup
     };
 
-    return var_lookups[v.type](v, key);
+    return var_lookups[v.type](v, key, eh);
 }
 
-static var_t nil_lookdn(var_t t, var_t k, len_t i) { assert(false); } // TODO errors
-static var_t vtbl_lookdn(var_t t, var_t k, len_t i) { return tbl_lookdn(t.tbl, k, i); }
+static var_t nil_lookdn(var_t t, var_t k, len_t i, veh_t *eh)  { err_undefined(eh); }
+static var_t vtbl_lookdn(var_t t, var_t k, len_t i, veh_t *eh) { return tbl_lookdn(t.tbl, k, i); }
 
-var_t var_lookdn(var_t v, var_t key, len_t i) {
-    static var_t (* const var_lookdns[8])(var_t, var_t, len_t) = {
+var_t var_lookdn(var_t v, var_t key, len_t i, veh_t *eh) {
+    static var_t (* const var_lookdns[8])(var_t, var_t, len_t, veh_t *) = {
         nil_lookdn, nil_lookdn, nil_lookdn, nil_lookdn,
         vtbl_lookdn, nil_lookdn, nil_lookdn, nil_lookdn
     };
 
-    return var_lookdns[v.type](v, key, i);
+    return var_lookdns[v.type](v, key, i, eh);
 }
 
 
-static void nil_insert(var_t t, var_t k, var_t v) { assert(false); } // TODO error
-static void vtbl_insert(var_t t, var_t k, var_t v) { tbl_insert(t.tbl, k, v); }
+static void nil_insert(var_t t, var_t k, var_t v, veh_t *eh)  { err_undefined(eh); }
+static void vtbl_insert(var_t t, var_t k, var_t v, veh_t *eh) { tbl_insert(t.tbl, k, v, eh); }
 
-void var_insert(var_t v, var_t key, var_t val) {
-    static void (* const var_inserts[8])(var_t, var_t, var_t) = {
+void var_insert(var_t v, var_t key, var_t val, veh_t *eh) {
+    static void (* const var_inserts[8])(var_t, var_t, var_t, veh_t *) = {
         nil_insert, nil_insert, nil_insert, nil_insert,
         vtbl_insert, nil_insert, nil_insert, nil_insert
     };
 
-    var_inserts[v.type](v, key, val);
+    var_inserts[v.type](v, key, val, eh);
 }
 
 
-static void nil_assign(var_t t, var_t k, var_t v) { assert(false); } // TODO error
-static void vtbl_assign(var_t t, var_t k, var_t v) { tbl_assign(t.tbl, k, v); }
+static void nil_assign(var_t t, var_t k, var_t v, veh_t *eh)  { err_undefined(eh); }
+static void vtbl_assign(var_t t, var_t k, var_t v, veh_t *eh) { tbl_assign(t.tbl, k, v, eh); }
 
-void var_assign(var_t v, var_t key, var_t val) {
-    static void (* const var_assigns[8])(var_t, var_t, var_t) = {
+void var_assign(var_t v, var_t key, var_t val, veh_t *eh) {
+    static void (* const var_assigns[8])(var_t, var_t, var_t, veh_t *) = {
         nil_assign, nil_assign, nil_assign, nil_assign,
         vtbl_assign, nil_assign, nil_assign, nil_assign
     };
 
-    var_assigns[v.type](v, key, val);
+    var_assigns[v.type](v, key, val, eh);
 }
 
 
-static void nil_add(var_t t, var_t v) { assert(false); } // TODO error
-static void vtbl_add(var_t t, var_t v) { tbl_add(t.tbl, v); }
+static void nil_add(var_t t, var_t v, veh_t *eh)  { err_undefined(eh); }
+static void vtbl_add(var_t t, var_t v, veh_t *eh) { tbl_add(t.tbl, v, eh); }
 
-void var_add(var_t v, var_t val) {
-    static void (* const var_adds[8])(var_t, var_t) = {
+void var_add(var_t v, var_t val, veh_t *eh) {
+    static void (* const var_adds[8])(var_t, var_t, veh_t *) = {
         nil_add, nil_add, nil_add, nil_add,
         vtbl_add, nil_add, nil_add, nil_add
     };
 
-    var_adds[v.type](v, val);
+    var_adds[v.type](v, val, eh);
 }
 
 
 // Function calls performed on variables
-static var_t nil_call(var_t f, tbl_t *a)  { assert(false); } // TODO error
-static var_t vfn_call(var_t f, tbl_t *a)  { f.meta &= ~3; return fn_call(f.fn, a, f.tbl); }
-static var_t vbfn_call(var_t f, tbl_t *a) { f.meta &= ~3; return f.bfn(a); }
-static var_t vsfn_call(var_t f, tbl_t *a) { f.meta &= ~3; return f.sfn(a, f.tbl); }
+static var_t nil_call(var_t f, tbl_t *a, veh_t *eh)  { err_undefined(eh); }
+static var_t vfn_call(var_t f, tbl_t *a, veh_t *eh)  { f.meta &= ~3; return fn_call(f.fn, a, f.tbl, eh); }
+static var_t vbfn_call(var_t f, tbl_t *a, veh_t *eh) { f.meta &= ~3; return f.bfn(a, eh); }
+static var_t vsfn_call(var_t f, tbl_t *a, veh_t *eh) { f.meta &= ~3; return f.sfn(a, f.tbl, eh); }
 
-var_t var_call(var_t v, tbl_t *args) {
-    static var_t (* const var_calls[8])(var_t, tbl_t *) = {
+var_t var_call(var_t v, tbl_t *args, veh_t *eh) {
+    static var_t (* const var_calls[8])(var_t, tbl_t *, veh_t *) = {
         nil_call, nil_call, vbfn_call, vsfn_call, 
         nil_call, nil_call, nil_call, vfn_call
     };
 
-    return var_calls[v.type](v, args);
+    return var_calls[v.type](v, args, eh);
 }
 

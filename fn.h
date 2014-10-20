@@ -24,8 +24,8 @@ struct fn {
 // Functions for managing functions
 // Each function is preceded with a reference count
 // which is used as its handle in a var
-fn_t *fn_create(tbl_t *args, var_t code);
-fn_t *fn_create_nested(tbl_t *args, void *vs);
+fn_t *fn_create(tbl_t *args, var_t code, veh_t *eh);
+fn_t *fn_create_nested(tbl_t *args, void *vs, veh_t *eh);
 
 // Called by garbage collector to clean up
 void fn_destroy(void *);
@@ -36,11 +36,11 @@ v_fn var_t fn_unpack(tbl_t *args, tbl_t *scope);
 
 // Call a function. Each function takes a table
 // of arguments, and returns a single variable.
-var_t fn_call(fn_t *, tbl_t *args, tbl_t *scope);
+var_t fn_call(fn_t *, tbl_t *args, tbl_t *scope, veh_t *eh);
 
 
 // Returns a string representation of a function
-var_t fn_repr(var_t v);
+var_t fn_repr(var_t v, veh_t *eh);
 
 
 // Function reference counting

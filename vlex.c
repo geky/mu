@@ -5,8 +5,6 @@
 #include "num.h"
 #include "str.h"
 
-#include <assert.h>
-
 
 // Creates internal tables for keywords or uses prexisting.
 // Use this to initialize an op table if nescessary.
@@ -14,23 +12,24 @@ __attribute__((const))
 tbl_t *vkeys(void) {
     // Currently this is initialized at runtime
     // TODO compile them?
+    // TODO currently assumes failure is impossible
     static tbl_t *vkeyt = 0;
 
     if (vkeyt) return vkeyt;
 
-    vkeyt = tbl_create(0);
-    tbl_insert(vkeyt, vcstr("nil"), vraw(VT_NIL));
-    tbl_insert(vkeyt, vcstr("fn"), vraw(VT_FN));
-    tbl_insert(vkeyt, vcstr("let"), vraw(VT_LET));
-    tbl_insert(vkeyt, vcstr("return"), vraw(VT_RETURN));
-    tbl_insert(vkeyt, vcstr("if"), vraw(VT_IF));
-    tbl_insert(vkeyt, vcstr("while"), vraw(VT_WHILE));
-    tbl_insert(vkeyt, vcstr("for"), vraw(VT_FOR));
-    tbl_insert(vkeyt, vcstr("continue"), vraw(VT_CONT));
-    tbl_insert(vkeyt, vcstr("break"), vraw(VT_BREAK));
-    tbl_insert(vkeyt, vcstr("else"), vraw(VT_ELSE));
-    tbl_insert(vkeyt, vcstr("and"), vraw(VT_AND));
-    tbl_insert(vkeyt, vcstr("or"), vraw(VT_OR));
+    vkeyt = tbl_create(0, 0);
+    tbl_insert(vkeyt, vcstr("nil"), vraw(VT_NIL), 0);
+    tbl_insert(vkeyt, vcstr("fn"), vraw(VT_FN), 0);
+    tbl_insert(vkeyt, vcstr("let"), vraw(VT_LET), 0);
+    tbl_insert(vkeyt, vcstr("return"), vraw(VT_RETURN), 0);
+    tbl_insert(vkeyt, vcstr("if"), vraw(VT_IF), 0);
+    tbl_insert(vkeyt, vcstr("while"), vraw(VT_WHILE), 0);
+    tbl_insert(vkeyt, vcstr("for"), vraw(VT_FOR), 0);
+    tbl_insert(vkeyt, vcstr("continue"), vraw(VT_CONT), 0);
+    tbl_insert(vkeyt, vcstr("break"), vraw(VT_BREAK), 0);
+    tbl_insert(vkeyt, vcstr("else"), vraw(VT_ELSE), 0);
+    tbl_insert(vkeyt, vcstr("and"), vraw(VT_AND), 0);
+    tbl_insert(vkeyt, vcstr("or"), vraw(VT_OR), 0);
     
     return vkeyt;
 }
@@ -96,7 +95,7 @@ static void vskip(vstate_t *vs) {
 
 __attribute__((noreturn))
 static void vl_bad(vstate_t *vs) {
-    assert(false); //TODO: errors: bad parse
+    err_parse(vs->eh);
 }
 
 static void vl_ws(vstate_t *vs) {
@@ -188,7 +187,7 @@ static void vl_num(vstate_t *vs) {
 
 static void vl_str(vstate_t *vs) {
     vs->tok = VT_LIT;
-    vs->val = str_parse(&vs->pos, vs->end);
+    vs->val = str_parse(&vs->pos, vs->end, vs->eh);
 }
 
 

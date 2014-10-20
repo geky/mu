@@ -3,7 +3,6 @@
 #include "vlex.h"
 #include "tbl.h"
 
-#include <assert.h>
 #include <stdio.h>
 
 
@@ -12,7 +11,7 @@
 __attribute__((noreturn))
 static void _vunexpected(vstate_t *vs, const char *fn) {
     printf("\033[31munexpected (%d) in %s\033[0m\n", vs->tok, fn);
-    assert(false); // TODO make this throw actual messages
+    err_parse(vs->eh);
 }
 
 // Expect a token or fail
@@ -20,7 +19,7 @@ static void _vunexpected(vstate_t *vs, const char *fn) {
 static void _vexpect(vstate_t *vs, vtok_t tok, const char *fn) {
     if (vs->tok != tok) {
         printf("\033[31mexpected (%d) not (%d) in %s\033[0m\n", tok, vs->tok, fn);
-        assert(false); // TODO errors
+        err_parse(vs->eh);
     }
 
     vlex(vs);
@@ -33,11 +32,13 @@ static void venlarge(vstate_t *vs, int count) {
     fn->ins += count;
 
     while (fn->ins > fn->len) {
-        assert(((int)fn->len << 1) <= VMAXLEN); // TODO errors
+        if (((int)fn->len << 1) > VMAXLEN)
+            err_len(vs->eh);
+
         fn->len <<= 1;
     }
         
-    fn->bcode = vrealloc(fn->bcode, fn->len, fn->len << 1);
+    fn->bcode = v_realloc(fn->bcode, fn->len, fn->len << 1, vs->eh);
 }
 
 static void venlargein(vstate_t *vs, int count, int ins) {
@@ -91,24 +92,24 @@ static varg_t vaccvar(vstate_t *vs, var_t v) {
         return index.data;
 
     varg_t arg = vs->fn->vars->len;
-    tbl_assign(vs->fn->vars, v, vraw(arg));
+    tbl_assign(vs->fn->vars, v, vraw(arg), vs->eh);
     return arg;
 }
 
 static void vpatch(vstate_t *vs, tbl_t *jtbl, int ins) {
-    tbl_for(k, v, jtbl, {
+    tbl_for_begin (k, v, jtbl) {
         vinserta(vs, VJUMP, ins - (v.data+vs->jsize), v.data);
-    });
+    } tbl_for_end;
 
     tbl_dec(jtbl);
 }
 
-static tbl_t *vrevargs(tbl_t *args) {
-    tbl_t *res = tbl_create(0);
+static tbl_t *vrevargs(tbl_t *args, veh_t *eh) {
+    tbl_t *res = tbl_create(0, eh);
     int i;
 
     for (i = args->len-1; i >= 0; i--) {
-        tbl_add(res, tbl_lookup(args, vnum(i)));
+        tbl_add(res, tbl_lookup(args, vnum(i)), eh);
     }
 
     tbl_dec(args);
@@ -118,7 +119,7 @@ static tbl_t *vrevargs(tbl_t *args) {
 static void vunpack(vstate_t *vs, tbl_t *map) {
     venc(vs, VSCOPE);
 
-    tbl_for(k, v, map, {
+    tbl_for_begin (k, v, map) {
         if (v.type == TYPE_TBL) {
             venca(vs, VDUP, 1);
             venc(vs, VNIL);
@@ -131,7 +132,7 @@ static void vunpack(vstate_t *vs, tbl_t *map) {
             venca(vs, VLOOKDN, var_num(k));
             venc(vs, VINSERT);
         }
-    });
+    } tbl_for_end;
 
     venc(vs, VDROP);
     venc(vs, VDROP);
@@ -204,8 +205,8 @@ static void vp_fn(vstate_t *vs) {
     struct vfnstate *f = vs->fn;
     struct vjstate j = vs->j;
 
-    fn_t *fn = fn_create_nested(args, vs);
-    tbl_add(f->fns, vraw((uint32_t)fn));
+    fn_t *fn = fn_create_nested(args, vs, vs->eh);
+    tbl_add(f->fns, vraw((uint32_t)fn), vs->eh);
 
     vs->j = j;
     vs->fn = f;
@@ -242,8 +243,8 @@ static void vp_if(vstate_t *vs) {
 static void vp_while(vstate_t *vs) {
     if (!vs->stmt) venc(vs, VTBL);
     struct vjstate j = vs->j;
-    vs->j.ctbl = tbl_create(0);
-    vs->j.btbl = tbl_create(0);
+    vs->j.ctbl = tbl_create(0, vs->eh);
+    vs->j.btbl = tbl_create(0, vs->eh);
     int w_ins = vs->fn->ins;
 
     vexpect(vs, '(');
@@ -272,13 +273,14 @@ static void vp_while(vstate_t *vs) {
 
 static void vp_for(vstate_t *vs) {
     if (!vs->stmt) venc(vs, VTBL);
+
     struct vjstate j = vs->j;
-    vs->j.ctbl = tbl_create(0);
-    vs->j.btbl = tbl_create(0);
+    vs->j.ctbl = tbl_create(0, vs->eh);
+    vs->j.btbl = tbl_create(0, vs->eh);
 
     vexpect(vs, '(');
     vp_args(vs);
-    tbl_t *args = vrevargs(vs->args);
+    tbl_t *args = vrevargs(vs->args, vs->eh);
     vexpect(vs, VT_SET);
     vp_value(vs);
     venc(vs, VITER);
@@ -507,14 +509,14 @@ static void vp_args_entry(vstate_t *vs) {
         case VT_FOR:
         case VT_IDENT:  
         case VT_NIL:
-        case VT_LIT:    tbl_add(vs->args, vs->val);
+        case VT_LIT:    tbl_add(vs->args, vs->val, vs->eh);
                         vlex(vs);
                         return vp_args_follow(vs);
 
         case '[':       {   tbl_t *args = vs->args;
                             vlex(vs);
                             vp_args(vs);
-                            tbl_add(args, vtbl(vs->args));
+                            tbl_add(args, vtbl(vs->args), vs->eh);
                             vs->args = args;
                         }
                         vexpect(vs, ']');
@@ -525,7 +527,7 @@ static void vp_args_entry(vstate_t *vs) {
 }
 
 static void vp_args(vstate_t *vs) {
-    vs->args = tbl_create(0);
+    vs->args = tbl_create(0, vs->eh);
 
     return vp_args_entry(vs);
 }
@@ -692,13 +694,13 @@ static void vp_stmt(vstate_t *vs) {
 
         case VT_CONT:   if (!vs->j.ctbl) vunexpected(vs);
                         vlex(vs);
-                        tbl_add(vs->j.ctbl, vraw(vs->fn->ins));
+                        tbl_add(vs->j.ctbl, vraw(vs->fn->ins), vs->eh);
                         venlarge(vs, vs->jsize);
                         return;
 
         case VT_BREAK:  if (!vs->j.btbl) vunexpected(vs);
                         vlex(vs);
-                        tbl_add(vs->j.btbl, vraw(vs->fn->ins));
+                        tbl_add(vs->j.btbl, vraw(vs->fn->ins), vs->eh);
                         venlarge(vs, vs->jsize);
                         return;
 

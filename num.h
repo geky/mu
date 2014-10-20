@@ -22,7 +22,7 @@ hash_t num_hash(var_t v);
 var_t num_parse(const str_t **off, const str_t *end);
 
 // Obtains a string representation of a number
-var_t num_repr(var_t v);
+var_t num_repr(var_t v, veh_t *eh);
 
 
 // Checks to see if a number is equivalent to its hash

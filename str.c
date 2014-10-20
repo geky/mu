@@ -3,12 +3,10 @@
 #include "num.h"
 #include "mem.h"
 
-#include <assert.h>
-
 
 // Functions for creating strings
-str_t *str_create(len_t size) {
-    len_t *len = vref_alloc(size + sizeof(len_t));
+str_t *str_create(len_t size, veh_t *eh) {
+    len_t *len = vref_alloc(size + sizeof(len_t), eh);
     *len = size;
 
     return (str_t *)(len + 1);
@@ -40,14 +38,14 @@ hash_t str_hash(var_t v) {
 }
 
 // Parses a string and returns a string
-var_t str_parse(const str_t **off, const str_t *end) {
+var_t str_parse(const str_t **off, const str_t *end, veh_t *eh) {
     const str_t *str = *off + 1;
     str_t quote = **off;
     int size = 0;
 
     while (*str != quote) {
         if (str == end)
-            assert(false); // TODO error here: unterminated string
+            err_parse(eh); // Unterminated string
 
         if (*str == '\\' && end-str >= 2) {
             switch (str[1]) {
@@ -102,9 +100,10 @@ var_t str_parse(const str_t **off, const str_t *end) {
         }
     }
 
-    assert(size <= VMAXLEN); // TODO error
+    if (size > VMAXLEN)
+        err_len(eh);
 
-    str_t *out = str_create(size);
+    str_t *out = str_create(size, eh);
     str_t *res = out;
     str = *off + 1;
 
@@ -158,7 +157,7 @@ var_t str_parse(const str_t **off, const str_t *end) {
 
 
 // Returns a string representation of a string
-var_t str_repr(var_t v) {
+var_t str_repr(var_t v, veh_t *eh) {
     const str_t *str = var_str(v);    
     const str_t *end = str + v.len;
     int size = 2;
@@ -185,9 +184,10 @@ var_t str_repr(var_t v) {
         str++;
     }
 
-    assert(size <= VMAXLEN); // TODO assert on size
+    if (size > VMAXLEN)
+        err_len(eh);
 
-    str_t *out = str_create(size);
+    str_t *out = str_create(size, eh);
     str_t *res = out;
     str = var_str(v);
 

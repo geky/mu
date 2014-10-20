@@ -47,8 +47,8 @@ typedef struct fn fn_t;
 
 // Base functions
 #define v_fn __attribute__((aligned(8)))
-typedef v_fn struct var bfn_t(tbl_t *a);
-typedef v_fn struct var sfn_t(tbl_t *a, tbl_t *s);
+typedef v_fn struct var bfn_t(tbl_t *a, veh_t *eh);
+typedef v_fn struct var sfn_t(tbl_t *a, tbl_t *s, veh_t *eh);
 
 
 // Actual var type declariation
@@ -227,23 +227,23 @@ bool var_equals(var_t a, var_t b);
 hash_t var_hash(var_t var);
 
 // Performs iteration on variables
-var_t var_iter(var_t v);
+var_t var_iter(var_t v, veh_t *eh);
 
 // Returns a string representation of the variable
-var_t var_repr(var_t v);
+var_t var_repr(var_t v, veh_t *eh);
 
 // Prints variable to stdout for debugging
-void var_print(var_t v);
+void var_print(var_t v, veh_t *eh);
 
 // Table related functions performed on variables
-var_t var_lookup(var_t v, var_t key);
-var_t var_lookdn(var_t v, var_t key, len_t i);
-void var_assign(var_t v, var_t key, var_t val);
-void var_insert(var_t v, var_t key, var_t val);
-void var_add(var_t v, var_t val);
+var_t var_lookup(var_t v, var_t key, veh_t *eh);
+var_t var_lookdn(var_t v, var_t key, len_t i, veh_t *eh);
+void var_assign(var_t v, var_t key, var_t val, veh_t *eh);
+void var_insert(var_t v, var_t key, var_t val, veh_t *eh);
+void var_add(var_t v, var_t val, veh_t *eh);
 
 // Function calls performed on variables
-var_t var_call(var_t v, tbl_t *args);
+var_t var_call(var_t v, tbl_t *args, veh_t *eh);
 
 
 #endif

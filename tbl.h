@@ -39,7 +39,7 @@ struct tbl {
 // Functions for managing tables
 // Each table is preceeded with a reference count
 // which is used as its handle in a var
-tbl_t *tbl_create(len_t size);
+tbl_t *tbl_create(len_t size, veh_t *eh);
 
 // Called by garbage collector to clean up
 void tbl_destroy(void *);
@@ -55,28 +55,28 @@ var_t tbl_lookdn(tbl_t *, var_t key, len_t i);
 
 // Recursively assigns a value in the table with the given key
 // decends down the tail chain until its found
-void tbl_assign(tbl_t *, var_t key, var_t val);
+void tbl_assign(tbl_t *, var_t key, var_t val, veh_t *eh);
 
 // Inserts a value in the table with the given key
 // without decending down the tail chain
-void tbl_insert(tbl_t *, var_t key, var_t val);
+void tbl_insert(tbl_t *, var_t key, var_t val, veh_t *eh);
 
 // Sets the next index in the table with the value
-void tbl_add(tbl_t *, var_t val);
+void tbl_add(tbl_t *, var_t val, veh_t *eh);
 
 
 // Performs iteration on a table
-var_t tbl_iter(var_t v);
+var_t tbl_iter(var_t v, veh_t *eh);
 
 // Returns a string representation of the table
-var_t tbl_repr(var_t v);
+var_t tbl_repr(var_t v, veh_t *eh);
 
 
 
 // Macro for iterating through a table in c
 // Assign names for k and v, and pass in the 
 // block to execute for each pair in tbl
-#define tbl_for(k, v, tbl, block) {                 \
+#define tbl_for_begin(k, v, tbl) {                  \
     var_t k;                                        \
     var_t v;                                        \
     tbl_t *_t = tbl_readp(tbl);                     \
@@ -99,8 +99,9 @@ var_t tbl_repr(var_t v);
                     continue;                       \
                 break;                              \
         }                                           \
-                                                    \
-        {block};                                    \
+{
+#define tbl_for_end                                 \
+}                                                   \
         _c--;                                       \
     }                                               \
 }
@@ -119,8 +120,10 @@ static inline tbl_t *tbl_readp(tbl_t *tbl) {
     return (tbl_t *)(~0x1 & (uint32_t)tbl);
 }
 
-static inline tbl_t *tbl_writep(tbl_t *tbl) {
-    assert(!tbl_isro(tbl)); // TODO error on const tbl
+static inline tbl_t *tbl_writep(tbl_t *tbl, veh_t *eh) {
+    if (tbl_isro(tbl))
+        err_ro(eh);
+
     return tbl;
 }
 

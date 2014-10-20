@@ -71,6 +71,8 @@ struct vstate {
     const str_t *str;
     const str_t *pos;
     const str_t *end;
+
+    veh_t *eh;
 };
 
 
