@@ -1,10 +1,10 @@
-TARGET = v
+TARGET = mu
 
 CC = gcc
 
 SRC := var.c num.c str.c tbl.c fn.c
 SRC += err.c mem.c
-SRC += vparse.c vlex.c vm.c
+SRC += parse.c lex.c vm.c
 SRC += main.c
 OBJ := $(SRC:.c=.o)
 ASM := $(OBJ:.o=.s)
@@ -24,7 +24,7 @@ all: $(TARGET)
 
 asm: $(ASM)
 
-v: $(OBJ)
+mu: $(OBJ)
 	$(CC) $(CFLAGS) $^ $(LFLAGS) -o $@
 
 %.o: %.c

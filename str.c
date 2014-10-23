@@ -5,8 +5,8 @@
 
 
 // Functions for creating strings
-str_t *str_create(len_t size, veh_t *eh) {
-    len_t *len = vref_alloc(size + sizeof(len_t), eh);
+str_t *str_create(len_t size, eh_t *eh) {
+    len_t *len = ref_alloc(size + sizeof(len_t), eh);
     *len = size;
 
     return (str_t *)(len + 1);
@@ -14,18 +14,18 @@ str_t *str_create(len_t size, veh_t *eh) {
 
 // Called by garbage collector to clean up
 void str_destroy(void *m) {
-    vref_dealloc(m, *(len_t *)m + sizeof(len_t));
+    ref_dealloc(m, *(len_t *)m + sizeof(len_t));
 }
 
 // Returns true if both variables are equal
 bool str_equals(var_t a, var_t b) {
-    return (a.len == b.len) && !memcmp(var_str(a), var_str(b), a.len);
+    return (a.len == b.len) && !memcmp(getstr(a), getstr(b), a.len);
 }
 
 // Returns a hash for each string
 // based off the djb2 algorithm
 hash_t str_hash(var_t v) {
-    const str_t *str = var_str(v);
+    const str_t *str = getstr(v);
     const str_t *end = str + v.len;
     hash_t hash = 5381;
 
@@ -38,45 +38,45 @@ hash_t str_hash(var_t v) {
 }
 
 // Parses a string and returns a string
-var_t str_parse(const str_t **off, const str_t *end, veh_t *eh) {
-    const str_t *str = *off + 1;
+var_t str_parse(const str_t **off, const str_t *end, eh_t *eh) {
+    const str_t *pos = *off + 1;
     str_t quote = **off;
     int size = 0;
 
-    while (*str != quote) {
-        if (str == end)
+    while (*pos != quote) {
+        if (pos == end)
             err_parse(eh); // Unterminated string
 
-        if (*str == '\\' && end-str >= 2) {
-            switch (str[1]) {
+        if (*pos == '\\' && end-pos >= 2) {
+            switch (pos[1]) {
                 case 'o': 
-                    if (end-str >= 5 && num_val(str[2]) < 8 &&
-                                        num_val(str[3]) < 8 &&
-                                        num_val(str[4]) < 8) {
+                    if (end-pos >= 5 && num_val(pos[2]) < 8 &&
+                                        num_val(pos[3]) < 8 &&
+                                        num_val(pos[4]) < 8) {
                         size++;
-                        str += 5;
+                        pos += 5;
                     }
                     break;
                 
                 case 'd':
-                    if (end-str >= 5 && num_val(str[2]) < 10 &&
-                                        num_val(str[3]) < 10 &&
-                                        num_val(str[4]) < 10) {
+                    if (end-pos >= 5 && num_val(pos[2]) < 10 &&
+                                        num_val(pos[3]) < 10 &&
+                                        num_val(pos[4]) < 10) {
                         size++;
-                        str += 5;
+                        pos += 5;
                     }
                     break;
 
                 case 'x':
-                    if (end-str >= 4 && num_val(str[2]) < 16 &&
-                                        num_val(str[3]) < 16) {
+                    if (end-pos >= 4 && num_val(pos[2]) < 16 &&
+                                        num_val(pos[3]) < 16) {
                         size++;
-                        str += 4;
+                        pos += 4;
                     }
                     break;
 
                 case '\n': 
-                    str += 2;
+                    pos += 2;
                     break;
 
                 case '\\':
@@ -91,81 +91,81 @@ var_t str_parse(const str_t **off, const str_t *end, veh_t *eh) {
                 case 'v':
                 case '0': 
                     size++;
-                    str += 2;
+                    pos += 2;
                     break;
             }
         } else {
             size++;
-            str++;
+            pos++;
         }
     }
 
-    if (size > VMAXLEN)
+    if (size > MU_MAXLEN)
         err_len(eh);
 
     str_t *out = str_create(size, eh);
     str_t *res = out;
-    str = *off + 1;
+    pos = *off + 1;
 
-    while (*str != quote) {
-        if (*str == '\\') {
-            switch (str[1]) {
+    while (*pos != quote) {
+        if (*pos == '\\') {
+            switch (pos[1]) {
                 case 'o':
-                    *res++ = num_val(str[2])*7*7 +
-                             num_val(str[3])*7 +
-                             num_val(str[4]);
-                    str += 4;
+                    *res++ = num_val(pos[2])*7*7 +
+                             num_val(pos[3])*7 +
+                             num_val(pos[4]);
+                    pos += 4;
                     break;
 
                 case 'd':
-                    *res++ = num_val(str[2])*10*10 +
-                             num_val(str[3])*10 +
-                             num_val(str[4]);
-                    str += 4;
+                    *res++ = num_val(pos[2])*10*10 +
+                             num_val(pos[3])*10 +
+                             num_val(pos[4]);
+                    pos += 4;
                     break;
 
                 case 'x':
-                    *res++ = num_val(str[2])*16 +
-                             num_val(str[3]);
-                    str += 3;
+                    *res++ = num_val(pos[2])*16 +
+                             num_val(pos[3]);
+                    pos += 3;
                     break;
 
-                case '\n': str += 2; break;
-                case '\\': *res++ = '\\'; str += 2; break;
-                case '\'': *res++ = '\''; str += 2; break;
-                case '"':  *res++ = '"';  str += 2; break;
-                case 'a':  *res++ = '\a'; str += 2; break;
-                case 'b':  *res++ = '\b'; str += 2; break;
-                case 'f':  *res++ = '\f'; str += 2; break;
-                case 'n':  *res++ = '\n'; str += 2; break;
-                case 'r':  *res++ = '\r'; str += 2; break;
-                case 't':  *res++ = '\t'; str += 2; break;
-                case 'v':  *res++ = '\v'; str += 2; break;
-                case '0':  *res++ = '\0'; str += 2; break;
-                default:   *res++ = '\\'; str += 1; break;
+                case '\n': pos += 2; break;
+                case '\\': *res++ = '\\'; pos += 2; break;
+                case '\'': *res++ = '\''; pos += 2; break;
+                case '"':  *res++ = '"';  pos += 2; break;
+                case 'a':  *res++ = '\a'; pos += 2; break;
+                case 'b':  *res++ = '\b'; pos += 2; break;
+                case 'f':  *res++ = '\f'; pos += 2; break;
+                case 'n':  *res++ = '\n'; pos += 2; break;
+                case 'r':  *res++ = '\r'; pos += 2; break;
+                case 't':  *res++ = '\t'; pos += 2; break;
+                case 'v':  *res++ = '\v'; pos += 2; break;
+                case '0':  *res++ = '\0'; pos += 2; break;
+                default:   *res++ = '\\'; pos += 1; break;
             }
         } else {
-            *res++ = *str++;
+            *res++ = *pos++;
         }
     }
 
 
-    *off = str + 1;
+    *off = pos + 1;
 
     return vstr(out, 0, size);
 }
 
 
 // Returns a string representation of a string
-var_t str_repr(var_t v, veh_t *eh) {
-    const str_t *str = var_str(v);    
-    const str_t *end = str + v.len;
+var_t str_repr(var_t v, eh_t *eh) {
+    const str_t *pos = getstr(v);    
+    const str_t *end = pos + v.len;
     int size = 2;
 
-    while (str < end) {
-        if (*str < ' ' || *str > '~' || 
-            *str == '\\' || *str == '\'') {
-            switch (*str) {
+    while (pos < end) {
+        if (*pos < ' ' || *pos > '~' || 
+            *pos == '\\' || *pos == '\'') {
+            switch (*pos) {
                 case '\'':
                 case '\\':
                 case '\a':
@@ -181,24 +181,24 @@ var_t str_repr(var_t v, veh_t *eh) {
         }
 
         size++;
-        str++;
+        pos++;
     }
 
-    if (size > VMAXLEN)
+    if (size > MU_MAXLEN)
         err_len(eh);
 
     str_t *out = str_create(size, eh);
     str_t *res = out;
-    str = var_str(v);
+    pos = getstr(v);
 
     *res++ = '\'';
 
-    while (str < end) {
-        if (*str < ' ' || *str > '~' || 
-            *str == '\\' || *str == '\'') {
+    while (pos < end) {
+        if (*pos < ' ' || *pos > '~' || 
+            *pos == '\\' || *pos == '\'') {
             *res++ = '\\';
 
-            switch (*str) {
+            switch (*pos) {
                 case '\\': *res++ = '\\'; break;
                 case '\'': *res++ = '\''; break;
                 case '\a': *res++ = 'a'; break;
@@ -211,15 +211,15 @@ var_t str_repr(var_t v, veh_t *eh) {
                 case '\0': *res++ = '0'; break;
                 default:
                     *res++ = 'x';
-                    *res++ = num_ascii(*str / 16);
-                    *res++ = num_ascii(*str % 16);
+                    *res++ = num_ascii(*pos / 16);
+                    *res++ = num_ascii(*pos % 16);
                     break;
             }
         } else {
-            *res++ = *str;
+            *res++ = *pos;
         }
 
-        str++;
+        pos++;
     }
 
     *res++ = '\'';

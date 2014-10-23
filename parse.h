@@ -1,40 +1,32 @@
 /*
- *  Parser for V
+ *  Parser for Mu
  */
 
-#ifndef V_PARSE
-#define V_PARSE
+#ifndef MU_PARSE_H
+#define MU_PARSE_H
 
 #include "var.h"
 #include "vm.h"
 
 
 // Parsing type definitions
-typedef uint8_t vtok_t;
-typedef struct vstate vstate_t;
-
-
-// Representation of parsing product
-enum vproduct {
-    VP_NONE = 0,
-    VP_REF  = 1,
-    VP_VAL  = 2
-};
+typedef uint8_t mtok_t;
+typedef struct mstate mstate_t;
 
 
 // Specific state structures
-struct vopstate {
+struct opstate {
     len_t ins;
     uint8_t lprec;
     uint8_t rprec;
 };
 
-struct vjstate {
+struct jstate {
     tbl_t *ctbl;
     tbl_t *btbl;
 };
 
-struct vfnstate {
+struct fnstate {
     str_t *bcode;
 
     len_t stack;
@@ -46,10 +38,10 @@ struct vfnstate {
 };
 
 // State of a parse
-struct vstate {
-    struct vfnstate *fn;
-    struct vjstate j;
-    struct vopstate op;
+struct mstate {
+    struct fnstate *fn;
+    struct jstate j;
+    struct opstate op;
     tbl_t *args;
 
     tbl_t *keys;
@@ -64,7 +56,7 @@ struct vstate {
     uint8_t jtsize;
     uint8_t jfsize;
 
-    vtok_t tok;
+    mtok_t tok;
     var_t val;
 
     ref_t *ref;
@@ -72,14 +64,14 @@ struct vstate {
     const str_t *pos;
     const str_t *end;
 
-    veh_t *eh;
+    eh_t *eh;
 };
 
 
-// Parses V source into bytecode
-void vparse_init(vstate_t *vs, var_t code);
-void vparse_args(vstate_t *vs, tbl_t *args);
-void vparse_top(vstate_t *vs);
-void vparse_nested(vstate_t *vs);
+// Parses Mu source into bytecode
+void mu_parse_init(mstate_t *vs, var_t code);
+void mu_parse_args(mstate_t *vs, tbl_t *args);
+void mu_parse_top(mstate_t *vs);
+void mu_parse_nested(mstate_t *vs);
 
 #endif

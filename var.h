@@ -2,8 +2,8 @@
  *  Variable types and definitions
  */
 
-#ifndef V_VAR
-#define V_VAR
+#ifndef MU_VAR_M
+#define MU_VAR_M
 
 #include "mem.h"
 
@@ -16,17 +16,17 @@
 // three bits of each var
 // Highest bit indicates if reference counted
 typedef enum type {
-    TYPE_NIL = 0x0, // nil - nil
-    TYPE_NUM = 0x1, // number - 12.3
+    MU_NIL = 0x0, // nil - nil
+    MU_NUM = 0x1, // number - 12.3
 
-    TYPE_BFN = 0x2, // builtin function
-    TYPE_SFN = 0x3, // builtin function with scope
+    MU_BFN = 0x2, // builtin function
+    MU_SFN = 0x3, // builtin function with scope
 
-    TYPE_TBL = 0x4, // table - ['a':1, 'b':2, 'c':3]
-    TYPE_OBJ = 0x5, // wrapped table - obj(['a':1, 'b':2])
+    MU_TBL = 0x4, // table - ['a':1, 'b':2, 'c':3]
+    MU_OBJ = 0x5, // wrapped table - obj(['a':1, 'b':2])
 
-    TYPE_STR = 0x6, // string - "hello"
-    TYPE_FN  = 0x7, // function - fn() { return 5 }
+    MU_STR = 0x6, // string - "hello"
+    MU_FN  = 0x7, // function - fn() { return 5 }
 } type_t;
 
 
@@ -34,7 +34,7 @@ typedef enum type {
 typedef uint32_t hash_t;
 
 // Length type bound to 16 bits for space consumption
-#define VMAXLEN 0xffff
+#define MU_MAXLEN 0xffff
 typedef uint16_t len_t;
 
 // Base types
@@ -46,9 +46,9 @@ typedef struct tbl tbl_t;
 typedef struct fn fn_t;
 
 // Base functions
-#define v_fn __attribute__((aligned(8)))
-typedef v_fn struct var bfn_t(tbl_t *a, veh_t *eh);
-typedef v_fn struct var sfn_t(tbl_t *a, tbl_t *s, veh_t *eh);
+#define mu_fn __attribute__((aligned(8)))
+typedef mu_fn struct var bfn_t(tbl_t *a, eh_t *eh);
+typedef mu_fn struct var sfn_t(tbl_t *a, tbl_t *s, eh_t *eh);
 
 
 // Actual var type declariation
@@ -97,26 +97,25 @@ typedef struct var {
 
 
 // properties of variables
-static inline bool var_isnil(var_t v) { return !v.meta; }
-static inline bool var_isnum(var_t v) { return v.type == TYPE_NUM; }
-static inline bool var_isstr(var_t v) { return v.type == TYPE_STR; }
-static inline bool var_istbl(var_t v) { return (6 & v.meta) == 4; }
-static inline bool var_isobj(var_t v) { return v.type == TYPE_OBJ; }
-static inline bool var_isfn(var_t v)  { return (6 & v.meta) == 2 || 
-                                               v.type == TYPE_FN; }
+static inline bool isnil(var_t v) { return !v.meta; }
+static inline bool isnum(var_t v) { return v.type == MU_NUM; }
+static inline bool isstr(var_t v) { return v.type == MU_STR; }
+static inline bool istbl(var_t v) { return (6 & v.meta) == 4; }
+static inline bool isobj(var_t v) { return v.type == MU_OBJ; }
+static inline bool isfn(var_t v)  { return (6 & v.meta) == 2 || v.type == MU_FN; }
 
 // definitions for accessing components
-static inline ref_t *var_ref(var_t v)  { v.type = 0; return v.ref; }
-static inline type_t var_type(var_t v) { return v.type; }
+static inline ref_t *getref(var_t v)  { v.type = 0; return v.ref; }
+static inline type_t gettype(var_t v) { return v.type; }
 
-static inline num_t var_num(var_t v)        { v.meta &= ~3; return v.num; }
-static inline const str_t *var_str(var_t v) { return v.str + v.off; }
-static inline tbl_t *var_tbl(var_t v)       { return v.tbl; }
-static inline fn_t *var_fn(var_t v)         { v.meta &= ~3; return v.fn; }
+static inline num_t getnum(var_t v)        { v.meta &= ~3; return v.num; }
+static inline const str_t *getstr(var_t v) { return v.str + v.off; }
+static inline tbl_t *gettbl(var_t v)       { return v.tbl; }
+static inline fn_t *getfn(var_t v)         { v.meta &= ~3; return v.fn; }
 
 
 // definitions of literal vars in C
-#define vnil ((var_t){{0}})
+#define vnil  ((var_t){{0}})
 #define vnan  vnum(NAN)
 #define vinf  vnum(INFINITY)
 #define vninf vnum(-INFINITY)
@@ -125,14 +124,14 @@ static inline fn_t *var_fn(var_t v)         { v.meta &= ~3; return v.fn; }
 static inline var_t vraw(uint32_t r) {
     var_t v;
     v.data = r;
-    v.type = TYPE_NUM;
+    v.type = MU_NUM;
     return v;
 }
 
 static inline var_t vnum(num_t n) {
     var_t v;
     v.num = n;
-    v.type = TYPE_NUM;
+    v.type = MU_NUM;
     return v;
 }
 
@@ -141,7 +140,7 @@ static inline var_t vstr(const str_t *s, len_t off, len_t len) {
     v.str = s;
     v.off = off;
     v.len = len;
-    v.type = TYPE_STR;
+    v.type = MU_STR;
     return v;
 }
 
@@ -149,7 +148,7 @@ static inline var_t vfn(fn_t *f, tbl_t *s) {
     var_t v;
     v.fn = f;
     v.tbl = s;
-    v.type = TYPE_FN;
+    v.type = MU_FN;
     return v;
 }
 
@@ -157,7 +156,7 @@ static inline var_t vtbl(tbl_t *t) {
     var_t v;
     v.ref = (ref_t*)t;
     v.tbl = t;
-    v.type = TYPE_TBL;
+    v.type = MU_TBL;
     return v;
 }
 
@@ -165,14 +164,14 @@ static inline var_t vobj(tbl_t *t) {
     var_t v;
     v.ref = (ref_t*)t;
     v.tbl = t;
-    v.type = TYPE_OBJ;
+    v.type = MU_OBJ;
     return v;
 }
 
 static inline var_t vbfn(bfn_t *f) {
     var_t v;
     v.bfn = f;
-    v.type = TYPE_BFN;
+    v.type = MU_BFN;
     return v;
 }
 
@@ -180,13 +179,14 @@ static inline var_t vsfn(sfn_t *f, tbl_t *s) {
     var_t v;
     v.sfn = f;
     v.tbl = s;
-    v.type = TYPE_SFN;
+    v.type = MU_SFN;
     return v;
 }
 
 #define vcstr(c) ({                         \
     static struct {                         \
-        ref_t r; len_t l;                   \
+        ref_t r;                            \
+        len_t l;                            \
         const str_t s[sizeof(c)-1];         \
     } _vcstr = { 1, sizeof(c)-1, {(c)}};    \
                                             \
@@ -202,9 +202,9 @@ extern void fn_destroy(void *);
 
 static inline void var_inc(var_t v) {
     if (4 & v.meta)
-        vref_inc(v.ref);
+        ref_inc(v.ref);
     if (!(3 & ~v.meta))
-        vref_inc(v.tbl);
+        ref_inc(v.tbl);
 }
 
 static inline void var_dec(var_t v) {
@@ -213,9 +213,9 @@ static inline void var_dec(var_t v) {
     };
 
     if (4 & v.meta)
-        vref_dec(v.ref, dtors[3 & v.meta]);
+        ref_dec(v.ref, dtors[3 & v.meta]);
     if (!(3 & ~v.meta))
-        vref_dec(v.tbl, tbl_destroy);
+        ref_dec(v.tbl, tbl_destroy);
 }
 
 
@@ -227,23 +227,23 @@ bool var_equals(var_t a, var_t b);
 hash_t var_hash(var_t var);
 
 // Performs iteration on variables
-var_t var_iter(var_t v, veh_t *eh);
+var_t var_iter(var_t v, eh_t *eh);
 
 // Returns a string representation of the variable
-var_t var_repr(var_t v, veh_t *eh);
+var_t var_repr(var_t v, eh_t *eh);
 
 // Prints variable to stdout for debugging
-void var_print(var_t v, veh_t *eh);
+void var_print(var_t v, eh_t *eh);
 
 // Table related functions performed on variables
-var_t var_lookup(var_t v, var_t key, veh_t *eh);
-var_t var_lookdn(var_t v, var_t key, len_t i, veh_t *eh);
-void var_assign(var_t v, var_t key, var_t val, veh_t *eh);
-void var_insert(var_t v, var_t key, var_t val, veh_t *eh);
-void var_add(var_t v, var_t val, veh_t *eh);
+var_t var_lookup(var_t v, var_t key, eh_t *eh);
+var_t var_lookdn(var_t v, var_t key, len_t i, eh_t *eh);
+void var_assign(var_t v, var_t key, var_t val, eh_t *eh);
+void var_insert(var_t v, var_t key, var_t val, eh_t *eh);
+void var_append(var_t v, var_t val, eh_t *eh);
 
 // Function calls performed on variables
-var_t var_call(var_t v, tbl_t *args, veh_t *eh);
+var_t var_call(var_t v, tbl_t *args, eh_t *eh);
 
 
 #endif

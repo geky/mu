@@ -2,51 +2,51 @@
  * Error Handling
  */
 
-#ifndef V_ERR
-#define V_ERR
+#ifndef MU_ERR_H
+#define MU_ERR_H
 
 #include <setjmp.h>
 
 
-// Definition of overhead for error handler in V
+// Definition of overhead for error handler in Mu
 extern jmp_buf _jmp_buf;
-typedef typeof(_jmp_buf[0]) veh_t;
+typedef typeof(_jmp_buf[0]) eh_t;
 
 
 // Try a statement returning a table pointer if exception 
 // is thrown, null marks successful execution
-#define v_try_begin(err, eh) {              \
-    veh_t eh[1];                            \
+#define mu_try_begin(err, eh) {             \
+    eh_t eh[1];                             \
                                             \
     err = (tbl_t *)setjmp(eh);              \
                                             \
     if (__builtin_expect(err == 0, 1)) {    \
 {
-#define v_try_end                           \
+#define mu_try_end                          \
 }                                           \
     }                                       \
 }
 
 
-#define v_on_err_begin(eh) {                \
-    veh_t **_eh = &(eh);                    \
-    veh_t _new_eh[1];                       \
-    veh_t *_old_eh = *_eh;                  \
+#define mu_on_err_begin(eh) {               \
+    eh_t **_eh = &(eh);                     \
+    eh_t _new_eh[1];                        \
+    eh_t *_old_eh = *_eh;                   \
                                             \
     tbl_t *_err = (tbl_t *)setjmp(_new_eh); \
                                             \
     if (__builtin_expect(_err == 0, 1)) {   \
         *_eh = _new_eh;                     \
 {
-#define v_on_err_do                         \
+#define mu_on_err_do                        \
 }                                           \
         *_eh = _old_eh;                     \
     } else {                                \
         *_eh = _old_eh;                     \
 {
-#define v_on_err_end                        \
+#define mu_on_err_end                       \
 }                                           \
-        v_err(_err, _old_eh);               \
+        mu_err(_err, _old_eh);              \
     }                                       \
 }
 
@@ -55,14 +55,14 @@ typedef typeof(_jmp_buf[0]) veh_t;
 // dragging in all of var.h
 typedef struct tbl tbl_t;
 
-__attribute__((noreturn)) void v_err(tbl_t *err, veh_t *eh);
+__attribute__((noreturn)) void mu_err(tbl_t *err, eh_t *eh);
 
 
-__attribute__((noreturn)) void err_nomem(veh_t *eh);
-__attribute__((noreturn)) void err_len(veh_t *eh);
-__attribute__((noreturn)) void err_ro(veh_t *eh);
-__attribute__((noreturn)) void err_parse(veh_t *eh);
-__attribute__((noreturn)) void err_undefined(veh_t *eh);
+__attribute__((noreturn)) void err_nomem(eh_t *eh);
+__attribute__((noreturn)) void err_len(eh_t *eh);
+__attribute__((noreturn)) void err_ro(eh_t *eh);
+__attribute__((noreturn)) void err_parse(eh_t *eh);
+__attribute__((noreturn)) void err_undefined(eh_t *eh);
 
 
 #endif

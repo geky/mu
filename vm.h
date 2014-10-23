@@ -1,16 +1,16 @@
 /*
- * V's virtual machine
+ * Mu's virtual machine
  */
 
-#ifndef V_VM
-#define V_VM
+#ifndef MU_VM
+#define MU_VM
 
 #include "var.h"
 #include "tbl.h"
 #include "fn.h"
 
 
-/* V uses bytecode as an intermediary representation
+/* Mu uses bytecode as an intermediary representation
  * during compilation. It is either executed directly
  * or then converted to opcodes for the underlying machine.
  *
@@ -27,48 +27,48 @@
  */
 
 // Instruction components
-typedef uint8_t vop_t;
-typedef uint16_t varg_t;
-typedef int16_t vsarg_t;
+typedef uint8_t mop_t;
+typedef uint16_t marg_t;
+typedef int16_t msarg_t;
 
 enum {
-    VOP_OP    = 0xf8, // Opcode in top 5 bits
-    VOP_FLAGS = 0x07, // Flags in bottom 3 bits
+    MOP_OP    = 0xf8, // Opcode in top 5 bits
+    MOP_FLAGS = 0x07, // Flags in bottom 3 bits
 
-    VOP_ARG   = 0x01, // Indicates this opcode uses an argument
+    MOP_ARG   = 0x01, // Indicates this opcode uses an argument
 };
 
 
-enum vop {
+enum mop {
 /*  opcode    encoding      arg         stack   result      description                                     */
 
-    VVAR    = 0x10 << 3, // var index   +1      var[i]      places constant variable on stack
-    VFN     = 0x11 << 3, // var index   +1      fn(var[i])  places function bound with scope on the stack
-    VNIL    = 0x12 << 3, // -           +1      nil         places nil on the stack
-    VTBL    = 0x13 << 3, // -           +1      []          creates a new table on the stack
-    VSCOPE  = 0x14 << 3, // -           +1      scope       places the scope on the stack
-    VARGS   = 0x15 << 3, // -           +1      args        places the args on the stack
+    MVAR    = 0x10 << 3, // var index   +1      var[i]      places constant variable on stack
+    MFN     = 0x11 << 3, // var index   +1      fn(var[i])  places function bound with scope on the stack
+    MNIL    = 0x12 << 3, // -           +1      nil         places nil on the stack
+    MTBL    = 0x13 << 3, // -           +1      []          creates a new table on the stack
+    MSCOPE  = 0x14 << 3, // -           +1      scope       places the scope on the stack
+    MARGS   = 0x15 << 3, // -           +1      args        places the args on the stack
 
-    VDUP    = 0x16 << 3, // stack index +1      s[i]        duplicates the specified element on the stack
-    VDROP   = 0x17 << 3, // -           -1      -           pops element off the stack
+    MDUP    = 0x16 << 3, // stack index +1      s[i]        duplicates the specified element on the stack
+    MDROP   = 0x17 << 3, // -           -1      -           pops element off the stack
 
-    VJUMP   = 0x18 << 3, // offset      -       -           adds signed offset to pc
-    VJFALSE = 0x1a << 3, // offset      -1      -           jump if top of stack is nil
-    VJTRUE  = 0x1b << 3, // offset      -1      -           jump if top of stack is not nil
+    MJUMP   = 0x18 << 3, // offset      -       -           adds signed offset to pc
+    MJFALSE = 0x1a << 3, // offset      -1      -           jump if top of stack is nil
+    MJTRUE  = 0x1b << 3, // offset      -1      -           jump if top of stack is not nil
 
-    VLOOKUP = 0x04 << 3, // -           -1      s1[s0]      looks up s1[s0] onto stack
-    VLOOKDN = 0x05 << 3, // index       -1      s1[s0|i]    looks up either s2[s1] or index s2[s0]
+    MLOOKUP = 0x04 << 3, // -           -1      s1[s0]      looks up s1[s0] onto stack
+    MLOOKDN = 0x05 << 3, // index       -1      s1[s0|i]    looks up either s2[s1] or index s2[s0]
 
-    VASSIGN = 0x08 << 3, // -           -3      -           assigns s2[s1] with s0 recursively
-    VINSERT = 0x09 << 3, // -           -2      s2          inserts s2[s1] with s0 nonrecursively
-    VADD    = 0x0a << 3, // -           -1      s1          adds s0 to s1
+    MASSIGN = 0x08 << 3, // -           -3      -           assigns s2[s1] with s0 recursively
+    MINSERT = 0x09 << 3, // -           -2      s2          inserts s2[s1] with s0 nonrecursively
+    MAPPEND = 0x0a << 3, // -           -1      s1          adds s0 to s1
 
-    VITER   = 0x0c << 3, // -           -       iter(s0)    obtains iterator onto stack
+    MITER   = 0x0c << 3, // -           -       iter(s0)    obtains iterator onto stack
 
-    VCALL   = 0x03 << 3, // -           -1      s1(s0)      calls function s1(s0) onto stack
-    VTCALL  = 0x02 << 3, // -           -2      ret s1(s0)  returns tailcall of function s1(s0)   
-    VRET    = 0x01 << 3, // -           -1      ret s0      returns s0
-    VRETN   = 0x00 << 3, // -           -       ret nil     returns nil
+    MCALL   = 0x03 << 3, // -           -1      s1(s0)      calls function s1(s0) onto stack
+    MTCALL  = 0x02 << 3, // -           -2      ret s1(s0)  returns tailcall of function s1(s0)   
+    MRET    = 0x01 << 3, // -           -1      ret s0      returns s0
+    MRETN   = 0x00 << 3, // -           -       ret nil     returns nil
 };
 
 
@@ -79,13 +79,13 @@ enum vop {
 // Return the size taken by the specified opcode
 // Note: size of the jump opcode currently can not change
 // based on argument, because this is not handled by the parser
-int vcount(vop_t op, varg_t arg);
+int mu_count(mop_t op, marg_t arg);
 
 // Encode the specified opcode and return its size
-void vencode(str_t *code, vop_t op, varg_t arg);
+void mu_encode(str_t *code, mop_t op, marg_t arg);
 
 // Execute the bytecode
-var_t vexec(fn_t *f, tbl_t *args, tbl_t *scope, veh_t *eh);
+var_t mu_exec(fn_t *f, tbl_t *args, tbl_t *scope, eh_t *eh);
 
 
 #endif

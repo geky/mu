@@ -4,7 +4,7 @@
 
 // Returns true if both variables are equal
 bool num_equals(var_t a, var_t b) {
-    return var_num(a) == var_num(b);
+    return getnum(a) == getnum(b);
 }
 
 
@@ -137,7 +137,7 @@ done:       // return the result
 
 
 // Obtains a string representation of a number
-var_t num_repr(var_t v, veh_t *eh) {
+var_t num_repr(var_t v, eh_t *eh) {
     v.type = 0;
 
     if (v.num == 0) {
@@ -154,7 +154,7 @@ var_t num_repr(var_t v, veh_t *eh) {
 
         return s;
     } else {
-        str_t *out = str_create(VNUMLEN, eh);
+        str_t *out = str_create(MU_NUMLEN, eh);
         str_t *res = out;
 
         if (v.num < 0.0) {
@@ -165,7 +165,7 @@ var_t num_repr(var_t v, veh_t *eh) {
 
         num_t exp = floor(log10(v.num));
         num_t digit = pow(10.0, exp);
-        bool isexp = (exp > VNUMLEN-2 || exp < -(VNUMLEN-3));
+        bool isexp = (exp > MU_NUMLEN-2 || exp < -(MU_NUMLEN-3));
 
         if (isexp) {
             v.num /= digit;
@@ -175,7 +175,7 @@ var_t num_repr(var_t v, veh_t *eh) {
         }
 
 
-        int len = isexp ? VNUMLEN-6 : VNUMLEN-1;
+        int len = isexp ? MU_NUMLEN-6 : MU_NUMLEN-1;
 
         for (; len >= 0; len--) {
             if (v.num <= 0.0 && digit < 1.0)

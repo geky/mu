@@ -2,13 +2,13 @@
  *  Number Definition
  */
 
-#ifndef V_NUM
-#define V_NUM
+#ifndef MU_NUM_H
+#define MU_NUM_H
 
 #include "var.h"
 
 // Max length of a string representation
-#define VNUMLEN 14
+#define MU_NUMLEN 14
 
 
 // Returns true if both variables are equal
@@ -22,12 +22,12 @@ hash_t num_hash(var_t v);
 var_t num_parse(const str_t **off, const str_t *end);
 
 // Obtains a string representation of a number
-var_t num_repr(var_t v, veh_t *eh);
+var_t num_repr(var_t v, eh_t *eh);
 
 
 // Checks to see if a number is equivalent to its hash
 static inline bool num_ishash(var_t v, hash_t hash) {
-    return var_isnum(v) && num_equals(v, vnum(hash));
+    return isnum(v) && num_equals(v, vnum(hash));
 }
 
 // Obtains ascii value
