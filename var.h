@@ -12,21 +12,18 @@
 #include <math.h>
 
 
-// Three bit type specifier located in first 
-// three bits of each var
-// Highest bit indicates if reference counted
+// Three bit type specifier located in lowest bits of each var
+// 3b1xx indicates reference counted
+// 3bx11 indicates additional table attached
 typedef enum type {
-    MU_NIL = 0x0, // nil - nil
-    MU_NUM = 0x1, // number - 12.3
-
+    MU_NIL = 0x0, // nil
+    MU_NUM = 0x1, // number
     MU_BFN = 0x2, // builtin function
     MU_SFN = 0x3, // builtin function with scope
-
-    MU_TBL = 0x4, // table - ['a':1, 'b':2, 'c':3]
-    MU_OBJ = 0x5, // wrapped table - obj(['a':1, 'b':2])
-
-    MU_STR = 0x6, // string - "hello"
-    MU_FN  = 0x7, // function - fn() { return 5 }
+    MU_TBL = 0x4, // table
+    MU_OBJ = 0x5, // wrapped table
+    MU_STR = 0x6, // string
+    MU_FN  = 0x7, // function
 } type_t;
 
 
@@ -184,13 +181,12 @@ static inline var_t vsfn(sfn_t *f, tbl_t *s) {
 }
 
 #define vcstr(c) ({                         \
-    static struct {                         \
+    static const struct {                   \
         ref_t r;                            \
         len_t l;                            \
-        const str_t s[sizeof(c)-1];         \
-    } _vcstr = { 1, sizeof(c)-1, {(c)}};    \
+        str_t s[sizeof(c)-1];               \
+    } _vcstr = { 0, sizeof(c)-1, {(c)}};    \
                                             \
-    _vcstr.r++;                             \
     vstr(_vcstr.s, 0, sizeof(c)-1);         \
 })
 

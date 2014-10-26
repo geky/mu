@@ -36,14 +36,17 @@ void ref_dealloc(void *m, size_t size);
 
 static inline void ref_inc(void *m) {
     ref_t *ref = (ref_t*)(~0x7 & (uint32_t)m);
-    (*ref)++;
+
+    if (*ref != 0)
+        (*ref)++;
 }
 
 static inline void ref_dec(void *m, void (*dtor)(void*)) {
     ref_t *ref = (ref_t*)(~0x7 & (uint32_t)m);
 
-    if (--(*ref) == 0)
-        dtor(ref + 1);
+    if (*ref != 0)
+        if (--(*ref) == 0)
+            dtor(ref + 1);
 }
 
 
