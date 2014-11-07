@@ -2,19 +2,25 @@
  *  Memory management
  */
 
+#ifdef MU_DEF
+#ifndef MU_MEM_DEF
+#define MU_MEM_DEF
+
+#include "mu.h"
+
+
+// Reference type as word type aligned to 8 bytes
+typedef mu_aligned unsigned int ref_t;
+
+
+#endif
+#else
 #ifndef MU_MEM_H
 #define MU_MEM_H
-
-#include <stdint.h>
-#include <string.h>
-
+#define MU_DEF
+#include "mem.h"
 #include "err.h"
-
-
-// Reference type as word type
-// Aligned to 8 bytes
-typedef unsigned int ref_t 
-__attribute__((aligned(8)));
+#undef MU_DEF
 
 
 // Manual memory management
@@ -34,14 +40,14 @@ void *ref_alloc(size_t size, eh_t *eh);
 void ref_dealloc(void *m, size_t size);
 
 
-static inline void ref_inc(void *m) {
+mu_inline void ref_inc(void *m) {
     ref_t *ref = (ref_t*)(~0x7 & (uint32_t)m);
 
     if (*ref != 0)
         (*ref)++;
 }
 
-static inline void ref_dec(void *m, void (*dtor)(void*)) {
+mu_inline void ref_dec(void *m, void (*dtor)(void*)) {
     ref_t *ref = (ref_t*)(~0x7 & (uint32_t)m);
 
     if (*ref != 0)
@@ -50,4 +56,5 @@ static inline void ref_dec(void *m, void (*dtor)(void*)) {
 }
 
 
+#endif
 #endif

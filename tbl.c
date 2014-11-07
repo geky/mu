@@ -1,25 +1,25 @@
 #include "tbl.h"
 
-#include "mem.h"
+#include "var.h"
+#include "num.h"
 #include "str.h"
+#include "mem.h"
 
 #include <string.h>
+
 
 // TODO check lengths appropriately
 
 // finds capactiy based on load factor of 1.5
-static inline hash_t tbl_ncap(hash_t s) {
+mu_inline hash_t tbl_ncap(hash_t s) {
     return s + (s >> 1);
 }
 
-// finds next power of two
-static inline hash_t tbl_npw2(hash_t s) {
-    return s ? 1 << (32-__builtin_clz(s - 1)) : 0;
-}
-
-// iterates through hash entries using
-// i = i*5 + 1 to avoid degenerative cases
-static inline hash_t tbl_next(hash_t i) {
+// Iterates through hash entries using i = i*5 + 1
+// This uses the recurrence equation used in Python's dictionary 
+// implementation, which allows open hashing with the benifit
+// of reducing collisions with very regular sets of data.
+mu_inline hash_t tbl_next(hash_t i) {
     return (i<<2) + i + 1;
 }
 
@@ -30,7 +30,7 @@ static inline hash_t tbl_next(hash_t i) {
 tbl_t *tbl_create(len_t size, eh_t *eh) {
     tbl_t *tbl = ref_alloc(sizeof(tbl_t), eh);
 
-    tbl->mask = tbl_npw2(tbl_ncap(size)) - 1;
+    tbl->mask = mu_npw2(tbl_ncap(size)) - 1;
 
     tbl->tail = 0;
     tbl->nils = 0;
@@ -79,7 +79,7 @@ var_t tbl_lookup(tbl_t *tbl, var_t key) {
 
     hash_t i, hash = var_hash(key);
 
-    for (tbl = tbl_readp(tbl); tbl; tbl = tbl_readp(tbl->tail)) {
+    for (tbl = tbl_read(tbl); tbl; tbl = tbl_read(tbl->tail)) {
         if (tbl->stride < 2) {
             if (num_ishash(key, hash) && hash < tbl->len) {
                 if (tbl->stride == 0)
@@ -108,7 +108,7 @@ var_t tbl_lookup(tbl_t *tbl, var_t key) {
 // Recursively looks up either a key or index
 // if key is not found
 var_t tbl_lookdn(tbl_t *tbl, var_t key, len_t i) {
-    tbl = tbl_readp(tbl);
+    tbl = tbl_read(tbl);
 
     if (!tbl->tail && tbl->stride < 2) {
         if (i < tbl->len) {
@@ -170,8 +170,8 @@ static void tbl_realizekeys(tbl_t *tbl, eh_t *eh) {
 
 
 // reallocates and rehashes a table
-static inline void tbl_resize(tbl_t * tbl, len_t size, eh_t *eh) {
-    hash_t cap = tbl_npw2(tbl_ncap(size));
+mu_inline void tbl_resize(tbl_t * tbl, len_t size, eh_t *eh) {
+    hash_t cap = mu_npw2(tbl_ncap(size));
     hash_t mask = cap - 1;
 
     if (tbl->stride < 2) {
@@ -330,7 +330,7 @@ static void tbl_insertval(tbl_t *tbl, var_t key, var_t val, eh_t *eh) {
     
 
 void tbl_insert(tbl_t *tbl, var_t key, var_t val, eh_t *eh) {
-    tbl = tbl_writep(tbl, eh);
+    tbl = tbl_write(tbl, eh);
 
     if (isnil(key))
         return;
@@ -437,7 +437,7 @@ static void tbl_assignval(tbl_t *head, var_t key, var_t val, eh_t *eh) {
     }
 
 
-    tbl = tbl_writep(head, eh);
+    tbl = tbl_write(head, eh);
 
     if (tbl_ncap(tbl->len+tbl->nils + 1) > tbl->mask + 1)
         tbl_resize(tbl, tbl->len+1, eh);
@@ -501,9 +501,9 @@ void tbl_assign(tbl_t *tbl, var_t key, var_t val, eh_t *eh) {
 
 // Performs iteration on a table
 mu_fn var_t tbl_0_iteration(tbl_t *args, tbl_t *scope, eh_t *eh) {
-    tbl_t *tbl = tbl_lookup(scope, vnum(0)).tbl;
-    tbl_t *ret = tbl_lookup(scope, vnum(1)).tbl;
-    int i = tbl_lookup(scope, vnum(2)).data;
+    tbl_t *tbl = gettbl(tbl_lookup(scope, vnum(0)));
+    tbl_t *ret = gettbl(tbl_lookup(scope, vnum(1)));
+    int i = getraw(tbl_lookup(scope, vnum(2)));
 
     if (i >= tbl->len)
         return vnil;
@@ -519,9 +519,9 @@ mu_fn var_t tbl_0_iteration(tbl_t *args, tbl_t *scope, eh_t *eh) {
 }
 
 mu_fn var_t tbl_1_iteration(tbl_t *args, tbl_t *scope, eh_t *eh) {
-    tbl_t *tbl = tbl_lookup(scope, vnum(0)).tbl;
-    tbl_t *ret = tbl_lookup(scope, vnum(1)).tbl;
-    int i = tbl_lookup(scope, vnum(2)).data;
+    tbl_t *tbl = gettbl(tbl_lookup(scope, vnum(0)));
+    tbl_t *ret = gettbl(tbl_lookup(scope, vnum(1)));
+    int i = getraw(tbl_lookup(scope, vnum(2)));
 
     if (i >= tbl->len)
         return vnil;
@@ -537,21 +537,20 @@ mu_fn var_t tbl_1_iteration(tbl_t *args, tbl_t *scope, eh_t *eh) {
 }
 
 mu_fn var_t tbl_2_iteration(tbl_t *args, tbl_t *scope, eh_t *eh) {
-    tbl_t *t = tbl_lookup(scope, vnum(0)).tbl;
-    tbl_t *ret = tbl_lookup(scope, vnum(1)).tbl;
-    int i = tbl_lookup(scope, vnum(2)).data;
-    int j = tbl_lookup(scope, vnum(3)).data;
+    tbl_t *tbl = gettbl(tbl_lookup(scope, vnum(0)));
+    tbl_t *ret = gettbl(tbl_lookup(scope, vnum(1)));
+    int i = getraw(tbl_lookup(scope, vnum(2)));
+    int j = getraw(tbl_lookup(scope, vnum(3)));
     var_t k, v;
 
-    if (i >= t->len)
+    if (i >= tbl->len)
         return vnil;
 
     do {
-        k = t->array[2*j  ];
-        v = t->array[2*j+1];
+        k = tbl->array[2*j  ];
+        v = tbl->array[2*j+1];
 
         j += 1;
-        tbl_insert(scope, vnum(3), vraw(j), eh);
     } while (isnil(k) || isnil(v));
 
     tbl_insert(ret, vnum(0), v, eh);
@@ -560,6 +559,7 @@ mu_fn var_t tbl_2_iteration(tbl_t *args, tbl_t *scope, eh_t *eh) {
 
     i += 1;
     tbl_insert(scope, vnum(2), vraw(i), eh);
+    tbl_insert(scope, vnum(3), vraw(j), eh);
 
     return vtbl(ret);
 }
@@ -571,11 +571,11 @@ var_t tbl_iter(var_t v, eh_t *eh) {
         tbl_2_iteration
     };
 
-    tbl_t *t = tbl_readp(v.tbl);
+    tbl_t *tbl = tbl_read(gettbl(v));
     tbl_t *scope = tbl_create(3, eh);
 
     mu_on_err_begin (eh) {
-        tbl_insert(scope, vnum(0), vtbl(t), eh);
+        tbl_insert(scope, vnum(0), vtbl(tbl), eh);
         tbl_insert(scope, vnum(1), vtbl(tbl_create(3, eh)), eh);
         tbl_insert(scope, vnum(2), vraw(0), eh);
     } mu_on_err_do {
@@ -583,15 +583,14 @@ var_t tbl_iter(var_t v, eh_t *eh) {
         // TODO clean up everything
     } mu_on_err_end;
 
-    return vsfn(tbl_iters[t->stride], scope);
+    return vsfn(tbl_iters[tbl->stride], scope);
 }
 
 
 // Returns a string representation of the table
 var_t tbl_repr(var_t v, eh_t *eh) {
-    tbl_t *tbl = tbl_readp(v.tbl);
-
-    var_t *reprs = mu_alloc(2*tbl->len * sizeof(var_t), eh);
+    tbl_t *tbl = gettbl(v);
+    var_t *reprs = mu_alloc(2*tbl_len(tbl) * sizeof(var_t), eh);
 
     mu_on_err_begin (eh) {
         int size = 2;
@@ -600,9 +599,9 @@ var_t tbl_repr(var_t v, eh_t *eh) {
         tbl_for_begin (k, v, tbl) {
             reprs[2*i  ] = var_repr(k, eh);
             reprs[2*i+1] = var_repr(v, eh);
-            size += reprs[2*i  ].len;
-            size += reprs[2*i+1].len;
-            size += (i == tbl->len-1) ? 2 : 4;
+            size += getlen(reprs[2*i  ]);
+            size += getlen(reprs[2*i+1]);
+            size += (i == tbl_len(tbl)-1) ? 2 : 4;
 
             i++;
         } tbl_for_end;
@@ -610,24 +609,24 @@ var_t tbl_repr(var_t v, eh_t *eh) {
         if (size > MU_MAXLEN)
             err_len(eh);
 
-        str_t *out = str_create(size, eh);
-        str_t *res = out;
+        mstr_t *out = str_create(size, eh);
+        mstr_t *res = out;
 
         *res++ = '[';
 
-        for (i=0; i < tbl->len; i++) {
-            memcpy(res, getstr(reprs[2*i]), reprs[2*i].len);
-            res += reprs[2*i].len;
+        for (i=0; i < tbl_len(tbl); i++) {
+            memcpy(res, getstr(reprs[2*i]), getlen(reprs[2*i]));
+            res += getlen(reprs[2*i]);
             var_dec(reprs[2*i]);
 
             *res++ = ':';
             *res++ = ' ';
 
-            memcpy(res, getstr(reprs[2*i+1]), reprs[2*i+1].len);
-            res += reprs[2*i+1].len;
+            memcpy(res, getstr(reprs[2*i+1]), getlen(reprs[2*i+1]));
+            res += getlen(reprs[2*i+1]);
             var_dec(reprs[2*i+1]);
 
-            if (i != tbl->len-1) {
+            if (i != tbl_len(tbl)-1) {
                 *res++ = ',';
                 *res++ = ' ';
             }
@@ -635,10 +634,10 @@ var_t tbl_repr(var_t v, eh_t *eh) {
 
         *res++ = ']';
 
-        mu_dealloc(reprs, 2*tbl->len * sizeof(var_t));
+        mu_dealloc(reprs, 2*tbl_len(tbl) * sizeof(var_t));
 
         return vstr(out, 0, size);
     } mu_on_err_do {
-        mu_dealloc(reprs, 2*tbl->len * sizeof(var_t));
+        mu_dealloc(reprs, 2*tbl_len(tbl) * sizeof(var_t));
     } mu_on_err_end;
 }

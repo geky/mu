@@ -2,13 +2,32 @@
  *  String Definition
  */
 
+#ifdef MU_DEF
+#ifndef MU_STR_DEF
+#define MU_STR_DEF
+
+#include "mu.h"
+
+
+// Definition of Mu's string type 
+// and Mu's mutable string type
+typedef uint8_t mstr_t;
+typedef const mstr_t str_t;
+
+
+#endif
+#else
 #ifndef MU_STR_H
 #define MU_STR_H
-
+#define MU_DEF
+#include "str.h"
 #include "var.h"
+#include "err.h"
+#undef MU_DEF
+
 
 // Functions for creating strings
-str_t *str_create(len_t size, eh_t *eh);
+mstr_t *str_create(len_t size, eh_t *eh);
 
 // Called by garbage collector to clean up
 void str_destroy(void *);
@@ -26,4 +45,5 @@ var_t str_parse(const str_t **off, const str_t *end, eh_t *eh);
 var_t str_repr(var_t v, eh_t *eh);
 
 
+#endif
 #endif

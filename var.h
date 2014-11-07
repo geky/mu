@@ -2,74 +2,63 @@
  *  Variable types and definitions
  */
 
-#ifndef MU_VAR_M
-#define MU_VAR_M
+#ifdef MU_DEF
+#ifndef MU_VAR_DEF
+#define MU_VAR_DEF
 
+#include "mu.h"
 #include "mem.h"
+#include "num.h"
+#include "str.h"
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <math.h>
+
+// 32 bit hash size for all types
+typedef uint32_t hash_t;
+
+// Common length for all structures
+typedef uint16_t len_t;
+
+#define MU_MAXLEN UINT16_MAX
 
 
 // Three bit type specifier located in lowest bits of each var
 // 3b1xx indicates reference counted
 // 3bx11 indicates additional table attached
-typedef enum type {
-    MU_NIL = 0x0, // nil
-    MU_NUM = 0x1, // number
-    MU_BFN = 0x2, // builtin function
-    MU_SFN = 0x3, // builtin function with scope
-    MU_TBL = 0x4, // table
-    MU_OBJ = 0x5, // wrapped table
-    MU_STR = 0x6, // string
-    MU_FN  = 0x7, // function
-} type_t;
+enum type {
+    MU_NIL = 0, // nil
+    MU_NUM = 1, // number
+    MU_BFN = 2, // builtin function
+    MU_SFN = 3, // builtin function with scope
+    MU_TBL = 4, // table
+    MU_OBJ = 5, // wrapped table
+    MU_STR = 6, // string
+    MU_FN  = 7, // function
+};
 
 
-// All vars hash to 32 bits 
-typedef uint32_t hash_t;
-
-// Length type bound to 16 bits for space consumption
-#define MU_MAXLEN 0xffff
-typedef uint16_t len_t;
-
-// Base types
-typedef double num_t;
-typedef uint8_t str_t;
-
-// Base structs
-typedef struct tbl tbl_t;
-typedef struct fn fn_t;
-
-// Base functions
-#define mu_fn __attribute__((aligned(8)))
-typedef mu_fn struct var bfn_t(tbl_t *a, eh_t *eh);
-typedef mu_fn struct var sfn_t(tbl_t *a, tbl_t *s, eh_t *eh);
-
-
-// Actual var type declariation
+// declaration of var type
 typedef struct var {
     union {
         // bitwise representations
         uint64_t bits;
         uint8_t  bytes[8];
 
-        // packed metadata for all vars
         struct {
             union {
                 // metadata for all vars
                 uint32_t meta;
-                type_t type : 3;
+
+                // type specifier is encoded in lower 3 bits
+                enum type type : 3;
+
+                // reference counting is performed here for half of vars
                 ref_t *ref;
 
-                // string representation
-                const str_t *str;
+                // string encoding
+                str_t *str;
 
-                // function representations
-                fn_t *fn;
-                bfn_t *bfn;
-                sfn_t *sfn;
+                // function encoding
+                struct fn *fn;
             };
 
             union {
@@ -78,37 +67,63 @@ typedef struct var {
 
                 // string offset and length
                 struct {
-                    len_t off;
                     len_t len;
+                    len_t off;
                 };
 
-                // pointer to table representation
-                tbl_t *tbl;
+                // table encoding
+                struct tbl *tbl;
             };
         };
 
-        // number representation
+        // number encoding
         num_t num;
     };
 } var_t;
 
 
-// properties of variables
-static inline bool isnil(var_t v) { return !v.meta; }
-static inline bool isnum(var_t v) { return v.type == MU_NUM; }
-static inline bool isstr(var_t v) { return v.type == MU_STR; }
-static inline bool istbl(var_t v) { return (6 & v.meta) == 4; }
-static inline bool isobj(var_t v) { return v.type == MU_OBJ; }
-static inline bool isfn(var_t v)  { return (6 & v.meta) == 2 || v.type == MU_FN; }
+#endif
+#else
+#ifndef MU_VAR_H
+#define MU_VAR_H
+#define MU_DEF
+#include "var.h"
+#include "tbl.h"
+#include "fn.h"
+#include "err.h"
+#undef MU_DEF
+
+#include "mem.h"
+
 
 // definitions for accessing components
-static inline ref_t *getref(var_t v)  { v.type = 0; return v.ref; }
-static inline type_t gettype(var_t v) { return v.type; }
+mu_inline enum type type(var_t v)  { return v.type; }
 
-static inline num_t getnum(var_t v)        { v.meta &= ~3; return v.num; }
-static inline const str_t *getstr(var_t v) { return v.str + v.off; }
-static inline tbl_t *gettbl(var_t v)       { return v.tbl; }
-static inline fn_t *getfn(var_t v)         { v.meta &= ~3; return v.fn; }
+mu_inline void *getptr(var_t v)    { return v.ref; }
+mu_inline uint32_t getraw(var_t v) { return v.data; }
+mu_inline ref_t *getref(var_t v)   { return (ref_t *)(v.meta & ~7); }
+mu_inline num_t getnum(var_t v)    { v.meta &= ~7; return v.num; }
+mu_inline str_t *getstart(var_t v) { return v.str; }
+mu_inline str_t *getstr(var_t v)   { return v.str + v.off; }
+mu_inline str_t *getend(var_t v)   { return v.str + v.off + v.len; }
+mu_inline len_t getoff(var_t v)    { return v.off; }
+mu_inline len_t getlen(var_t v)    { return v.len; }
+mu_inline tbl_t *gettbl(var_t v)   { return v.tbl; }
+mu_inline fn_t *getfn(var_t v)     { return (fn_t *)(v.meta & ~3); }
+mu_inline bfn_t *getbfn(var_t v)   { return (bfn_t *)getfn(v); }
+mu_inline sfn_t *getsfn(var_t v)   { return (sfn_t *)getfn(v); }
+
+
+// properties of variables
+mu_inline bool isnil(var_t v) { return !v.meta; }
+mu_inline bool isnum(var_t v) { return type(v) == MU_NUM; }
+mu_inline bool isstr(var_t v) { return type(v) == MU_STR; }
+mu_inline bool istbl(var_t v) { return (6 & v.meta) == 4; }
+mu_inline bool isobj(var_t v) { return type(v) == MU_OBJ; }
+mu_inline bool isfn(var_t v)  { return (6 & v.meta) == 2 || type(v) == MU_FN; }
+
+mu_inline bool hasref(var_t v)   { return 4 & v.meta; }
+mu_inline bool hasscope(var_t v) { return !(3 & ~v.meta); }
 
 
 // definitions of literal vars in C
@@ -118,64 +133,64 @@ static inline fn_t *getfn(var_t v)         { v.meta &= ~3; return v.fn; }
 #define vninf vnum(-INFINITY)
 
 // var constructors for C
-static inline var_t vraw(uint32_t r) {
+mu_inline var_t vraw(uint32_t raw) {
     var_t v;
-    v.data = r;
+    v.data = raw;
     v.type = MU_NUM;
     return v;
 }
 
-static inline var_t vnum(num_t n) {
+mu_inline var_t vnum(num_t num) {
     var_t v;
-    v.num = n;
+    v.num = num;
     v.type = MU_NUM;
     return v;
 }
 
-static inline var_t vstr(const str_t *s, len_t off, len_t len) {
+mu_inline var_t vstr(str_t *str, len_t off, len_t len) {
     var_t v;
-    v.str = s;
+    v.str = str;
     v.off = off;
     v.len = len;
     v.type = MU_STR;
     return v;
 }
 
-static inline var_t vfn(fn_t *f, tbl_t *s) {
+mu_inline var_t vtbl(tbl_t *tbl) {
     var_t v;
-    v.fn = f;
-    v.tbl = s;
-    v.type = MU_FN;
-    return v;
-}
-
-static inline var_t vtbl(tbl_t *t) {
-    var_t v;
-    v.ref = (ref_t*)t;
-    v.tbl = t;
+    v.ref = (ref_t*)tbl;
+    v.tbl = tbl;
     v.type = MU_TBL;
     return v;
 }
 
-static inline var_t vobj(tbl_t *t) {
+mu_inline var_t vobj(tbl_t *tbl) {
     var_t v;
-    v.ref = (ref_t*)t;
-    v.tbl = t;
+    v.ref = (ref_t*)tbl;
+    v.tbl = tbl;
     v.type = MU_OBJ;
     return v;
 }
 
-static inline var_t vbfn(bfn_t *f) {
+mu_inline var_t vfn(fn_t *fn, tbl_t *scope) {
     var_t v;
-    v.bfn = f;
+    v.fn = fn;
+    v.tbl = scope;
+    v.type = MU_FN;
+    return v;
+}
+
+mu_inline var_t vbfn(bfn_t *bfn) {
+    var_t v;
+    v.fn = (fn_t *)bfn;
     v.type = MU_BFN;
     return v;
 }
 
-static inline var_t vsfn(sfn_t *f, tbl_t *s) {
+mu_inline var_t vsfn(sfn_t *sfn, tbl_t *scope) {
     var_t v;
-    v.sfn = f;
-    v.tbl = s;
+    v.fn = (fn_t *)sfn;
+    v.tbl = scope;
     v.type = MU_SFN;
     return v;
 }
@@ -196,22 +211,22 @@ extern void tbl_destroy(void *);
 extern void str_destroy(void *);
 extern void fn_destroy(void *);
 
-static inline void var_inc(var_t v) {
-    if (4 & v.meta)
-        ref_inc(v.ref);
-    if (!(3 & ~v.meta))
-        ref_inc(v.tbl);
+mu_inline void var_inc(var_t v) {
+    if (hasref(v))
+        ref_inc(getptr(v));
+    if (hasscope(v))
+        ref_inc(gettbl(v));
 }
 
-static inline void var_dec(var_t v) {
+mu_inline void var_dec(var_t v) {
     static void (* const dtors[4])(void *) = {
         tbl_destroy, 0, str_destroy, fn_destroy
     };
 
-    if (4 & v.meta)
-        ref_dec(v.ref, dtors[3 & v.meta]);
-    if (!(3 & ~v.meta))
-        ref_dec(v.tbl, tbl_destroy);
+    if (hasref(v))
+        ref_dec(getptr(v), dtors[3 & v.meta]);
+    if (hasscope(v))
+        ref_dec(gettbl(v), tbl_destroy);
 }
 
 
@@ -242,4 +257,5 @@ void var_append(var_t v, var_t val, eh_t *eh);
 var_t var_call(var_t v, tbl_t *args, eh_t *eh);
 
 
+#endif
 #endif

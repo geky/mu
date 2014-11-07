@@ -2,32 +2,31 @@
  *  Parser for Mu
  */
 
-#ifndef MU_PARSE_H
-#define MU_PARSE_H
+#ifdef MU_DEF
+#ifndef MU_PARSE_DEF
+#define MU_PARSE_DEF
 
+#include "mu.h"
 #include "var.h"
-#include "vm.h"
-
-
-// Parsing type definitions
-typedef uint8_t mtok_t;
-typedef struct mstate mstate_t;
+#include "tbl.h"
+#include "err.h"
+#include "lex.h"
 
 
 // Specific state structures
-struct opstate {
+struct opparse {
     len_t ins;
     uint8_t lprec;
     uint8_t rprec;
 };
 
-struct jstate {
+struct jparse {
     tbl_t *ctbl;
     tbl_t *btbl;
 };
 
-struct fnstate {
-    str_t *bcode;
+struct fnparse {
+    mstr_t *bcode;
 
     len_t stack;
     len_t len;
@@ -38,10 +37,10 @@ struct fnstate {
 };
 
 // State of a parse
-struct mstate {
-    struct fnstate *fn;
-    struct jstate j;
-    struct opstate op;
+typedef struct parse {
+    struct fnparse *fn;
+    struct jparse j;
+    struct opparse op;
     tbl_t *args;
 
     tbl_t *keys;
@@ -56,22 +55,33 @@ struct mstate {
     uint8_t jtsize;
     uint8_t jfsize;
 
-    mtok_t tok;
+    tok_t tok;
     var_t val;
 
     ref_t *ref;
-    const str_t *str;
-    const str_t *pos;
-    const str_t *end;
+    str_t *str;
+    str_t *pos;
+    str_t *end;
 
     eh_t *eh;
-};
+} parse_t;
+
+
+#endif
+#else
+#ifndef MU_PARSE_H
+#define MU_PARSE_H
+#define MU_DEF
+#include "parse.h"
+#undef MU_DEF
 
 
 // Parses Mu source into bytecode
-void mu_parse_init(mstate_t *vs, var_t code);
-void mu_parse_args(mstate_t *vs, tbl_t *args);
-void mu_parse_top(mstate_t *vs);
-void mu_parse_nested(mstate_t *vs);
+void mu_parse_init(parse_t *p, var_t code);
+void mu_parse_args(parse_t *p, tbl_t *args);
+void mu_parse_top(parse_t *p);
+void mu_parse_nested(parse_t *p);
 
+
+#endif
 #endif

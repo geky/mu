@@ -2,14 +2,17 @@
 
 #include "num.h"
 #include "mem.h"
+#include "err.h"
+
+#include <string.h>
 
 
 // Functions for creating strings
-str_t *str_create(len_t size, eh_t *eh) {
+mstr_t *str_create(len_t size, eh_t *eh) {
     len_t *len = ref_alloc(size + sizeof(len_t), eh);
     *len = size;
 
-    return (str_t *)(len + 1);
+    return (mstr_t *)(len + 1);
 }
 
 // Called by garbage collector to clean up
@@ -19,14 +22,15 @@ void str_destroy(void *m) {
 
 // Returns true if both variables are equal
 bool str_equals(var_t a, var_t b) {
-    return (a.len == b.len) && !memcmp(getstr(a), getstr(b), a.len);
+    return getlen(a) == getlen(b) && 
+           !memcmp(getstr(a), getstr(b), getlen(a));
 }
 
 // Returns a hash for each string
 // based off the djb2 algorithm
 hash_t str_hash(var_t v) {
-    const str_t *str = getstr(v);
-    const str_t *end = str + v.len;
+    str_t *str = getstr(v);
+    str_t *end = getend(v);
     hash_t hash = 5381;
 
     while (str < end) {
@@ -39,7 +43,7 @@ hash_t str_hash(var_t v) {
 
 // Parses a string and returns a string
 var_t str_parse(const str_t **off, const str_t *end, eh_t *eh) {
-    const str_t *pos = *off + 1;
+    str_t *pos = *off + 1;
     str_t quote = **off;
     int size = 0;
 
@@ -103,8 +107,8 @@ var_t str_parse(const str_t **off, const str_t *end, eh_t *eh) {
     if (size > MU_MAXLEN)
         err_len(eh);
 
-    str_t *out = str_create(size, eh);
-    str_t *res = out;
+    mstr_t *out = str_create(size, eh);
+    mstr_t *res = out;
     pos = *off + 1;
 
     while (*pos != quote) {
@@ -158,8 +162,8 @@ var_t str_parse(const str_t **off, const str_t *end, eh_t *eh) {
 
 // Returns a string representation of a string
 var_t str_repr(var_t v, eh_t *eh) {
-    const str_t *pos = getstr(v);    
-    const str_t *end = pos + v.len;
+    str_t *pos = getstr(v);    
+    str_t *end = getend(v);
     int size = 2;
 
     while (pos < end) {
@@ -187,8 +191,8 @@ var_t str_repr(var_t v, eh_t *eh) {
     if (size > MU_MAXLEN)
         err_len(eh);
 
-    str_t *out = str_create(size, eh);
-    str_t *res = out;
+    mstr_t *out = str_create(size, eh);
+    mstr_t *res = out;
     pos = getstr(v);
 
     *res++ = '\'';

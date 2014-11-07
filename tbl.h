@@ -2,13 +2,12 @@
  * Table variable type
  */
 
-#ifndef MU_TBL_H
-#define MU_TBL_H
+#ifdef MU_DEF
+#ifndef MU_TBL_DEF
+#define MU_TBL_DEF
 
+#include "mu.h"
 #include "var.h"
-#include "num.h"
-
-#include <assert.h>
 
 
 // Each table is composed of an array of values 
@@ -16,7 +15,7 @@
 // is not stored in the array it is implicitely 
 // stored as a range/offset based on the specified 
 // offset and length.
-struct tbl {
+typedef struct tbl {
     struct tbl *tail; // tail chain of tables
 
     len_t nils;     // count of nil entries
@@ -30,10 +29,22 @@ struct tbl {
     } stride;           // table types
 
     union {
-        int offset;     // offset for implicit ranges
-        var_t *array;   // pointer to stored data
+        int offset;         // offset for implicit ranges
+        var_t *array;  // pointer to stored data
     };
-};
+} tbl_t;
+
+
+#endif
+#else
+#ifndef MU_TBL_H
+#define MU_TBL_H
+#define MU_DEF
+#include "tbl.h"
+#undef MU_DEF
+
+#include "mem.h"
+#include "err.h"
 
 
 // Functions for managing tables
@@ -43,7 +54,6 @@ tbl_t *tbl_create(len_t size, eh_t *eh);
 
 // Called by garbage collector to clean up
 void tbl_destroy(void *);
-
 
 // Recursively looks up a key in the table
 // returns either that value or nil
@@ -72,14 +82,13 @@ var_t tbl_iter(var_t v, eh_t *eh);
 var_t tbl_repr(var_t v, eh_t *eh);
 
 
-
 // Macro for iterating through a table in c
 // Assign names for k and v, and pass in the 
 // block to execute for each pair in tbl
 #define tbl_for_begin(k, v, tbl) {                  \
     var_t k;                                        \
     var_t v;                                        \
-    tbl_t *_t = tbl_readp(tbl);                     \
+    tbl_t *_t = tbl_read(tbl);                      \
     int _i, _c = _t->len;                           \
                                                     \
     for (_i=0; _c; _i++) {                          \
@@ -108,29 +117,32 @@ var_t tbl_repr(var_t v, eh_t *eh);
 
 
 // Accessing table pointers with the ro flag
-static inline bool tbl_isro(tbl_t *tbl) {
-    return 0x1 & (uint32_t)tbl;
+mu_inline bool tbl_isro(tbl_t *tbl) {
+    return 1 & (uint32_t)tbl;
 }
 
-static inline tbl_t *tbl_ro(tbl_t *tbl) {
-    return (tbl_t *)(0x1 | (uint32_t)tbl);
+mu_inline tbl_t *tbl_ro(tbl_t *tbl) {
+    return (tbl_t *)(1 | (uint32_t)tbl);
 }
 
-static inline tbl_t *tbl_readp(tbl_t *tbl) {
-    return (tbl_t *)(~0x1 & (uint32_t)tbl);
+mu_inline tbl_t *tbl_read(tbl_t *tbl) {
+    return (tbl_t *)(~1 & (uint32_t)tbl);
 }
 
-static inline tbl_t *tbl_writep(tbl_t *tbl, eh_t *eh) {
+mu_inline tbl_t *tbl_write(tbl_t *tbl, eh_t *eh) {
     if (tbl_isro(tbl))
         err_ro(eh);
 
     return tbl;
 }
 
+// Accessing table properties
+mu_inline len_t tbl_len(tbl_t *tbl) { return tbl_read(tbl)->len; }
 
 // Table reference counting
-static inline void tbl_inc(void *m) { ref_inc(m); }
-static inline void tbl_dec(void *m) { ref_dec(m, tbl_destroy); }
+mu_inline void tbl_inc(void *m) { ref_inc(m); }
+mu_inline void tbl_dec(void *m) { ref_dec(m, tbl_destroy); }
 
 
+#endif
 #endif

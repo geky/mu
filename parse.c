@@ -1,110 +1,111 @@
 #include "parse.h"
 
+#include "vm.h"
 #include "lex.h"
+#include "var.h"
 #include "tbl.h"
+#include "fn.h"
 
 #include <stdio.h>
+#include <string.h>
 
 
 // Parsing error handling
-#define mu_unexpected(m) _mu_unexpected(m, __FUNCTION__)
-__attribute__((noreturn))
-static void _mu_unexpected(mstate_t *m, const char *fn) {
-    printf("\033[31munexpected (%d) in %s\033[0m\n", m->tok, fn);
-    err_parse(m->eh);
+#define unexpected(p) _unexpected(p, __FUNCTION__)
+static mu_noreturn void _unexpected(parse_t *p, const char *fn) {
+    printf("\033[31munexpected (%d) in %s\033[0m\n", p->tok, fn);
+    err_parse(p->eh);
 }
 
 // Expect a token or fail
-#define mu_expect(m, tok) _mu_expect(m, tok, __FUNCTION__)
-static void _mu_expect(mstate_t *m, mtok_t tok, const char *fn) {
-    if (m->tok != tok) {
-        printf("\033[31mexpected (%d) not (%d) in %s\033[0m\n", tok, m->tok, fn);
-        err_parse(m->eh);
+#define expect(p, tok) _expect(p, tok, __FUNCTION__)
+static void _expect(parse_t *p, tok_t tok, const char *fn) {
+    if (p->tok != tok) {
+        printf("\033[31mexpected (%d) not (%d) in %s\033[0m\n", tok, p->tok, fn);
+        err_parse(p->eh);
     }
 
-    mu_lex(m);
+    mu_lex(p);
 }
 
 
 // Allocation functions for managing bytecode space
-static void mu_enlarge(mstate_t *m, int count) {
-    struct fnstate *fn = m->fn;
+static void enlarge(parse_t *p, int count) {
+    struct fnparse *fn = p->fn;
     fn->ins += count;
 
     while (fn->ins > fn->len) {
         if (((int)fn->len << 1) > MU_MAXLEN)
-            err_len(m->eh);
+            err_len(p->eh);
 
         fn->len <<= 1;
     }
         
-    fn->bcode = mu_realloc(fn->bcode, fn->len, fn->len << 1, m->eh);
+    fn->bcode = mu_realloc(fn->bcode, fn->len, fn->len << 1, p->eh);
 }
 
-static void mu_enlargein(mstate_t *m, int count, int ins) {
-    mu_enlarge(m, count);
+static void enlargein(parse_t *p, int count, int ins) {
+    enlarge(p, count);
 
-    memmove(&m->fn->bcode[ins] + count,
-            &m->fn->bcode[ins], 
-            m->fn->ins-count - ins);
+    memmove(&p->fn->bcode[ins] + count,
+            &p->fn->bcode[ins], 
+            p->fn->ins-count - ins);
 }
 
 
 // Different encoding calls
-static void mu_enc(mstate_t *m, mop_t op) {
-    int count = mu_count(op, 0);
-    mu_enlarge(m, count);
-    mu_encode(&m->fn->bcode[m->fn->ins-count], op, 0);
+static mu_const int size(op_t op) {
+    return mu_size(op << 3, 0);
 }
 
-static void mu_enca(mstate_t *m, mop_t op, marg_t arg) {
-    int count = mu_count(op | MOP_ARG, arg);
-    mu_enlarge(m, count);
-    mu_encode(&m->fn->bcode[m->fn->ins-count], op | MOP_ARG, arg);
+static mu_const int sizea(op_t op, arg_t arg) {
+    return mu_size((op << 3) | MU_ARG, arg);
 }
 
-__attribute__((const))
-static int mu_size(mstate_t *m, mop_t op) {
-    return mu_count(op, 0);
+static void encode(parse_t *p, op_t op) {
+    int count = mu_size(op << 3, 0);
+    enlarge(p, count);
+    mu_encode(&p->fn->bcode[p->fn->ins-count], op << 3, 0);
 }
 
-__attribute__((const))
-static int mu_sizea(mstate_t *m, mop_t op, marg_t arg) {
-    return mu_count(op | MOP_ARG, arg);
+static void encodea(parse_t *p, op_t op, arg_t arg) {
+    int count = mu_size((op << 3) | MU_ARG, arg);
+    enlarge(p, count);
+    mu_encode(&p->fn->bcode[p->fn->ins-count], (op << 3) | MU_ARG, arg);
 }
 
-static int mu_insert(mstate_t *m, mop_t op, int ins) {
-    mu_encode(&m->fn->bcode[ins], op, 0);
-    return mu_count(op, 0);
+static int insert(parse_t *p, op_t op, int ins) {
+    mu_encode(&p->fn->bcode[ins], op << 3, 0);
+    return mu_size(op << 3, 0);
 }
 
-static int mu_inserta(mstate_t *m, mop_t op, marg_t arg, int ins) {
-    mu_encode(&m->fn->bcode[ins], op | MOP_ARG, arg);
-    return mu_count(MOP_ARG, arg);
+static int inserta(parse_t *p, op_t op, arg_t arg, int ins) {
+    mu_encode(&p->fn->bcode[ins], (op << 3) | MU_ARG, arg);
+    return mu_size((op << 3) | MU_ARG, arg);
 }
 
 
 // Helping functions for code generation
-static marg_t mu_accvar(mstate_t *m, var_t v) {
-    var_t index = tbl_lookup(m->fn->vars, v);
+static arg_t accvar(parse_t *p, var_t v) {
+    var_t index = tbl_lookup(p->fn->vars, v);
 
     if (!isnil(index))
-        return index.data;
+        return getraw(index);
 
-    marg_t arg = m->fn->vars->len;
-    tbl_assign(m->fn->vars, v, vraw(arg), m->eh);
+    arg_t arg = p->fn->vars->len;
+    tbl_assign(p->fn->vars, v, vraw(arg), p->eh);
     return arg;
 }
 
-static void mu_patch(mstate_t *m, tbl_t *jtbl, int ins) {
+static void patch(parse_t *p, tbl_t *jtbl, int ins) {
     tbl_for_begin (k, v, jtbl) {
-        mu_inserta(m, MJUMP, ins - (v.data+m->jsize), v.data);
+        inserta(p, OP_JUMP, ins - (getraw(v)+p->jsize), getraw(v));
     } tbl_for_end;
 
     tbl_dec(jtbl);
 }
 
-static tbl_t *mu_revargs(tbl_t *args, eh_t *eh) {
+static tbl_t *revargs(tbl_t *args, eh_t *eh) {
     tbl_t *res = tbl_create(0, eh);
     int i;
 
@@ -116,681 +117,681 @@ static tbl_t *mu_revargs(tbl_t *args, eh_t *eh) {
     return res;
 }
 
-static void mu_unpack(mstate_t *m, tbl_t *map) {
-    mu_enc(m, MSCOPE);
+static void unpack(parse_t *p, tbl_t *map) {
+    encode(p, OP_SCOPE);
 
     tbl_for_begin (k, v, map) {
-        if (v.type == MU_TBL) {
-            mu_enca(m, MDUP, 1);
-            mu_enc(m, MNIL);
-            mu_enca(m, MLOOKDN, getnum(k));
-            mu_unpack(m, v.tbl);
+        if (istbl(v)) {
+            encodea(p, OP_DUP, 1);
+            encode(p, OP_NIL);
+            encodea(p, OP_LOOKDN, getnum(k));
+            unpack(p, gettbl(v));
         } else {
-            mu_enca(m, MVAR, mu_accvar(m, v));
-            mu_enca(m, MDUP, 2);
-            mu_enca(m, MDUP, 1);
-            mu_enca(m, MLOOKDN, getnum(k));
-            mu_enc(m, MINSERT);
+            encodea(p, OP_VAR, accvar(p, v));
+            encodea(p, OP_DUP, 2);
+            encodea(p, OP_DUP, 1);
+            encodea(p, OP_LOOKDN, getnum(k));
+            encode(p, OP_INSERT);
         }
     } tbl_for_end;
 
-    mu_enc(m, MDROP);
-    mu_enc(m, MDROP);
+    encode(p, OP_DROP);
+    encode(p, OP_DROP);
 }
 
 
 
-// Rules for Mu's grammar
-static void mp_value(mstate_t *m);
-static void mp_phrase(mstate_t *m);
-static void mp_fn(mstate_t *m);
-static void mp_if(mstate_t *m);
-static void mp_while(mstate_t *m);
-static void mp_for(mstate_t *m);
-static void mp_expr_op(mstate_t *m);
-static void mp_expr(mstate_t *m);
-static void mp_args_follow(mstate_t *m);
-static void mp_args_entry(mstate_t *m);
-static void mp_args(mstate_t *m);
-static void mp_table_follow(mstate_t *m);
-static void mp_table_assign(mstate_t *m);
-static void mp_table_entry(mstate_t *m);
-static void mp_table(mstate_t *m);
-static void mp_stmt_follow(mstate_t *m);
-static void mp_stmt_insert(mstate_t *m);
-static void mp_stmt_assign(mstate_t *m);
-static void mp_stmt(mstate_t *m);
-static void mp_stmt_list(mstate_t *m);
-static void mp_stmt_entry(mstate_t *m);
+// Rules for OP_u's grammar
+static void p_value(parse_t *p);
+static void p_phrase(parse_t *p);
+static void p_fn(parse_t *p);
+static void p_if(parse_t *p);
+static void p_while(parse_t *p);
+static void p_for(parse_t *p);
+static void p_expr_op(parse_t *p);
+static void p_expr(parse_t *p);
+static void p_args_follow(parse_t *p);
+static void p_args_entry(parse_t *p);
+static void p_args(parse_t *p);
+static void p_table_follow(parse_t *p);
+static void p_table_assign(parse_t *p);
+static void p_table_entry(parse_t *p);
+static void p_table(parse_t *p);
+static void p_stmt_follow(parse_t *p);
+static void p_stmt_insert(parse_t *p);
+static void p_stmt_assign(parse_t *p);
+static void p_stmt(parse_t *p);
+static void p_stmt_list(parse_t *p);
+static void p_stmt_entry(parse_t *p);
 
 
-static void mp_value(mstate_t *m) {
-    struct opstate op = m->op;
-    m->op.lprec = -1;
+static void p_value(parse_t *p) {
+    struct opparse op = p->op;
+    p->op.lprec = -1;
 
-    if (m->stmt) {
-        m->stmt = false;
-        m->left = false;
-        mp_expr(m);
-        m->stmt = true;
-        m->left = true;
-    } else if (m->left) {
-        m->left = false;
-        mp_expr(m);
-        m->left = true;
+    if (p->stmt) {
+        p->stmt = false;
+        p->left = false;
+        p_expr(p);
+        p->stmt = true;
+        p->left = true;
+    } else if (p->left) {
+        p->left = false;
+        p_expr(p);
+        p->left = true;
     } else {
-        mp_expr(m);
+        p_expr(p);
     }
 
-    m->op = op;
+    p->op = op;
 
-    if (m->indirect)
-        mu_enc(m, MLOOKUP);
+    if (p->indirect)
+        encode(p, OP_LOOKUP);
 }
 
-static void mp_phrase(mstate_t *m) {
-    if (m->stmt)
-        mp_stmt(m);
+static void p_phrase(parse_t *p) {
+    if (p->stmt)
+        p_stmt(p);
     else
-        mp_value(m);
+        p_value(p);
 }
 
 
-static void mp_fn(mstate_t *m) {
-    mu_expect(m, '(');
-    mp_args(m);
-    tbl_t *args = m->args;
-    mu_expect(m, ')');
+static void p_fn(parse_t *p) {
+    expect(p, '(');
+    p_args(p);
+    tbl_t *args = p->args;
+    expect(p, ')');
 
-    struct fnstate *f = m->fn;
-    struct jstate j = m->j;
+    struct fnparse *f = p->fn;
+    struct jparse j = p->j;
 
-    fn_t *fn = fn_create_nested(args, m, m->eh);
-    tbl_append(f->fns, vraw((uint32_t)fn), m->eh);
+    fn_t *fn = fn_create_nested(args, p, p->eh);
+    tbl_append(f->fns, vraw((uint32_t)fn), p->eh);
 
-    m->j = j;
-    m->fn = f;
+    p->j = j;
+    p->fn = f;
 
-    mu_enca(m, MFN, f->fns->len-1);
+    encodea(p, OP_FN, f->fns->len-1);
 }
 
-static void mp_if(mstate_t *m) {
-    mu_expect(m, '(');
-    mp_value(m);
-    mu_expect(m, ')');
+static void p_if(parse_t *p) {
+    expect(p, '(');
+    p_value(p);
+    expect(p, ')');
 
-    int i_ins = m->fn->ins;
-    mu_enlarge(m, m->jfsize);
-    mp_phrase(m);
+    int i_ins = p->fn->ins;
+    enlarge(p, p->jfsize);
+    p_phrase(p);
 
-    if (m->tok == MT_ELSE) {
-        int e_ins = m->fn->ins;
-        mu_enlarge(m, m->jsize);
-        mu_lex(m);
-        mp_phrase(m);
+    if (p->tok == T_ELSE) {
+        int e_ins = p->fn->ins;
+        enlarge(p, p->jsize);
+        mu_lex(p);
+        p_phrase(p);
 
-        mu_inserta(m, MJFALSE, (e_ins+m->jsize) - (i_ins+m->jfsize), i_ins);
-        mu_inserta(m, MJUMP, m->fn->ins - (e_ins+m->jsize), e_ins);
+        inserta(p, OP_JFALSE, (e_ins+p->jsize) - (i_ins+p->jfsize), i_ins);
+        inserta(p, OP_JUMP, p->fn->ins - (e_ins+p->jsize), e_ins);
     } else {
-        if (!m->stmt) {
-            mu_enca(m, MJUMP, mu_size(m, MNIL));
-            mu_enc(m, MNIL);
+        if (!p->stmt) {
+            encodea(p, OP_JUMP, size(OP_NIL));
+            encode(p, OP_NIL);
         }
-        mu_inserta(m, MJFALSE, m->fn->ins - (i_ins+m->jfsize), i_ins);
+        inserta(p, OP_JFALSE, p->fn->ins - (i_ins+p->jfsize), i_ins);
     }
 }
 
-static void mp_while(mstate_t *m) {
-    if (!m->stmt) mu_enc(m, MTBL);
-    struct jstate j = m->j;
-    m->j.ctbl = tbl_create(0, m->eh);
-    m->j.btbl = tbl_create(0, m->eh);
-    int w_ins = m->fn->ins;
+static void p_while(parse_t *p) {
+    if (!p->stmt) encode(p, OP_TBL);
+    struct jparse j = p->j;
+    p->j.ctbl = tbl_create(0, p->eh);
+    p->j.btbl = tbl_create(0, p->eh);
+    int w_ins = p->fn->ins;
 
-    mu_expect(m, '(');
-    mp_value(m);
-    mu_expect(m, ')');
+    expect(p, '(');
+    p_value(p);
+    expect(p, ')');
 
-    int j_ins = m->fn->ins;
-    mu_enlarge(m, m->jfsize);
-    mp_phrase(m);
-    if (!m->stmt) mu_enc(m, MAPPEND);
+    int j_ins = p->fn->ins;
+    enlarge(p, p->jfsize);
+    p_phrase(p);
+    if (!p->stmt) encode(p, OP_APPEND);
 
-    mu_inserta(m, MJFALSE, (m->fn->ins+m->jsize) - (j_ins+m->jfsize), j_ins);
-    mu_enca(m, MJUMP, w_ins - (m->fn->ins+m->jsize));
+    inserta(p, OP_JFALSE, (p->fn->ins+p->jsize) - (j_ins+p->jfsize), j_ins);
+    encodea(p, OP_JUMP, w_ins - (p->fn->ins+p->jsize));
 
-    mu_patch(m, m->j.ctbl, w_ins);
-    tbl_t *btbl = m->j.btbl;
-    m->j = j;
+    patch(p, p->j.ctbl, w_ins);
+    tbl_t *btbl = p->j.btbl;
+    p->j = j;
 
-    if (m->stmt && m->tok == MT_ELSE) {
-        mu_lex(m);
-        mp_stmt(m);
+    if (p->stmt && p->tok == T_ELSE) {
+        mu_lex(p);
+        p_stmt(p);
     }
 
-    mu_patch(m, btbl, m->fn->ins);
+    patch(p, btbl, p->fn->ins);
 }
 
-static void mp_for(mstate_t *m) {
-    if (!m->stmt) mu_enc(m, MTBL);
+static void p_for(parse_t *p) {
+    if (!p->stmt) encode(p, OP_TBL);
 
-    struct jstate j = m->j;
-    m->j.ctbl = tbl_create(0, m->eh);
-    m->j.btbl = tbl_create(0, m->eh);
+    struct jparse j = p->j;
+    p->j.ctbl = tbl_create(0, p->eh);
+    p->j.btbl = tbl_create(0, p->eh);
 
-    mu_expect(m, '(');
-    mp_args(m);
-    tbl_t *args = mu_revargs(m->args, m->eh);
-    mu_expect(m, MT_SET);
-    mp_value(m);
-    mu_enc(m, MITER);
-    mu_expect(m, ')');
+    expect(p, '(');
+    p_args(p);
+    tbl_t *args = revargs(p->args, p->eh);
+    expect(p, T_SET);
+    p_value(p);
+    encode(p, OP_ITER);
+    expect(p, ')');
 
-    int f_ins = m->fn->ins;
-    mu_enlarge(m, m->jsize);
+    int f_ins = p->fn->ins;
+    enlarge(p, p->jsize);
 
-    mu_unpack(m, args);
-    if (m->stmt) {
-        mp_phrase(m);
+    unpack(p, args);
+    if (p->stmt) {
+        p_phrase(p);
     } else {
-        mu_enca(m, MDUP, 1);
-        mp_phrase(m);
-        mu_enc(m, MAPPEND);
-        mu_enc(m, MDROP);
+        encodea(p, OP_DUP, 1);
+        p_phrase(p);
+        encode(p, OP_APPEND);
+        encode(p, OP_DROP);
     }
 
-    mu_inserta(m, MJUMP, m->fn->ins - (f_ins+m->jsize), f_ins);
-    mu_patch(m, m->j.ctbl, m->fn->ins);
+    inserta(p, OP_JUMP, p->fn->ins - (f_ins+p->jsize), f_ins);
+    patch(p, p->j.ctbl, p->fn->ins);
 
-    mu_enca(m, MDUP, 0);
-    mu_enc(m, MTBL);
-    mu_enc(m, MCALL);
-    mu_enca(m, MDUP, 0);
+    encodea(p, OP_DUP, 0);
+    encode(p, OP_TBL);
+    encode(p, OP_CALL);
+    encodea(p, OP_DUP, 0);
 
-    mu_enca(m, MJTRUE, (f_ins+m->jsize) - (m->fn->ins+m->jtsize));
-    mu_enc(m, MDROP);
+    encodea(p, OP_JTRUE, (f_ins+p->jsize) - (p->fn->ins+p->jtsize));
+    encode(p, OP_DROP);
 
-    tbl_t *btbl = m->j.btbl;
-    m->j = j;
+    tbl_t *btbl = p->j.btbl;
+    p->j = j;
 
-    if (m->stmt && m->tok == MT_ELSE) {
-        mu_lex(m);
-        mp_stmt(m);
+    if (p->stmt && p->tok == T_ELSE) {
+        mu_lex(p);
+        p_stmt(p);
     }
 
-    mu_patch(m, btbl, m->fn->ins);
-    mu_enc(m, MDROP);
+    patch(p, btbl, p->fn->ins);
+    encode(p, OP_DROP);
 }
 
 
-static void mp_expr_op(mstate_t *m) {
-    switch (m->tok) {
-        case MT_KEY:    if (m->indirect) mu_enc(m, MLOOKUP);
-                        mu_lex(m);
-                        mu_enca(m, MVAR, mu_accvar(m, m->val));
-                        mu_lex(m);
-                        m->indirect = true;
-                        return mp_expr_op(m);
+static void p_expr_op(parse_t *p) {
+    switch (p->tok) {
+        case T_KEY:     if (p->indirect) encode(p, OP_LOOKUP);
+                        mu_lex(p);
+                        encodea(p, OP_VAR, accvar(p, p->val));
+                        mu_lex(p);
+                        p->indirect = true;
+                        return p_expr_op(p);
 
-        case '[':       if (m->indirect) mu_enc(m, MLOOKUP);
-                        m->paren++;
-                        mu_lex(m);
-                        mp_value(m);
-                        m->paren--;
-                        mu_expect(m, ']');
-                        m->indirect = true;
-                        return mp_expr_op(m);
+        case '[':       if (p->indirect) encode(p, OP_LOOKUP);
+                        p->paren++;
+                        mu_lex(p);
+                        p_value(p);
+                        p->paren--;
+                        expect(p, ']');
+                        p->indirect = true;
+                        return p_expr_op(p);
 
-        case '(':       if (m->indirect) mu_enc(m, MLOOKUP);
-                        mu_enc(m, MTBL);
-                        m->paren++;
-                        mp_table(m);
-                        m->paren--;
-                        mu_expect(m, ')');
-                        mu_enc(m, MCALL);
-                        m->indirect = false;
-                        return mp_expr_op(m);
+        case '(':       if (p->indirect) encode(p, OP_LOOKUP);
+                        encode(p, OP_TBL);
+                        p->paren++;
+                        p_table(p);
+                        p->paren--;
+                        expect(p, ')');
+                        encode(p, OP_CALL);
+                        p->indirect = false;
+                        return p_expr_op(p);
 
-        case MT_OP:     if (m->op.lprec <= m->op.rprec) return;
-                        if (m->indirect) mu_enc(m, MLOOKUP);
-                        mu_enc(m, MAPPEND);
-                        {   struct opstate op = m->op;
-                            marg_t tblarg = mu_accvar(m, vcstr("ops"));
-                            marg_t symarg = mu_accvar(m, m->val);
-                            mu_enlargein(m, mu_size(m, MSCOPE) +
-                                           mu_sizea(m, MVAR, tblarg) +
-                                           mu_size(m, MLOOKUP) +
-                                           mu_sizea(m, MVAR, symarg) +
-                                           mu_size(m, MLOOKUP) +
-                                           mu_size(m, MTBL), m->op.ins);
-                            m->op.ins += mu_insert(m, MSCOPE, m->op.ins);
-                            m->op.ins += mu_inserta(m, MVAR, tblarg, m->op.ins);
-                            m->op.ins += mu_insert(m, MLOOKUP, m->op.ins);
-                            m->op.ins += mu_inserta(m, MVAR, symarg, m->op.ins);
-                            m->op.ins += mu_insert(m, MLOOKUP, m->op.ins);
-                            m->op.ins += mu_insert(m, MTBL, m->op.ins);
-                            m->op.lprec = m->op.rprec;
-                            mu_lex(m);
-                            mp_expr(m);
-                            m->op = op;
+        case T_OP:      if (p->op.lprec <= p->op.rprec) return;
+                        if (p->indirect) encode(p, OP_LOOKUP);
+                        encode(p, OP_APPEND);
+                        {   struct opparse op = p->op;
+                            arg_t tblarg = accvar(p, vcstr("ops"));
+                            arg_t symarg = accvar(p, p->val);
+                            enlargein(p, size(OP_SCOPE) +
+                                         sizea(OP_VAR, tblarg) +
+                                         size(OP_LOOKUP) +
+                                         sizea(OP_VAR, symarg) +
+                                         size(OP_LOOKUP) +
+                                         size(OP_TBL), p->op.ins);
+                            p->op.ins += insert(p, OP_SCOPE, p->op.ins);
+                            p->op.ins += inserta(p, OP_VAR, tblarg, p->op.ins);
+                            p->op.ins += insert(p, OP_LOOKUP, p->op.ins);
+                            p->op.ins += inserta(p, OP_VAR, symarg, p->op.ins);
+                            p->op.ins += insert(p, OP_LOOKUP, p->op.ins);
+                            p->op.ins += insert(p, OP_TBL, p->op.ins);
+                            p->op.lprec = p->op.rprec;
+                            mu_lex(p);
+                            p_expr(p);
+                            p->op = op;
                         }
-                        if (m->indirect) mu_enc(m, MLOOKUP);
-                        mu_enc(m, MAPPEND);
-                        mu_enc(m, MCALL);
-                        m->indirect = false;
-                        return mp_expr_op(m);
+                        if (p->indirect) encode(p, OP_LOOKUP);
+                        encode(p, OP_APPEND);
+                        encode(p, OP_CALL);
+                        p->indirect = false;
+                        return p_expr_op(p);
 
-        case MT_AND:    if (m->op.lprec <= m->op.rprec) return;
-                        if (m->indirect) mu_enc(m, MLOOKUP);
-                        mu_enca(m, MDUP, 0);
-                        {   int a_ins = m->fn->ins;
-                            struct opstate op = m->op;
-                            mu_enlarge(m, m->jfsize);
-                            mu_enc(m, MDROP);
-                            m->op.lprec = m->op.rprec;
-                            mu_lex(m);
-                            mp_expr(m);
-                            if (m->indirect) mu_enc(m, MLOOKUP);
-                            m->op = op;
-                            mu_inserta(m, MJFALSE, 
-                                     m->fn->ins - (a_ins+m->jfsize), a_ins);
+        case T_AND:     if (p->op.lprec <= p->op.rprec) return;
+                        if (p->indirect) encode(p, OP_LOOKUP);
+                        encodea(p, OP_DUP, 0);
+                        {   int a_ins = p->fn->ins;
+                            struct opparse op = p->op;
+                            enlarge(p, p->jfsize);
+                            encode(p, OP_DROP);
+                            p->op.lprec = p->op.rprec;
+                            mu_lex(p);
+                            p_expr(p);
+                            if (p->indirect) encode(p, OP_LOOKUP);
+                            p->op = op;
+                            inserta(p, OP_JFALSE, 
+                                     p->fn->ins - (a_ins+p->jfsize), a_ins);
                         }
-                        m->indirect = false;
-                        return mp_expr_op(m);
+                        p->indirect = false;
+                        return p_expr_op(p);
                             
-        case MT_OR:     if (m->op.lprec <= m->op.rprec) return;
-                        if (m->indirect) mu_enc(m, MLOOKUP);
-                        mu_enca(m, MDUP, 0);
-                        {   int o_ins = m->fn->ins;
-                            struct opstate op = m->op;
-                            mu_enlarge(m, m->jtsize);
-                            mu_enc(m, MDROP);
-                            m->op.lprec = m->op.rprec;
-                            mu_lex(m);
-                            mp_expr(m);
-                            if (m->indirect) mu_enc(m, MLOOKUP);
-                            m->op = op;
-                            mu_inserta(m, MJTRUE, 
-                                     m->fn->ins - (o_ins+m->jtsize), o_ins);
+        case T_OR:      if (p->op.lprec <= p->op.rprec) return;
+                        if (p->indirect) encode(p, OP_LOOKUP);
+                        encodea(p, OP_DUP, 0);
+                        {   int o_ins = p->fn->ins;
+                            struct opparse op = p->op;
+                            enlarge(p, p->jtsize);
+                            encode(p, OP_DROP);
+                            p->op.lprec = p->op.rprec;
+                            mu_lex(p);
+                            p_expr(p);
+                            if (p->indirect) encode(p, OP_LOOKUP);
+                            p->op = op;
+                            inserta(p, OP_JTRUE, 
+                                     p->fn->ins - (o_ins+p->jtsize), o_ins);
                         }
-                        m->indirect = false;
-                        return mp_expr_op(m);
+                        p->indirect = false;
+                        return p_expr_op(p);
 
         default:        return;
     }
 }
 
-static void mp_expr(mstate_t *m) {
-    m->op.ins = m->fn->ins;
+static void p_expr(parse_t *p) {
+    p->op.ins = p->fn->ins;
 
-    switch (m->tok) {
-        case MT_IDENT:  mu_enc(m, MSCOPE);
-                        mu_enca(m, MVAR, mu_accvar(m, m->val));
-                        m->indirect = true;
-                        mu_lex(m);
-                        return mp_expr_op(m);
+    switch (p->tok) {
+        case T_IDENT:   encode(p, OP_SCOPE);
+                        encodea(p, OP_VAR, accvar(p, p->val));
+                        p->indirect = true;
+                        mu_lex(p);
+                        return p_expr_op(p);
 
-        case MT_NIL:    mu_enc(m, MSCOPE);
-                        mu_enc(m, MNIL);
-                        m->indirect = true;
-                        mu_lex(m);
-                        return mp_expr_op(m);
+        case T_NIL:     encode(p, OP_SCOPE);
+                        encode(p, OP_NIL);
+                        p->indirect = true;
+                        mu_lex(p);
+                        return p_expr_op(p);
 
-        case MT_LIT:    mu_enca(m, MVAR, mu_accvar(m, m->val));
-                        m->indirect = false;
-                        mu_lex(m);
-                        return mp_expr_op(m);
+        case T_LIT:     encodea(p, OP_VAR, accvar(p, p->val));
+                        p->indirect = false;
+                        mu_lex(p);
+                        return p_expr_op(p);
 
-        case '[':       mu_enc(m, MTBL);
-                        mp_table(m);
-                        mu_expect(m, ']');
-                        m->indirect = false;
-                        return mp_expr_op(m);
+        case '[':       encode(p, OP_TBL);
+                        p_table(p);
+                        expect(p, ']');
+                        p->indirect = false;
+                        return p_expr_op(p);
 
-        case '(':       m->paren++;
-                        mu_lex(m);
-                        mp_value(m);
-                        m->paren--;
-                        mu_expect(m, ')');
-                        return mp_expr_op(m);
+        case '(':       p->paren++;
+                        mu_lex(p);
+                        p_value(p);
+                        p->paren--;
+                        expect(p, ')');
+                        return p_expr_op(p);
 
-        case MT_OP:     mu_enc(m, MSCOPE);
-                        mu_enca(m, MVAR, mu_accvar(m, vcstr("ops")));
-                        mu_enc(m, MLOOKUP);
-                        mu_enca(m, MVAR, mu_accvar(m, m->val));
-                        mu_enc(m, MLOOKUP);
-                        mu_enc(m, MTBL);
-                        mu_lex(m);
-                        mp_value(m);
-                        mu_enc(m, MAPPEND);
-                        mu_enc(m, MCALL);
-                        m->indirect = false;
-                        return mp_expr_op(m);
+        case T_OP:      encode(p, OP_SCOPE);
+                        encodea(p, OP_VAR, accvar(p, vcstr("ops")));
+                        encode(p, OP_LOOKUP);
+                        encodea(p, OP_VAR, accvar(p, p->val));
+                        encode(p, OP_LOOKUP);
+                        encode(p, OP_TBL);
+                        mu_lex(p);
+                        p_value(p);
+                        encode(p, OP_APPEND);
+                        encode(p, OP_CALL);
+                        p->indirect = false;
+                        return p_expr_op(p);
 
-        case MT_IF:     mu_lex(m);
-                        mp_if(m);
-                        m->indirect = false;
-                        return mp_expr_op(m);
+        case T_IF:      mu_lex(p);
+                        p_if(p);
+                        p->indirect = false;
+                        return p_expr_op(p);
 
-        case MT_WHILE:  mu_lex(m);
-                        mp_while(m);
-                        m->indirect = false;
-                        return mp_expr_op(m); 
+        case T_WHILE:   mu_lex(p);
+                        p_while(p);
+                        p->indirect = false;
+                        return p_expr_op(p); 
 
-        case MT_FOR:    mu_lex(m);
-                        mp_for(m);
-                        m->indirect = false;
-                        return mp_expr_op(m);
+        case T_FOR:     mu_lex(p);
+                        p_for(p);
+                        p->indirect = false;
+                        return p_expr_op(p);
 
-        case MT_FN:     mu_lex(m);
-                        mp_fn(m);
-                        m->indirect = false;
-                        return mp_expr_op(m);
+        case T_FN:      mu_lex(p);
+                        p_fn(p);
+                        p->indirect = false;
+                        return p_expr_op(p);
 
-        default:        mu_unexpected(m);
+        default:        unexpected(p);
     }
 }
 
 
-static void mp_args_follow(mstate_t *m) {
-    switch (m->tok) {
-        case MT_SEP:    mu_lex(m);
-                        return mp_args_entry(m);
+static void p_args_follow(parse_t *p) {
+    switch (p->tok) {
+        case T_SEP:     mu_lex(p);
+                        return p_args_entry(p);
 
         default:        return;
     }
 }
 
-static void mp_args_entry(mstate_t *m) {
-    switch (m->tok) {
-        case MT_FN:
-        case MT_IF:
-        case MT_WHILE:
-        case MT_FOR:
-        case MT_IDENT:  
-        case MT_NIL:
-        case MT_LIT:    tbl_append(m->args, m->val, m->eh);
-                        mu_lex(m);
-                        return mp_args_follow(m);
+static void p_args_entry(parse_t *p) {
+    switch (p->tok) {
+        case T_FN:
+        case T_IF:
+        case T_WHILE:
+        case T_FOR:
+        case T_IDENT:  
+        case T_NIL:
+        case T_LIT:     tbl_append(p->args, p->val, p->eh);
+                        mu_lex(p);
+                        return p_args_follow(p);
 
-        case '[':       {   tbl_t *args = m->args;
-                            mu_lex(m);
-                            mp_args(m);
-                            tbl_append(args, vtbl(m->args), m->eh);
-                            m->args = args;
+        case '[':       {   tbl_t *args = p->args;
+                            mu_lex(p);
+                            p_args(p);
+                            tbl_append(args, vtbl(p->args), p->eh);
+                            p->args = args;
                         }
-                        mu_expect(m, ']');
-                        return mp_args_follow(m);
+                        expect(p, ']');
+                        return p_args_follow(p);
 
-        default:        return mp_args_follow(m);
+        default:        return p_args_follow(p);
     }
 }
 
-static void mp_args(mstate_t *m) {
-    m->args = tbl_create(0, m->eh);
+static void p_args(parse_t *p) {
+    p->args = tbl_create(0, p->eh);
 
-    return mp_args_entry(m);
+    return p_args_entry(p);
 }
 
 
-static void mp_table_follow(mstate_t *m) {
-    switch (m->tok) {
-        case MT_SEP:    return mp_table(m);
+static void p_table_follow(parse_t *p) {
+    switch (p->tok) {
+        case T_SEP:     return p_table(p);
 
         default:        return;
     }
 }
 
-static void mp_table_assign(mstate_t *m) {
-    switch (m->tok) {
-        case MT_SET:    mu_lex(m);
-                        mp_value(m);
-                        mu_enc(m, MINSERT);
-                        return mp_table_follow(m);
+static void p_table_assign(parse_t *p) {
+    switch (p->tok) {
+        case T_SET:     mu_lex(p);
+                        p_value(p);
+                        encode(p, OP_INSERT);
+                        return p_table_follow(p);
 
-        default:        mu_enc(m, MAPPEND);
-                        return mp_table_follow(m);
+        default:        encode(p, OP_APPEND);
+                        return p_table_follow(p);
     }
 }
         
-static void mp_table_entry(mstate_t *m) {
-    m->key = true;
-    mu_lex(m);
-    m->key = false;
+static void p_table_entry(parse_t *p) {
+    p->key = true;
+    mu_lex(p);
+    p->key = false;
 
-    switch (m->tok) {
-        case MT_IDSET:  mu_enca(m, MVAR, mu_accvar(m, m->val));
-                        mu_lex(m);
-                        mu_expect(m, MT_SET);
-                        mp_value(m);
-                        mu_enc(m, MINSERT);
-                        return mp_table_follow(m);
+    switch (p->tok) {
+        case T_IDSET:   encodea(p, OP_VAR, accvar(p, p->val));
+                        mu_lex(p);
+                        expect(p, T_SET);
+                        p_value(p);
+                        encode(p, OP_INSERT);
+                        return p_table_follow(p);
 
-        case MT_FNSET:  mu_lex(m);
-                        mu_expect(m, MT_IDENT);
-                        mu_enca(m, MVAR, mu_accvar(m, m->val));
-                        mp_fn(m);
-                        mu_enc(m, MINSERT);
-                        return mp_table_follow(m);
+        case T_FNSET:   mu_lex(p);
+                        expect(p, T_IDENT);
+                        encodea(p, OP_VAR, accvar(p, p->val));
+                        p_fn(p);
+                        encode(p, OP_INSERT);
+                        return p_table_follow(p);
 
-        case MT_SEP:    return mp_table(m);
+        case T_SEP:     return p_table(p);
 
-        case MT_IDENT:
-        case MT_NIL:
-        case MT_FN:
-        case MT_IF:
-        case MT_WHILE:
-        case MT_FOR:
-        case MT_LIT:
-        case MT_OP:
+        case T_IDENT:
+        case T_NIL:
+        case T_FN:
+        case T_IF:
+        case T_WHILE:
+        case T_FOR:
+        case T_LIT:
+        case T_OP:
         case '[':
-        case '(':       {   struct opstate op = m->op;
-                            m->op.lprec = -1;
-                            mp_expr(m);
-                            m->op = op;
+        case '(':       {   struct opparse op = p->op;
+                            p->op.lprec = -1;
+                            p_expr(p);
+                            p->op = op;
                         }
-                        if (m->indirect) mu_enc(m, MLOOKUP);
-                        return mp_table_assign(m);
+                        if (p->indirect) encode(p, OP_LOOKUP);
+                        return p_table_assign(p);
 
         default:        return;
     }
 }
 
-static void mp_table(mstate_t *m) {
-    uint8_t paren = m->paren;
-    m->paren = false;
+static void p_table(parse_t *p) {
+    uint8_t paren = p->paren;
+    p->paren = false;
 
-    m->left = true;
-    mp_table_entry(m);
+    p->left = true;
+    p_table_entry(p);
 
-    m->paren = paren;
+    p->paren = paren;
 }
 
 
-static void mp_stmt_follow(mstate_t *m) {
-    switch (m->tok) {
-        case MT_SEP:    mu_lex(m);
-                        return mp_stmt_entry(m);
+static void p_stmt_follow(parse_t *p) {
+    switch (p->tok) {
+        case T_SEP:     mu_lex(p);
+                        return p_stmt_entry(p);
 
         default:        return;
     }
 }
 
-static void mp_stmt_insert(mstate_t *m) {
-    switch (m->tok) {
-        case '[':       mu_lex(m);
-                        mp_args(m);
-                        mu_expect(m, ']');
-                        mu_expect(m, MT_SET);
-                        mp_value(m);
-                        mu_unpack(m, m->args);
+static void p_stmt_insert(parse_t *p) {
+    switch (p->tok) {
+        case '[':       mu_lex(p);
+                        p_args(p);
+                        expect(p, ']');
+                        expect(p, T_SET);
+                        p_value(p);
+                        unpack(p, p->args);
                         return;
 
-        default:        mp_expr(m);
-                        if (!m->indirect) mu_unexpected(m);
-                        mu_expect(m, MT_SET);
-                        mp_value(m);
-                        mu_enc(m, MINSERT);
-                        mu_enc(m, MDROP);
+        default:        p_expr(p);
+                        if (!p->indirect) unexpected(p);
+                        expect(p, T_SET);
+                        p_value(p);
+                        encode(p, OP_INSERT);
+                        encode(p, OP_DROP);
                         return;
     }
 }
 
-static void mp_stmt_assign(mstate_t *m) {
-    switch (m->tok) {
-        case MT_SET:    if (!m->indirect) mu_unexpected(m);
-                        mu_lex(m);
-                        mp_value(m);
-                        mu_enc(m, MASSIGN);
+static void p_stmt_assign(parse_t *p) {
+    switch (p->tok) {
+        case T_SET:     if (!p->indirect) unexpected(p);
+                        mu_lex(p);
+                        p_value(p);
+                        encode(p, OP_ASSIGN);
                         return;
 
-        case MT_OPSET:  if (!m->indirect) mu_unexpected(m);
-                        mu_enc(m, MSCOPE);
-                        mu_enca(m, MVAR, mu_accvar(m, vcstr("ops")));
-                        mu_enc(m, MLOOKUP);
-                        mu_enca(m, MVAR, mu_accvar(m, m->val));
-                        mu_enc(m, MLOOKUP);
-                        mu_enc(m, MTBL);
-                        mu_enca(m, MDUP, 3);
-                        mu_enca(m, MDUP, 3);
-                        mu_enc(m, MLOOKUP);
-                        mu_enc(m, MAPPEND);
-                        mu_lex(m);
-                        mp_value(m);
-                        mu_enc(m, MAPPEND);
-                        mu_enc(m, MCALL);
-                        mu_enc(m, MASSIGN);
+        case T_OPSET:   if (!p->indirect) unexpected(p);
+                        encode(p, OP_SCOPE);
+                        encodea(p, OP_VAR, accvar(p, vcstr("ops")));
+                        encode(p, OP_LOOKUP);
+                        encodea(p, OP_VAR, accvar(p, p->val));
+                        encode(p, OP_LOOKUP);
+                        encode(p, OP_TBL);
+                        encodea(p, OP_DUP, 3);
+                        encodea(p, OP_DUP, 3);
+                        encode(p, OP_LOOKUP);
+                        encode(p, OP_APPEND);
+                        mu_lex(p);
+                        p_value(p);
+                        encode(p, OP_APPEND);
+                        encode(p, OP_CALL);
+                        encode(p, OP_ASSIGN);
                         return;
                         
-        default:        if (m->indirect) mu_enc(m, MLOOKUP);
-                        mu_enc(m, MDROP);
+        default:        if (p->indirect) encode(p, OP_LOOKUP);
+                        encode(p, OP_DROP);
                         return;
     }
 }
 
-static void mp_stmt(mstate_t *m) {
-    switch (m->tok) {
-        case '{':       mu_lex(m);
-                        mp_stmt_list(m);
-                        mu_expect(m, '}');
+static void p_stmt(parse_t *p) {
+    switch (p->tok) {
+        case '{':       mu_lex(p);
+                        p_stmt_list(p);
+                        expect(p, '}');
                         return;
 
-        case MT_LET:    mu_lex(m);
-                        return mp_stmt_insert(m);
+        case T_LET:     mu_lex(p);
+                        return p_stmt_insert(p);
 
-        case MT_IF:     mu_lex(m);
-                        return mp_if(m);
+        case T_IF:      mu_lex(p);
+                        return p_if(p);
 
-        case MT_WHILE:  mu_lex(m);
-                        return mp_while(m); 
+        case T_WHILE:   mu_lex(p);
+                        return p_while(p); 
 
-        case MT_FOR:    mu_lex(m);
-                        return mp_for(m);
+        case T_FOR:     mu_lex(p);
+                        return p_for(p);
 
-        case MT_RETURN: mu_lex(m);
-                        mp_value(m);
-                        mu_enc(m, MRET);
+        case T_RETURN:  mu_lex(p);
+                        p_value(p);
+                        encode(p, OP_RET);
                         return;
 
-        case MT_CONT:   if (!m->j.ctbl) mu_unexpected(m);
-                        mu_lex(m);
-                        tbl_append(m->j.ctbl, vraw(m->fn->ins), m->eh);
-                        mu_enlarge(m, m->jsize);
+        case T_CONT:    if (!p->j.ctbl) unexpected(p);
+                        mu_lex(p);
+                        tbl_append(p->j.ctbl, vraw(p->fn->ins), p->eh);
+                        enlarge(p, p->jsize);
                         return;
 
-        case MT_BREAK:  if (!m->j.btbl) mu_unexpected(m);
-                        mu_lex(m);
-                        tbl_append(m->j.btbl, vraw(m->fn->ins), m->eh);
-                        mu_enlarge(m, m->jsize);
+        case T_BREAK:   if (!p->j.btbl) unexpected(p);
+                        mu_lex(p);
+                        tbl_append(p->j.btbl, vraw(p->fn->ins), p->eh);
+                        enlarge(p, p->jsize);
                         return;
 
-        case MT_FNSET:  mu_lex(m);
-                        mu_expect(m, MT_IDENT);
-                        mu_enc(m, MSCOPE);
-                        mu_enca(m, MVAR, mu_accvar(m, m->val));
-                        mp_fn(m);
-                        mu_enc(m, MINSERT);
-                        mu_enc(m, MDROP);
+        case T_FNSET:   mu_lex(p);
+                        expect(p, T_IDENT);
+                        encode(p, OP_SCOPE);
+                        encodea(p, OP_VAR, accvar(p, p->val));
+                        p_fn(p);
+                        encode(p, OP_INSERT);
+                        encode(p, OP_DROP);
                         return;
 
-        case MT_SEP:    mu_lex(m);
-                        return mp_stmt_list(m);
+        case T_SEP:     mu_lex(p);
+                        return p_stmt_list(p);
 
-        case MT_IDENT:
-        case MT_FN:
-        case MT_LIT:
-        case MT_NIL:
-        case MT_OP:
+        case T_IDENT:
+        case T_FN:
+        case T_LIT:
+        case T_NIL:
+        case T_OP:
         case '[':
-        case '(':       mp_expr(m);
-                        return mp_stmt_assign(m);
+        case '(':       p_expr(p);
+                        return p_stmt_assign(p);
 
         default:        return;
 
     }
 }
 
-static void mp_stmt_list(mstate_t *m) {
-    uint8_t paren = m->paren;
-    m->paren = false;
+static void p_stmt_list(parse_t *p) {
+    uint8_t paren = p->paren;
+    p->paren = false;
 
-    m->stmt = true;
-    m->left = true;
-    mp_stmt_entry(m);
+    p->stmt = true;
+    p->left = true;
+    p_stmt_entry(p);
 
-    m->paren = paren;
+    p->paren = paren;
 }
 
-static void mp_stmt_entry(mstate_t *m) {
-    mp_stmt(m);
-    return mp_stmt_follow(m);
+static void p_stmt_entry(parse_t *p) {
+    p_stmt(p);
+    return p_stmt_follow(p);
 }
 
 
 
-// Parses Mu source into bytecode
-void mu_parse_init(mstate_t *m, var_t code) {
-    m->ref = getref(code);
-    m->str = code.str;
-    m->pos = code.str + code.off;
-    m->end = code.str + code.off + code.len;
+// Parses OP_u source into bytecode
+void mu_parse_init(parse_t *p, var_t code) {
+    p->ref = getref(code);
+    p->str = getstart(code);
+    p->pos = getstr(code);
+    p->end = getend(code);
 
-    m->key = false;
-    m->stmt = true;
-    m->left = true;
-    m->paren = false;
-    m->keys = mu_keys();
+    p->key = false;
+    p->stmt = true;
+    p->left = true;
+    p->paren = false;
+    p->keys = mu_keys();
 
-    m->jsize = mu_sizea(m, MJUMP, 0);
-    m->jtsize = mu_sizea(m, MJTRUE, 0);
-    m->jfsize = mu_sizea(m, MJFALSE, 0);
+    p->jsize = sizea(OP_JUMP, 0);
+    p->jtsize = sizea(OP_JTRUE, 0);
+    p->jfsize = sizea(OP_JFALSE, 0);
 
-    mu_lex(m);
+    mu_lex(p);
 }
 
-void mu_parse_args(mstate_t *m, tbl_t *args) {
-    if (args && args->len > 0) {
-        mu_enc(m, MARGS);
-        mu_unpack(m, args);
+void mu_parse_args(parse_t *p, tbl_t *args) {
+    if (args && tbl_len(args) > 0) {
+        encode(p, OP_ARGS);
+        unpack(p, args);
     }
 }
 
-void mu_parse_top(mstate_t *m) {
-    m->j = (struct jstate){0};
+void mu_parse_top(parse_t *p) {
+    p->j = (struct jparse){0};
 
-    mp_stmt_list(m);
+    p_stmt_list(p);
 
-    if (m->tok != 0)
-        mu_unexpected(m);
+    if (p->tok != 0)
+        unexpected(p);
 
-    mu_enc(m, MRETN);
+    encode(p, OP_RETN);
 }
 
-void mu_parse_nested(mstate_t *m) {
-    m->j = (struct jstate){0};
+void mu_parse_nested(parse_t *p) {
+    p->j = (struct jparse){0};
 
-    mp_stmt(m);
+    p_stmt(p);
 
-    mu_enc(m, MRETN);
+    encode(p, OP_RETN);
 }
 

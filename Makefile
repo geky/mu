@@ -1,19 +1,22 @@
 TARGET = mu
+LIBTARGET = libmu.a
 
 CC = gcc
+AR = ar
 
-SRC := var.c num.c str.c tbl.c fn.c
-SRC += err.c mem.c
+SRC += var.c mem.c err.c
+SRC += num.c str.c tbl.c fn.c
 SRC += parse.c lex.c vm.c
 SRC += main.c
 OBJ := $(SRC:.c=.o)
-ASM := $(OBJ:.o=.s)
+DEP := $(SRC:.c=.d)
+ASM := $(SRC:.c=.s)
 
 #CFLAGS += -O2
-#CFLAGS += -O2 -pg
-CFLAGS += -O0 -g3 -gdwarf-2 -ggdb
+#CFLAGS += -Os -s
+CFLAGS += -O0 -g3 -gdwarf-2 -ggdb -DMU_DEBUG
 CFLAGS += -include stdio.h
-CFLAGS += -finline -foptimize-sibling-calls -freg-struct-return
+CFLAGS += -foptimize-sibling-calls -freg-struct-return
 CFLAGS += -m32
 CFLAGS += -Wall -Winline
 
@@ -22,18 +25,31 @@ LFLAGS += -lm
 
 all: $(TARGET)
 
+lib: $(LIBTARGET)
+
 asm: $(ASM)
 
-mu: $(OBJ)
+include $(DEP)
+
+
+$(TARGET): $(OBJ)
 	$(CC) $(CFLAGS) $^ $(LFLAGS) -o $@
 
-%.o: %.c
-	$(CC) -c $(CFLAGS) -o $@ $<
+$(LIBTARGET): $(OBJ)
+	$(AR) rcs $@ $^
+
+%.o: %.c %.d
+	$(CC) -c $(CFLAGS) $< -o $@
+
+%.d: %.c
+	$(CC) -MM $(CFLAGS) $< > $@
 
 %.s: %.c
-	$(CC) -S -fverbose-asm $(CFLAGS) -o $@ $<
+	$(CC) -S -fverbose-asm $(CFLAGS) $< -o $@
+
 
 clean:
-	-rm $(TARGET)
-	-rm $(ASM)
+	-rm $(TARGET) $(LIBTARGET)
 	-rm $(OBJ)
+	-rm $(DEP)
+	-rm $(ASM)

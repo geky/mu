@@ -2,9 +2,11 @@
  * Error Handling
  */
 
-#ifndef MU_ERR_H
-#define MU_ERR_H
+#ifdef MU_DEF
+#ifndef MU_ERR_DEF
+#define MU_ERR_DEF
 
+#include "mu.h"
 #include <setjmp.h>
 
 
@@ -13,20 +15,29 @@ extern jmp_buf _jmp_buf;
 typedef typeof(_jmp_buf[0]) eh_t;
 
 
+#endif
+#else
+#ifndef MU_ERR_H
+#define MU_ERR_H
+#define MU_DEF
+#include "err.h"
+#include "tbl.h"
+#undef MU_DEF
+
+
 // Try a statement returning a table pointer if exception 
 // is thrown, null marks successful execution
-#define mu_try_begin(err, eh) {             \
-    eh_t eh[1];                             \
-                                            \
-    err = (tbl_t *)setjmp(eh);              \
-                                            \
-    if (__builtin_expect(err == 0, 1)) {    \
+#define mu_try_begin(err, eh) {     \
+    eh_t eh[1];                     \
+                                    \
+    err = (tbl_t *)setjmp(eh);      \
+                                    \
+    if (mu_likely(err == 0)) {      \
 {
-#define mu_try_end                          \
-}                                           \
-    }                                       \
+#define mu_try_end                  \
+}                                   \
+    }                               \
 }
-
 
 #define mu_on_err_begin(eh) {               \
     eh_t **_eh = &(eh);                     \
@@ -35,7 +46,7 @@ typedef typeof(_jmp_buf[0]) eh_t;
                                             \
     tbl_t *_err = (tbl_t *)setjmp(_new_eh); \
                                             \
-    if (__builtin_expect(_err == 0, 1)) {   \
+    if (mu_likely(_err == 0)) {             \
         *_eh = _new_eh;                     \
 {
 #define mu_on_err_do                        \
@@ -51,18 +62,15 @@ typedef typeof(_jmp_buf[0]) eh_t;
 }
 
 
-// Redundant definition of table struct to avoid 
-// dragging in all of var.h
-typedef struct tbl tbl_t;
-
-__attribute__((noreturn)) void mu_err(tbl_t *err, eh_t *eh);
+mu_noreturn void mu_err(tbl_t *err, eh_t *eh);
 
 
-__attribute__((noreturn)) void err_nomem(eh_t *eh);
-__attribute__((noreturn)) void err_len(eh_t *eh);
-__attribute__((noreturn)) void err_ro(eh_t *eh);
-__attribute__((noreturn)) void err_parse(eh_t *eh);
-__attribute__((noreturn)) void err_undefined(eh_t *eh);
+mu_noreturn void err_nomem(eh_t *eh);
+mu_noreturn void err_len(eh_t *eh);
+mu_noreturn void err_ro(eh_t *eh);
+mu_noreturn void err_parse(eh_t *eh);
+mu_noreturn void err_undefined(eh_t *eh);
 
 
+#endif
 #endif

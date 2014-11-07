@@ -1,35 +1,39 @@
 #include "fn.h"
 
-#include "mem.h"
+#include "num.h"
 #include "str.h"
-#include "lex.h"
+#include "tbl.h"
 #include "parse.h"
 #include "vm.h"
+
+#include <string.h>
 
 
 // Functions for managing functions
 // Each function is preceded with a reference count
 // which is used as its handle in a var
 
-static fn_t *fn_realize(struct fnstate *fnstate, eh_t *eh) {
-    // this is a bit tricky since fn and m->fn share memory
-    fn_t *fn = (fn_t *)fnstate;
-    tbl_t *vars = fnstate->vars;
-    tbl_t *fns = fnstate->fns;
+static fn_t *fn_realize(struct fnparse *fnparse, eh_t *eh) {
+    // this is a bit tricky since fn and p->fn share memory
+    fn_t *fn = (fn_t *)fnparse;
+    tbl_t *vars = fnparse->vars;
+    tbl_t *fns = fnparse->fns;
     
     fn->vcount = vars->len;
     fn->fcount = fns->len;
 
     fn->vars = mu_alloc(fn->vcount*sizeof(var_t) + 
                         fn->fcount*sizeof(fn_t *), eh);
+
     tbl_for_begin (k, v, vars) {
-        fn->vars[v.data] = k;
+        fn->vars[getraw(v)] = k;
     } tbl_for_end;
 
-    fn->fns = (fn_t**)&fn->vars[fn->vcount];
     int i = 0;
+    fn->fns = (fn_t**)&fn->vars[fn->vcount];
+
     tbl_for_begin (k, v, fns) {
-        fn->fns[i++] = (fn_t*)v.data;
+        fn->fns[i++] = (fn_t*)getraw(v);
     } tbl_for_end;
     
     tbl_dec(vars);
@@ -40,52 +44,47 @@ static fn_t *fn_realize(struct fnstate *fnstate, eh_t *eh) {
 
 
 fn_t *fn_create(tbl_t *args, var_t code, eh_t *eh) {
-    args = tbl_readp(args);
+    parse_t *p = mu_alloc(sizeof(parse_t), eh);
+    p->fn = ref_alloc(sizeof(fn_t), eh);
+    p->fn->ins = 0;
+    p->fn->len = 4;
+    p->fn->bcode = mu_alloc(p->fn->len, eh);
 
-    mstate_t *m = mu_alloc(sizeof(mstate_t), eh);
-    m->fn = ref_alloc(sizeof(fn_t), eh);
-    m->fn->ins = 0;
-    m->fn->len = 4;
-    m->fn->bcode = mu_alloc(m->fn->len, eh);
+    p->fn->vars = tbl_create(args ? tbl_len(args) : 0, eh);
+    p->fn->fns = tbl_create(0, eh);
 
-    m->fn->vars = tbl_create(args ? args->len : 0, eh);
-    m->fn->fns = tbl_create(0, eh);
+    mu_parse_init(p, code);
+    mu_parse_args(p, args);
+    mu_parse_top(p);
+    p->fn->stack = 25; // TODO make this reasonable
 
-    mu_parse_init(m, code);
-    mu_parse_args(m, args);
-    mu_parse_top(m);
-    m->fn->stack = 25; // TODO make this reasonable
+    fn_t *fn = fn_realize(p->fn, eh);
 
-    fn_t *fn = fn_realize(m->fn, eh);
-
-    mu_dealloc(m, sizeof(mstate_t));
+    mu_dealloc(p, sizeof(parse_t));
 
     return fn;
 }
 
-fn_t *fn_create_nested(tbl_t *args, void *mmem, eh_t *eh) {
-    args = tbl_readp(args);
+fn_t *fn_create_nested(tbl_t *args, parse_t *p, eh_t *eh) {
+    p->fn = ref_alloc(sizeof(fn_t), eh);
+    p->fn->ins = 0;
+    p->fn->len = 4;
+    p->fn->bcode = mu_alloc(p->fn->len, eh);
 
-    mstate_t *m = mmem;
-    m->fn = ref_alloc(sizeof(fn_t), eh);
-    m->fn->ins = 0;
-    m->fn->len = 4;
-    m->fn->bcode = mu_alloc(m->fn->len, eh);
+    p->fn->vars = tbl_create(args ? tbl_len(args) : 0, eh);
+    p->fn->fns = tbl_create(0, eh);
 
-    m->fn->vars = tbl_create(args ? args->len : 0, eh);
-    m->fn->fns = tbl_create(0, eh);
+    mu_parse_args(p, args);
+    mu_parse_nested(p);
+    p->fn->stack = 25; // TODO make this reasonable
 
-    mu_parse_args(m, args);
-    mu_parse_nested(m);
-    m->fn->stack = 25; // TODO make this reasonable
-
-    return fn_realize(m->fn, eh);
+    return fn_realize(p->fn, eh);
 }
 
 
 // Called by garbage collector to clean up
-void fn_destroy(void *m) {
-    fn_t *fn = m;
+void fn_destroy(void *v) {
+    fn_t *fn = v;
     int i;
 
     for (i=0; i < fn->vcount; i++) {
@@ -98,7 +97,7 @@ void fn_destroy(void *m) {
 
     mu_dealloc((void *)fn->bcode, fn->bcount);
     mu_dealloc(fn->vars, fn->vcount*sizeof(var_t) + fn->fcount*sizeof(fn_t *));
-    ref_dealloc(m, sizeof(fn_t));
+    ref_dealloc(v, sizeof(fn_t));
 }
 
 
@@ -115,20 +114,16 @@ var_t fn_call(fn_t *fn, tbl_t *args, tbl_t *closure, eh_t *eh) {
 
 // Returns a string representation of a function
 var_t fn_repr(var_t v, eh_t *eh) {
-    v.type &= ~3;
-
-    str_t *out = str_create(13, eh);
-    str_t *res = out;
+    uint32_t bits = (uint32_t)getfn(v);
+    mstr_t *out = str_create(13, eh);
+    mstr_t *res = out;
     int i;
 
-    *res++ = 'f';
-    *res++ = 'n';
-    *res++ = ' ';
-    *res++ = '0';
-    *res++ = 'x';
+    memcpy(res, "fn 0x", 5);
+    res += 5;
 
-    for (i = 28; i >= 0; i -= 4) {
-        *res++ = num_ascii(0xf & (v.meta >> i));
+    for (i = 0; i < 8; i++) {
+        *res++ = num_ascii(0xf & (bits >> (8*(4-i))));
     }
 
     return vstr(out, 0, 13);

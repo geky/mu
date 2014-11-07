@@ -1,5 +1,4 @@
 #include "var.h"
-
 #include "num.h"
 #include "str.h"
 #include "tbl.h"
@@ -8,7 +7,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <assert.h>
 
 
 // Returns true if both variables are the
@@ -18,16 +16,16 @@ static bool nil_equals(var_t a, var_t b) { return true; }
 // compare raw bits by default
 static bool bit_equals(var_t a, var_t b) { return a.bits == b.bits; }
 
-static bool (* const var_equalss[8])(var_t, var_t) = {
-    nil_equals, num_equals, bit_equals, bit_equals,
-    bit_equals, bit_equals, str_equals, bit_equals
-};
-
 bool var_equals(var_t a, var_t b) {
-    if (a.type != b.type)
+    static bool (* const var_equalss[8])(var_t, var_t) = {
+        nil_equals, num_equals, bit_equals, bit_equals,
+        bit_equals, bit_equals, str_equals, bit_equals
+    };
+
+    if (type(a) != type(b))
         return false;
 
-    return var_equalss[a.type](a, b);
+    return var_equalss[type(a)](a, b);
 }
 
 
@@ -42,8 +40,9 @@ hash_t var_hash(var_t v) {
         bit_hash, bit_hash, str_hash, bit_hash
     };
 
-    return var_hashs[v.type](v);
+    return var_hashs[type(v)](v);
 }
+
 
 // Performs iteration on variables
 static var_t nil_iter(var_t v, eh_t *eh) { err_undefined(eh); }
@@ -54,7 +53,7 @@ var_t var_iter(var_t v, eh_t *eh) {
         tbl_iter, nil_iter, nil_iter, nil_iter
     };
 
-    return var_iters[v.type](v, eh);
+    return var_iters[type(v)](v, eh);
 }
     
 
@@ -68,19 +67,19 @@ var_t var_repr(var_t v, eh_t *eh) {
         tbl_repr, bad_repr, str_repr, fn_repr
     };
 
-    return var_reprs[v.type](v, eh);
+    return var_reprs[type(v)](v, eh);
 }
 
 // Prints variable to stdout for debugging
 void var_print(var_t v, eh_t *eh) {
     var_t repr = var_repr(v, eh);
-    printf("%.*s", repr.len, getstr(repr));
+    printf("%.*s", getlen(repr), getstr(repr));
 }
 
 
 // Table related functions performed on variables
 static var_t nil_lookup(var_t t, var_t k, eh_t *eh)  { err_undefined(eh); }
-static var_t vtbl_lookup(var_t t, var_t k, eh_t *eh) { return tbl_lookup(t.tbl, k); }
+static var_t vtbl_lookup(var_t t, var_t k, eh_t *eh) { return tbl_lookup(gettbl(t), k); }
 
 var_t var_lookup(var_t v, var_t key, eh_t *eh) {
     static var_t (* const var_lookups[8])(var_t, var_t, eh_t *) = {
@@ -88,11 +87,11 @@ var_t var_lookup(var_t v, var_t key, eh_t *eh) {
         vtbl_lookup, nil_lookup, nil_lookup, nil_lookup
     };
 
-    return var_lookups[v.type](v, key, eh);
+    return var_lookups[type(v)](v, key, eh);
 }
 
 static var_t nil_lookdn(var_t t, var_t k, len_t i, eh_t *eh)  { err_undefined(eh); }
-static var_t vtbl_lookdn(var_t t, var_t k, len_t i, eh_t *eh) { return tbl_lookdn(t.tbl, k, i); }
+static var_t vtbl_lookdn(var_t t, var_t k, len_t i, eh_t *eh) { return tbl_lookdn(gettbl(t), k, i); }
 
 var_t var_lookdn(var_t v, var_t key, len_t i, eh_t *eh) {
     static var_t (* const var_lookdns[8])(var_t, var_t, len_t, eh_t *) = {
@@ -100,12 +99,12 @@ var_t var_lookdn(var_t v, var_t key, len_t i, eh_t *eh) {
         vtbl_lookdn, nil_lookdn, nil_lookdn, nil_lookdn
     };
 
-    return var_lookdns[v.type](v, key, i, eh);
+    return var_lookdns[type(v)](v, key, i, eh);
 }
 
 
 static void nil_insert(var_t t, var_t k, var_t v, eh_t *eh)  { err_undefined(eh); }
-static void vtbl_insert(var_t t, var_t k, var_t v, eh_t *eh) { tbl_insert(t.tbl, k, v, eh); }
+static void vtbl_insert(var_t t, var_t k, var_t v, eh_t *eh) { tbl_insert(gettbl(t), k, v, eh); }
 
 void var_insert(var_t v, var_t key, var_t val, eh_t *eh) {
     static void (* const var_inserts[8])(var_t, var_t, var_t, eh_t *) = {
@@ -113,12 +112,12 @@ void var_insert(var_t v, var_t key, var_t val, eh_t *eh) {
         vtbl_insert, nil_insert, nil_insert, nil_insert
     };
 
-    var_inserts[v.type](v, key, val, eh);
+    var_inserts[type(v)](v, key, val, eh);
 }
 
 
 static void nil_assign(var_t t, var_t k, var_t v, eh_t *eh)  { err_undefined(eh); }
-static void vtbl_assign(var_t t, var_t k, var_t v, eh_t *eh) { tbl_assign(t.tbl, k, v, eh); }
+static void vtbl_assign(var_t t, var_t k, var_t v, eh_t *eh) { tbl_assign(gettbl(t), k, v, eh); }
 
 void var_assign(var_t v, var_t key, var_t val, eh_t *eh) {
     static void (* const var_assigns[8])(var_t, var_t, var_t, eh_t *) = {
@@ -126,12 +125,12 @@ void var_assign(var_t v, var_t key, var_t val, eh_t *eh) {
         vtbl_assign, nil_assign, nil_assign, nil_assign
     };
 
-    var_assigns[v.type](v, key, val, eh);
+    var_assigns[type(v)](v, key, val, eh);
 }
 
 
 static void nil_append(var_t t, var_t v, eh_t *eh)  { err_undefined(eh); }
-static void vtbl_append(var_t t, var_t v, eh_t *eh) { tbl_append(t.tbl, v, eh); }
+static void vtbl_append(var_t t, var_t v, eh_t *eh) { tbl_append(gettbl(t), v, eh); }
 
 void var_append(var_t v, var_t val, eh_t *eh) {
     static void (* const var_appends[8])(var_t, var_t, eh_t *) = {
@@ -139,15 +138,15 @@ void var_append(var_t v, var_t val, eh_t *eh) {
         vtbl_append, nil_append, nil_append, nil_append
     };
 
-    var_appends[v.type](v, val, eh);
+    var_appends[type(v)](v, val, eh);
 }
 
 
 // Function calls performed on variables
 static var_t nil_call(var_t f, tbl_t *a, eh_t *eh)  { err_undefined(eh); }
-static var_t vfn_call(var_t f, tbl_t *a, eh_t *eh)  { f.meta &= ~3; return fn_call(f.fn, a, f.tbl, eh); }
-static var_t vbfn_call(var_t f, tbl_t *a, eh_t *eh) { f.meta &= ~3; return f.bfn(a, eh); }
-static var_t vsfn_call(var_t f, tbl_t *a, eh_t *eh) { f.meta &= ~3; return f.sfn(a, f.tbl, eh); }
+static var_t vfn_call(var_t f, tbl_t *a, eh_t *eh)  { return fn_call(getfn(f), a, gettbl(f), eh); }
+static var_t vbfn_call(var_t f, tbl_t *a, eh_t *eh) { return getbfn(f)(a, eh); }
+static var_t vsfn_call(var_t f, tbl_t *a, eh_t *eh) { return getsfn(f)(a, gettbl(f), eh); }
 
 var_t var_call(var_t v, tbl_t *args, eh_t *eh) {
     static var_t (* const var_calls[8])(var_t, tbl_t *, eh_t *) = {
@@ -155,6 +154,6 @@ var_t var_call(var_t v, tbl_t *args, eh_t *eh) {
         nil_call, nil_call, nil_call, vfn_call
     };
 
-    return var_calls[v.type](v, args, eh);
+    return var_calls[type(v)](v, args, eh);
 }
 
