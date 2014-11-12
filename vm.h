@@ -29,14 +29,10 @@
 typedef uint16_t arg_t;
 typedef int16_t sarg_t;
 
-enum {
-    MU_OP    = 0xf8, // Opcode in top 5 bits
-    MU_FLAGS = 0x07, // Flags in bottom 3 bits
-};
+#define MU_OP 0xf8      // Opcode in top 5 bits
+#define MU_FLAGS 0x07   // Flags in bottom 3 bits
 
-enum opflags {
-    MU_ARG   = 0x01, // Indicates this opcode uses an argument
-};
+#define MU_ARG 0x01     // Indicates this opcode uses an argument
 
 
 typedef enum op {

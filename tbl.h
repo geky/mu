@@ -10,12 +10,31 @@
 #include "var.h"
 
 
+// Lowest bit in table pointer indicates readonly if set
+#define MU_TBLRO 0x1
+
+
+typedef struct tbl tbl_t;
+
+
+#endif
+#else
+#ifndef MU_TBL_H
+#define MU_TBL_H
+#define MU_DEF
+#include "tbl.h"
+#undef MU_DEF
+
+#include "mem.h"
+#include "err.h"
+
+
 // Each table is composed of an array of values 
 // with a stride for keys/values. If keys/values 
 // is not stored in the array it is implicitely 
 // stored as a range/offset based on the specified 
 // offset and length.
-typedef struct tbl {
+struct tbl {
     struct tbl *tail; // tail chain of tables
 
     len_t nils;     // count of nil entries
@@ -29,22 +48,10 @@ typedef struct tbl {
     } stride;           // table types
 
     union {
-        int offset;         // offset for implicit ranges
+        int offset;    // offset for implicit ranges
         var_t *array;  // pointer to stored data
     };
-} tbl_t;
-
-
-#endif
-#else
-#ifndef MU_TBL_H
-#define MU_TBL_H
-#define MU_DEF
-#include "tbl.h"
-#undef MU_DEF
-
-#include "mem.h"
-#include "err.h"
+};
 
 
 // Functions for managing tables
@@ -118,15 +125,15 @@ var_t tbl_repr(var_t v, eh_t *eh);
 
 // Accessing table pointers with the ro flag
 mu_inline bool tbl_isro(tbl_t *tbl) {
-    return 1 & (uint32_t)tbl;
+    return MU_TBLRO & (uint32_t)tbl;
 }
 
 mu_inline tbl_t *tbl_ro(tbl_t *tbl) {
-    return (tbl_t *)(1 | (uint32_t)tbl);
+    return (tbl_t *)(MU_TBLRO | (uint32_t)tbl);
 }
 
 mu_inline tbl_t *tbl_read(tbl_t *tbl) {
-    return (tbl_t *)(~1 & (uint32_t)tbl);
+    return (tbl_t *)(~MU_TBLRO & (uint32_t)tbl);
 }
 
 mu_inline tbl_t *tbl_write(tbl_t *tbl, eh_t *eh) {

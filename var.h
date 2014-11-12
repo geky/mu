@@ -1,3 +1,4 @@
+
 /* 
  *  Variable types and definitions
  */
@@ -34,6 +35,8 @@ enum type {
     MU_STR = 6, // string
     MU_FN  = 7, // function
 };
+
+#define MU_ERR 8 // error
 
 
 // declaration of var type
@@ -121,6 +124,7 @@ mu_inline bool isstr(var_t v) { return type(v) == MU_STR; }
 mu_inline bool istbl(var_t v) { return (6 & v.meta) == 4; }
 mu_inline bool isobj(var_t v) { return type(v) == MU_OBJ; }
 mu_inline bool isfn(var_t v)  { return (6 & v.meta) == 2 || type(v) == MU_FN; }
+mu_inline bool iserr(var_t v) { return mu_unlikely(v.meta == MU_ERR); }
 
 mu_inline bool hasref(var_t v)   { return 4 & v.meta; }
 mu_inline bool hasscope(var_t v) { return !(3 & ~v.meta); }
@@ -195,6 +199,13 @@ mu_inline var_t vsfn(sfn_t *sfn, tbl_t *scope) {
     return v;
 }
 
+mu_inline var_t verr(tbl_t *err) {
+    var_t v;
+    v.tbl = err;
+    v.meta = MU_ERR;
+    return v;
+}
+
 #define vcstr(c) ({                         \
     static const struct {                   \
         ref_t r;                            \
@@ -255,6 +266,7 @@ void var_append(var_t v, var_t val, eh_t *eh);
 
 // Function calls performed on variables
 var_t var_call(var_t v, tbl_t *args, eh_t *eh);
+var_t var_pcall(var_t v, tbl_t *args);
 
 
 #endif

@@ -23,17 +23,7 @@ typedef mu_fn var_t bfn_t(tbl_t *args, eh_t *eh);
 typedef mu_fn var_t sfn_t(tbl_t *args, tbl_t *scope, eh_t *eh);
 
 // Definition of Mu function type
-typedef struct fn {
-    const str_t *bcode; // function bytecode
-
-    len_t stack;    // amount of stack usage
-    len_t bcount;   // length of bytecode
-    len_t fcount;   // number of stored functions
-    len_t vcount;   // number of stored vars
-
-    struct fn **fns;    // nested functions
-    var_t *vars;        // stored vars
-} fn_t;
+typedef struct fn fn_t;
 
 
 #endif
@@ -46,6 +36,19 @@ typedef struct fn {
 #undef MU_DEF
 
 #include "mem.h"
+
+
+typedef struct fn {
+    const str_t *bcode; // function bytecode
+
+    len_t stack;    // amount of stack usage
+    len_t bcount;   // length of bytecode
+    len_t fcount;   // number of stored functions
+    len_t vcount;   // number of stored vars
+
+    struct fn **fns;    // nested functions
+    var_t *vars;        // stored vars
+} fn_t;
 
 
 // Functions for managing functions

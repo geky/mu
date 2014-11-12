@@ -573,15 +573,9 @@ var_t tbl_iter(var_t v, eh_t *eh) {
 
     tbl_t *tbl = tbl_read(gettbl(v));
     tbl_t *scope = tbl_create(3, eh);
-
-    mu_on_err_begin (eh) {
-        tbl_insert(scope, vnum(0), vtbl(tbl), eh);
-        tbl_insert(scope, vnum(1), vtbl(tbl_create(3, eh)), eh);
-        tbl_insert(scope, vnum(2), vraw(0), eh);
-    } mu_on_err_do {
-        tbl_dec(scope);
-        // TODO clean up everything
-    } mu_on_err_end;
+    tbl_insert(scope, vnum(0), vtbl(tbl), eh);
+    tbl_insert(scope, vnum(1), vtbl(tbl_create(3, eh)), eh);
+    tbl_insert(scope, vnum(2), vraw(0), eh);
 
     return vsfn(tbl_iters[tbl->stride], scope);
 }
@@ -592,52 +586,48 @@ var_t tbl_repr(var_t v, eh_t *eh) {
     tbl_t *tbl = gettbl(v);
     var_t *reprs = mu_alloc(2*tbl_len(tbl) * sizeof(var_t), eh);
 
-    mu_on_err_begin (eh) {
-        int size = 2;
-        int i = 0;
+    int size = 2;
+    int i = 0;
 
-        tbl_for_begin (k, v, tbl) {
-            reprs[2*i  ] = var_repr(k, eh);
-            reprs[2*i+1] = var_repr(v, eh);
-            size += getlen(reprs[2*i  ]);
-            size += getlen(reprs[2*i+1]);
-            size += (i == tbl_len(tbl)-1) ? 2 : 4;
+    tbl_for_begin (k, v, tbl) {
+        reprs[2*i  ] = var_repr(k, eh);
+        reprs[2*i+1] = var_repr(v, eh);
+        size += getlen(reprs[2*i  ]);
+        size += getlen(reprs[2*i+1]);
+        size += (i == tbl_len(tbl)-1) ? 2 : 4;
 
-            i++;
-        } tbl_for_end;
+        i++;
+    } tbl_for_end;
 
-        if (size > MU_MAXLEN)
-            err_len(eh);
+    if (size > MU_MAXLEN)
+        err_len(eh);
 
-        mstr_t *out = str_create(size, eh);
-        mstr_t *res = out;
+    mstr_t *out = str_create(size, eh);
+    mstr_t *res = out;
 
-        *res++ = '[';
+    *res++ = '[';
 
-        for (i=0; i < tbl_len(tbl); i++) {
-            memcpy(res, getstr(reprs[2*i]), getlen(reprs[2*i]));
-            res += getlen(reprs[2*i]);
-            var_dec(reprs[2*i]);
+    for (i=0; i < tbl_len(tbl); i++) {
+        memcpy(res, getstr(reprs[2*i]), getlen(reprs[2*i]));
+        res += getlen(reprs[2*i]);
+        var_dec(reprs[2*i]);
 
-            *res++ = ':';
+        *res++ = ':';
+        *res++ = ' ';
+
+        memcpy(res, getstr(reprs[2*i+1]), getlen(reprs[2*i+1]));
+        res += getlen(reprs[2*i+1]);
+        var_dec(reprs[2*i+1]);
+
+        if (i != tbl_len(tbl)-1) {
+            *res++ = ',';
             *res++ = ' ';
-
-            memcpy(res, getstr(reprs[2*i+1]), getlen(reprs[2*i+1]));
-            res += getlen(reprs[2*i+1]);
-            var_dec(reprs[2*i+1]);
-
-            if (i != tbl_len(tbl)-1) {
-                *res++ = ',';
-                *res++ = ' ';
-            }
         }
+    }
 
-        *res++ = ']';
+    *res++ = ']';
 
-        mu_dealloc(reprs, 2*tbl_len(tbl) * sizeof(var_t));
+    mu_dealloc(reprs, 2*tbl_len(tbl) * sizeof(var_t));
 
-        return vstr(out, 0, size);
-    } mu_on_err_do {
-        mu_dealloc(reprs, 2*tbl_len(tbl) * sizeof(var_t));
-    } mu_on_err_end;
+    return vstr(out, 0, size);
 }
