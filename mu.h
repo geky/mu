@@ -22,6 +22,9 @@
 // TODO replace most of these with actual const allocations
 #define mu_const __attribute__((const))
 
+// Builtin for a potentially unused variable
+#define mu_unused __attribute__((unused))
+
 // Builtins for the likelyness of branches
 #define mu_likely(x) __builtin_expect(x, 1)
 #define mu_unlikely(x) __builtin_expect(x, 0)

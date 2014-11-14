@@ -45,6 +45,7 @@ static fn_t *fn_realize(struct fnparse *fnparse, eh_t *eh) {
 
 fn_t *fn_create(tbl_t *args, var_t code, eh_t *eh) {
     parse_t *p = mu_alloc(sizeof(parse_t), eh);
+    p->eh = eh;
     p->fn = ref_alloc(sizeof(fn_t), eh);
     p->fn->ins = 0;
     p->fn->len = 4;

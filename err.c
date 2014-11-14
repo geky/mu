@@ -4,16 +4,9 @@
 #include "tbl.h"
 
 
-tbl_t *mu_eh(eh_t *eh) {
-    eh->handles = 0;
-
-    tbl_t *err = (tbl_t *)setjmp(eh->env);
-
-    if (mu_unlikely(err != 0)) {
-        // Take care of error handlers here to make sure
-        // we have the stack space for them
-        // TODO dont do this when out of memory
-        if (eh->handles) {
+void mu_handle(tbl_t *err, eh_t *eh) {
+    if (eh->handles) {
+        if (setjmp(eh->env) == 0) {
             var_t type = tbl_lookup(err, vcstr("type"));
             var_t handle = tbl_lookup(eh->handles, type);
 
@@ -29,8 +22,6 @@ tbl_t *mu_eh(eh_t *eh) {
             }
         }
     }
-
-    return err;
 }
 
 
@@ -39,6 +30,7 @@ mu_noreturn void mu_err(tbl_t *err, eh_t *eh) {
     // of handling things since it has more stack space
     longjmp(eh->env, (int)err);
 }
+
 
 mu_noreturn void err_nomem(eh_t *eh) {
     mu_assert(false); // Figure out how to recover later
@@ -60,7 +52,7 @@ mu_noreturn void err_len(eh_t *eh) {
     mu_err(err, eh);
 }
 
-mu_noreturn void err_ro(eh_t *eh) {
+mu_noreturn void err_readonly(eh_t *eh) {
     tbl_t *err = tbl_create(0, eh);
     tbl_insert(err, vcstr("type"), vcstr("readonly error"), eh);
     tbl_insert(err, vcstr("reason"), vcstr("assigning to readonly table"), eh);

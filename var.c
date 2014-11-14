@@ -157,13 +157,3 @@ var_t var_call(var_t v, tbl_t *args, eh_t *eh) {
     return var_calls[type(v)](v, args, eh);
 }
 
-var_t var_pcall(var_t v, tbl_t *args) {
-    eh_t eh;
-    tbl_t *err = mu_eh(&eh);
-
-    if (mu_likely(err == 0)) {
-        return var_call(v, args, &eh);
-    } else {
-        return verr(err);
-    }
-}

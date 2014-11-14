@@ -36,8 +36,6 @@ enum type {
     MU_FN  = 7, // function
 };
 
-#define MU_ERR 8 // error
-
 
 // declaration of var type
 typedef struct var {
@@ -124,7 +122,6 @@ mu_inline bool isstr(var_t v) { return type(v) == MU_STR; }
 mu_inline bool istbl(var_t v) { return (6 & v.meta) == 4; }
 mu_inline bool isobj(var_t v) { return type(v) == MU_OBJ; }
 mu_inline bool isfn(var_t v)  { return (6 & v.meta) == 2 || type(v) == MU_FN; }
-mu_inline bool iserr(var_t v) { return mu_unlikely(v.meta == MU_ERR); }
 
 mu_inline bool hasref(var_t v)   { return 4 & v.meta; }
 mu_inline bool hasscope(var_t v) { return !(3 & ~v.meta); }
@@ -196,13 +193,6 @@ mu_inline var_t vsfn(sfn_t *sfn, tbl_t *scope) {
     v.fn = (fn_t *)sfn;
     v.tbl = scope;
     v.type = MU_SFN;
-    return v;
-}
-
-mu_inline var_t verr(tbl_t *err) {
-    var_t v;
-    v.tbl = err;
-    v.meta = MU_ERR;
     return v;
 }
 

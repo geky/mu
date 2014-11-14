@@ -138,7 +138,7 @@ mu_inline tbl_t *tbl_read(tbl_t *tbl) {
 
 mu_inline tbl_t *tbl_write(tbl_t *tbl, eh_t *eh) {
     if (tbl_isro(tbl))
-        err_ro(eh);
+        err_readonly(eh);
 
     return tbl;
 }
