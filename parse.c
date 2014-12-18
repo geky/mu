@@ -13,7 +13,7 @@
 // Parsing error handling
 #define unexpected(p) _unexpected(p, __FUNCTION__)
 static mu_noreturn void _unexpected(parse_t *p, const char *fn) {
-    printf("\033[31munexpected (%d) in %s\033[0m\n", p->tok, fn);
+//    printf("\033[31munexpected (%d) in %s\033[0m\n", p->tok, fn);
     err_parse(p->eh);
 }
 
@@ -21,11 +21,9 @@ static mu_noreturn void _unexpected(parse_t *p, const char *fn) {
 #define expect(p, tok) _expect(p, tok, __FUNCTION__)
 static void _expect(parse_t *p, tok_t tok, const char *fn) {
     if (p->tok != tok) {
-        printf("\033[31mexpected (%d) not (%d) in %s\033[0m\n", tok, p->tok, fn);
+//        printf("\033[31mexpected (%d) not (%d) in %s\033[0m\n", tok, p->tok, fn);
         err_parse(p->eh);
     }
-
-    mu_lex(p);
 }
 
 
@@ -141,7 +139,7 @@ static void unpack(parse_t *p, tbl_t *map) {
 
 
 
-// Rules for OP_u's grammar
+// Rules for Mu's grammar
 static void p_value(parse_t *p);
 static void p_phrase(parse_t *p);
 static void p_fn(parse_t *p);
@@ -172,14 +170,17 @@ static void p_value(parse_t *p) {
     if (p->stmt) {
         p->stmt = false;
         p->left = false;
+        lex(p);
         p_expr(p);
         p->stmt = true;
         p->left = true;
     } else if (p->left) {
         p->left = false;
+        lex(p);
         p_expr(p);
         p->left = true;
     } else {
+        lex(p);
         p_expr(p);
     }
 
@@ -198,11 +199,12 @@ static void p_phrase(parse_t *p) {
 
 
 static void p_fn(parse_t *p) {
+    lex(p);
     expect(p, '(');
     p_args(p);
-    tbl_t *args = p->args;
     expect(p, ')');
 
+    tbl_t *args = p->args;
     struct fnparse *f = p->fn;
     struct jparse j = p->j;
 
@@ -216,6 +218,7 @@ static void p_fn(parse_t *p) {
 }
 
 static void p_if(parse_t *p) {
+    lex(p);
     expect(p, '(');
     p_value(p);
     expect(p, ')');
@@ -227,7 +230,6 @@ static void p_if(parse_t *p) {
     if (p->tok == T_ELSE) {
         int e_ins = p->fn->ins;
         enlarge(p, p->jsize);
-        mu_lex(p);
         p_phrase(p);
 
         inserta(p, OP_JFALSE, (e_ins+p->jsize) - (i_ins+p->jfsize), i_ins);
@@ -248,6 +250,7 @@ static void p_while(parse_t *p) {
     p->j.btbl = tbl_create(0, p->eh);
     int w_ins = p->fn->ins;
 
+    lex(p);
     expect(p, '(');
     p_value(p);
     expect(p, ')');
@@ -255,7 +258,8 @@ static void p_while(parse_t *p) {
     int j_ins = p->fn->ins;
     enlarge(p, p->jfsize);
     p_phrase(p);
-    if (!p->stmt) encode(p, OP_APPEND);
+    if (!p->stmt) 
+        encode(p, OP_APPEND);
 
     inserta(p, OP_JFALSE, (p->fn->ins+p->jsize) - (j_ins+p->jfsize), j_ins);
     encodea(p, OP_JUMP, w_ins - (p->fn->ins+p->jsize));
@@ -264,10 +268,8 @@ static void p_while(parse_t *p) {
     tbl_t *btbl = p->j.btbl;
     p->j = j;
 
-    if (p->stmt && p->tok == T_ELSE) {
-        mu_lex(p);
+    if (p->stmt && p->tok == T_ELSE)
         p_stmt(p);
-    }
 
     patch(p, btbl, p->fn->ins);
 }
@@ -278,7 +280,9 @@ static void p_for(parse_t *p) {
     struct jparse j = p->j;
     p->j.ctbl = tbl_create(0, p->eh);
     p->j.btbl = tbl_create(0, p->eh);
+    p->left = true;
 
+    lex(p);
     expect(p, '(');
     p_args(p);
     tbl_t *args = revargs(p->args, p->eh);
@@ -314,10 +318,8 @@ static void p_for(parse_t *p) {
     tbl_t *btbl = p->j.btbl;
     p->j = j;
 
-    if (p->stmt && p->tok == T_ELSE) {
-        mu_lex(p);
+    if (p->stmt && p->tok == T_ELSE)
         p_stmt(p);
-    }
 
     patch(p, btbl, p->fn->ins);
     encode(p, OP_DROP);
@@ -327,18 +329,18 @@ static void p_for(parse_t *p) {
 static void p_expr_op(parse_t *p) {
     switch (p->tok) {
         case T_KEY:     if (p->indirect) encode(p, OP_LOOKUP);
-                        mu_lex(p);
+                        lex(p);
                         encodea(p, OP_VAR, accvar(p, p->val));
-                        mu_lex(p);
+                        lex(p);
                         p->indirect = true;
                         return p_expr_op(p);
 
         case '[':       if (p->indirect) encode(p, OP_LOOKUP);
                         p->paren++;
-                        mu_lex(p);
                         p_value(p);
                         p->paren--;
                         expect(p, ']');
+                        lex(p);
                         p->indirect = true;
                         return p_expr_op(p);
 
@@ -349,6 +351,7 @@ static void p_expr_op(parse_t *p) {
                         p->paren--;
                         expect(p, ')');
                         encode(p, OP_CALL);
+                        lex(p);
                         p->indirect = false;
                         return p_expr_op(p);
 
@@ -371,7 +374,7 @@ static void p_expr_op(parse_t *p) {
                             p->op.ins += insert(p, OP_LOOKUP, p->op.ins);
                             p->op.ins += insert(p, OP_TBL, p->op.ins);
                             p->op.lprec = p->op.rprec;
-                            mu_lex(p);
+                            lex(p);
                             p_expr(p);
                             p->op = op;
                         }
@@ -389,7 +392,7 @@ static void p_expr_op(parse_t *p) {
                             enlarge(p, p->jfsize);
                             encode(p, OP_DROP);
                             p->op.lprec = p->op.rprec;
-                            mu_lex(p);
+                            lex(p);
                             p_expr(p);
                             if (p->indirect) encode(p, OP_LOOKUP);
                             p->op = op;
@@ -407,7 +410,7 @@ static void p_expr_op(parse_t *p) {
                             enlarge(p, p->jtsize);
                             encode(p, OP_DROP);
                             p->op.lprec = p->op.rprec;
-                            mu_lex(p);
+                            lex(p);
                             p_expr(p);
                             if (p->indirect) encode(p, OP_LOOKUP);
                             p->op = op;
@@ -427,32 +430,33 @@ static void p_expr(parse_t *p) {
     switch (p->tok) {
         case T_IDENT:   encode(p, OP_SCOPE);
                         encodea(p, OP_VAR, accvar(p, p->val));
+                        lex(p);
                         p->indirect = true;
-                        mu_lex(p);
                         return p_expr_op(p);
 
         case T_NIL:     encode(p, OP_SCOPE);
                         encode(p, OP_NIL);
+                        lex(p);
                         p->indirect = true;
-                        mu_lex(p);
                         return p_expr_op(p);
 
         case T_LIT:     encodea(p, OP_VAR, accvar(p, p->val));
+                        lex(p);
                         p->indirect = false;
-                        mu_lex(p);
                         return p_expr_op(p);
 
         case '[':       encode(p, OP_TBL);
                         p_table(p);
                         expect(p, ']');
+                        lex(p);
                         p->indirect = false;
                         return p_expr_op(p);
 
         case '(':       p->paren++;
-                        mu_lex(p);
                         p_value(p);
                         p->paren--;
                         expect(p, ')');
+                        lex(p);
                         return p_expr_op(p);
 
         case T_OP:      encode(p, OP_SCOPE);
@@ -461,30 +465,25 @@ static void p_expr(parse_t *p) {
                         encodea(p, OP_VAR, accvar(p, p->val));
                         encode(p, OP_LOOKUP);
                         encode(p, OP_TBL);
-                        mu_lex(p);
                         p_value(p);
                         encode(p, OP_APPEND);
                         encode(p, OP_CALL);
                         p->indirect = false;
                         return p_expr_op(p);
 
-        case T_IF:      mu_lex(p);
-                        p_if(p);
+        case T_IF:      p_if(p);
                         p->indirect = false;
                         return p_expr_op(p);
 
-        case T_WHILE:   mu_lex(p);
-                        p_while(p);
+        case T_WHILE:   p_while(p);
                         p->indirect = false;
                         return p_expr_op(p); 
 
-        case T_FOR:     mu_lex(p);
-                        p_for(p);
+        case T_FOR:     p_for(p);
                         p->indirect = false;
                         return p_expr_op(p);
 
-        case T_FN:      mu_lex(p);
-                        p_fn(p);
+        case T_FN:      p_fn(p);
                         p->indirect = false;
                         return p_expr_op(p);
 
@@ -495,14 +494,15 @@ static void p_expr(parse_t *p) {
 
 static void p_args_follow(parse_t *p) {
     switch (p->tok) {
-        case T_SEP:     mu_lex(p);
-                        return p_args_entry(p);
+        case T_SEP:     return p_args_entry(p);
 
         default:        return;
     }
 }
 
 static void p_args_entry(parse_t *p) {
+    lex(p);
+
     switch (p->tok) {
         case T_FN:
         case T_IF:
@@ -511,16 +511,16 @@ static void p_args_entry(parse_t *p) {
         case T_IDENT:  
         case T_NIL:
         case T_LIT:     tbl_append(p->args, p->val, p->eh);
-                        mu_lex(p);
+                        lex(p);
                         return p_args_follow(p);
 
         case '[':       {   tbl_t *args = p->args;
-                            mu_lex(p);
                             p_args(p);
                             tbl_append(args, vtbl(p->args), p->eh);
                             p->args = args;
                         }
                         expect(p, ']');
+                        lex(p);
                         return p_args_follow(p);
 
         default:        return p_args_follow(p);
@@ -544,8 +544,7 @@ static void p_table_follow(parse_t *p) {
 
 static void p_table_assign(parse_t *p) {
     switch (p->tok) {
-        case T_SET:     mu_lex(p);
-                        p_value(p);
+        case T_SET:     p_value(p);
                         encode(p, OP_INSERT);
                         return p_table_follow(p);
 
@@ -556,18 +555,18 @@ static void p_table_assign(parse_t *p) {
         
 static void p_table_entry(parse_t *p) {
     p->key = true;
-    mu_lex(p);
+    lex(p);
     p->key = false;
 
     switch (p->tok) {
         case T_IDSET:   encodea(p, OP_VAR, accvar(p, p->val));
-                        mu_lex(p);
+                        lex(p);
                         expect(p, T_SET);
                         p_value(p);
                         encode(p, OP_INSERT);
                         return p_table_follow(p);
 
-        case T_FNSET:   mu_lex(p);
+        case T_FNSET:   lex(p);
                         expect(p, T_IDENT);
                         encodea(p, OP_VAR, accvar(p, p->val));
                         p_fn(p);
@@ -610,18 +609,19 @@ static void p_table(parse_t *p) {
 
 static void p_stmt_follow(parse_t *p) {
     switch (p->tok) {
-        case T_SEP:     mu_lex(p);
-                        return p_stmt_entry(p);
+        case T_SEP:     return p_stmt_entry(p);
 
         default:        return;
     }
 }
 
 static void p_stmt_insert(parse_t *p) {
+    lex(p);
+
     switch (p->tok) {
-        case '[':       mu_lex(p);
-                        p_args(p);
+        case '[':       p_args(p);
                         expect(p, ']');
+                        lex(p);
                         expect(p, T_SET);
                         p_value(p);
                         unpack(p, p->args);
@@ -640,7 +640,6 @@ static void p_stmt_insert(parse_t *p) {
 static void p_stmt_assign(parse_t *p) {
     switch (p->tok) {
         case T_SET:     if (!p->indirect) unexpected(p);
-                        mu_lex(p);
                         p_value(p);
                         encode(p, OP_ASSIGN);
                         return;
@@ -656,7 +655,6 @@ static void p_stmt_assign(parse_t *p) {
                         encodea(p, OP_DUP, 3);
                         encode(p, OP_LOOKUP);
                         encode(p, OP_APPEND);
-                        mu_lex(p);
                         p_value(p);
                         encode(p, OP_APPEND);
                         encode(p, OP_CALL);
@@ -670,42 +668,36 @@ static void p_stmt_assign(parse_t *p) {
 }
 
 static void p_stmt(parse_t *p) {
+    lex(p);
+
     switch (p->tok) {
-        case '{':       mu_lex(p);
-                        p_stmt_list(p);
+        case '{':       p_stmt_list(p);
                         expect(p, '}');
+                        lex(p);
                         return;
 
-        case T_LET:     mu_lex(p);
-                        return p_stmt_insert(p);
+        case T_LET:     return p_stmt_insert(p);
+        case T_IF:      return p_if(p);
+        case T_WHILE:   return p_while(p); 
+        case T_FOR:     return p_for(p);
 
-        case T_IF:      mu_lex(p);
-                        return p_if(p);
-
-        case T_WHILE:   mu_lex(p);
-                        return p_while(p); 
-
-        case T_FOR:     mu_lex(p);
-                        return p_for(p);
-
-        case T_RETURN:  mu_lex(p);
-                        p_value(p);
+        case T_RETURN:  p_value(p);
                         encode(p, OP_RET);
                         return;
 
         case T_CONT:    if (!p->j.ctbl) unexpected(p);
-                        mu_lex(p);
                         tbl_append(p->j.ctbl, vraw(p->fn->ins), p->eh);
                         enlarge(p, p->jsize);
+                        lex(p);
                         return;
 
         case T_BREAK:   if (!p->j.btbl) unexpected(p);
-                        mu_lex(p);
                         tbl_append(p->j.btbl, vraw(p->fn->ins), p->eh);
                         enlarge(p, p->jsize);
+                        lex(p);
                         return;
 
-        case T_FNSET:   mu_lex(p);
+        case T_FNSET:   lex(p);
                         expect(p, T_IDENT);
                         encode(p, OP_SCOPE);
                         encodea(p, OP_VAR, accvar(p, p->val));
@@ -714,8 +706,7 @@ static void p_stmt(parse_t *p) {
                         encode(p, OP_DROP);
                         return;
 
-        case T_SEP:     mu_lex(p);
-                        return p_stmt_list(p);
+        case T_SEP:     return p_stmt_list(p);
 
         case T_IDENT:
         case T_FN:
@@ -749,16 +740,16 @@ static void p_stmt_entry(parse_t *p) {
 
 
 
-// Parses OP_u source into bytecode
-void mu_parse_init(parse_t *p, var_t code) {
+// Parses Mu source into bytecode
+parse_t *parse_create(var_t code, eh_t *eh) {
+    parse_t *p = mu_alloc(sizeof(parse_t), eh);
+
     p->ref = getref(code);
     p->str = getstart(code);
     p->pos = getstr(code);
     p->end = getend(code);
 
     p->key = false;
-    p->stmt = true;
-    p->left = true;
     p->paren = false;
     p->keys = mu_keys();
 
@@ -766,32 +757,58 @@ void mu_parse_init(parse_t *p, var_t code) {
     p->jtsize = sizea(OP_JTRUE, 0);
     p->jfsize = sizea(OP_JFALSE, 0);
 
-    mu_lex(p);
+    p->eh = eh;
+
+    return p;
 }
 
-void mu_parse_args(parse_t *p, tbl_t *args) {
+void parse_destroy(parse_t *p) {
+    mu_dealloc(p, sizeof(parse_t));
+}
+
+void parse_args(parse_t *p, tbl_t *args) {
     if (args && tbl_len(args) > 0) {
         encode(p, OP_ARGS);
         unpack(p, args);
     }
 }
 
-void mu_parse_top(parse_t *p) {
+void parse_stmts(parse_t *p) {
     p->j = (struct jparse){0};
+    p->op.lprec = -1;
+    p->stmt = true;
+    p->left = true;
 
     p_stmt_list(p);
-
-    if (p->tok != 0)
-        unexpected(p);
 
     encode(p, OP_RETN);
 }
 
-void mu_parse_nested(parse_t *p) {
+void parse_stmt(parse_t *p) {
     p->j = (struct jparse){0};
+    p->op.lprec = -1;
+    p->stmt = true;
+    p->left = true;
 
     p_stmt(p);
 
     encode(p, OP_RETN);
+}
+
+void parse_expr(parse_t *p) {
+    p->j = (struct jparse){0};
+    p->op.lprec = -1;
+    p->stmt = false;
+    p->left = false;
+    p->paren = true;
+
+    p_value(p);
+
+    encode(p, OP_RET);
+}
+
+void parse_end(parse_t *p) {
+    if (p->tok != T_END)
+        unexpected(p);
 }
 

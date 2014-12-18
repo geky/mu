@@ -55,6 +55,7 @@ typedef struct fn {
 // Each function is preceded with a reference count
 // which is used as its handle in a var
 fn_t *fn_create(tbl_t *args, var_t code, eh_t *eh);
+fn_t *fn_create_expr(tbl_t *args, var_t code, eh_t *eh);
 fn_t *fn_create_nested(tbl_t *args, parse_t *p, eh_t *eh);
 
 // Called by garbage collector to clean up
@@ -63,6 +64,7 @@ void fn_destroy(void *);
 // Call a function. Each function takes a table
 // of arguments, and returns a single variable.
 var_t fn_call(fn_t *, tbl_t *args, tbl_t *scope, eh_t *eh);
+var_t fn_call_in(fn_t *, tbl_t *args, tbl_t *scope, eh_t *eh);
 
 // Returns a string representation of a function
 var_t fn_repr(var_t v, eh_t *eh);

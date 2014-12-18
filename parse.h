@@ -75,13 +75,15 @@ typedef struct parse {
 #include "parse.h"
 #undef MU_DEF
 
+// Entry points into parsing Mu source into bytecode
+parse_t *parse_create(var_t code, eh_t *eh);
+void parse_destroy(parse_t *p);
 
-// Parses Mu source into bytecode
-void mu_parse_init(parse_t *p, var_t code);
-void mu_parse_args(parse_t *p, tbl_t *args);
-void mu_parse_top(parse_t *p);
-void mu_parse_nested(parse_t *p);
-
+void parse_args(parse_t *p, tbl_t *args);
+void parse_stmts(parse_t *p);
+void parse_stmt(parse_t *p);
+void parse_expr(parse_t *p);
+void parse_end(parse_t *p);
 
 #endif
 #endif

@@ -31,6 +31,7 @@ struct eh {
 
 
 mu_noreturn void mu_err(tbl_t *err, eh_t *eh);
+mu_noreturn void mu_cerr(var_t type, var_t reason, eh_t *eh);
 
 void mu_handle(tbl_t *err, eh_t *eh);
 
@@ -44,14 +45,15 @@ mu_noreturn void err_undefined(eh_t *eh);
 
 #define mu_try_begin(eh) {                  \
     eh_t _eh;                               \
-    eh_t *eh = &_eh;                        \
     _eh.handles = 0;                        \
+                                            \
     tbl_t *_err = (tbl_t *)setjmp(_eh.env); \
                                             \
     if (mu_unlikely(_err != 0))             \
-        mu_handle(_err, eh);                \
+        mu_handle(_err, &_eh);              \
                                             \
     if (mu_likely(_err == 0)) {             \
+        mu_unused eh_t *eh = &_eh;          \
 {
 #define mu_on_err(err)                      \
 }                                           \

@@ -7,7 +7,7 @@ AR = ar
 SRC += var.c mem.c err.c
 SRC += num.c str.c tbl.c fn.c
 SRC += parse.c lex.c vm.c
-SRC += main.c
+SRC += mu.c
 OBJ := $(SRC:.c=.o)
 DEP := $(SRC:.c=.d)
 ASM := $(SRC:.c=.s)

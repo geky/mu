@@ -22,6 +22,8 @@ typedef mu_aligned unsigned int ref_t;
 #include "err.h"
 #undef MU_DEF
 
+#include <stdlib.h>
+
 
 // Manual memory management
 // simple wrapper over malloc and free if available

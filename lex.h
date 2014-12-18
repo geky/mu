@@ -64,7 +64,7 @@ mu_const tbl_t *mu_keys(void);
 
 // Performs lexical analysis on current location in string
 // Updates position, stores token type in tok, and value in val
-void mu_lex(parse_t *);
+void lex(parse_t *);
 
 
 #endif

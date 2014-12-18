@@ -21,6 +21,7 @@ static fn_t *fn_realize(struct fnparse *fnparse, eh_t *eh) {
     
     fn->vcount = vars->len;
     fn->fcount = fns->len;
+    fn->stack = 25; // TODO make this reasonable
 
     fn->vars = mu_alloc(fn->vcount*sizeof(var_t) + 
                         fn->fcount*sizeof(fn_t *), eh);
@@ -44,8 +45,8 @@ static fn_t *fn_realize(struct fnparse *fnparse, eh_t *eh) {
 
 
 fn_t *fn_create(tbl_t *args, var_t code, eh_t *eh) {
-    parse_t *p = mu_alloc(sizeof(parse_t), eh);
-    p->eh = eh;
+    parse_t *p = parse_create(code, eh);
+
     p->fn = ref_alloc(sizeof(fn_t), eh);
     p->fn->ins = 0;
     p->fn->len = 4;
@@ -54,14 +55,35 @@ fn_t *fn_create(tbl_t *args, var_t code, eh_t *eh) {
     p->fn->vars = tbl_create(args ? tbl_len(args) : 0, eh);
     p->fn->fns = tbl_create(0, eh);
 
-    mu_parse_init(p, code);
-    mu_parse_args(p, args);
-    mu_parse_top(p);
-    p->fn->stack = 25; // TODO make this reasonable
+    parse_args(p, args);
+    parse_stmts(p);
+    parse_end(p);
 
     fn_t *fn = fn_realize(p->fn, eh);
 
-    mu_dealloc(p, sizeof(parse_t));
+    parse_destroy(p);
+
+    return fn;
+}
+
+fn_t *fn_create_expr(tbl_t *args, var_t code, eh_t *eh) {
+    parse_t *p = parse_create(code, eh);
+
+    p->fn = ref_alloc(sizeof(fn_t), eh);
+    p->fn->ins = 0;
+    p->fn->len = 4;
+    p->fn->bcode = mu_alloc(p->fn->len, eh);
+
+    p->fn->vars = tbl_create(args ? tbl_len(args) : 0, eh);
+    p->fn->fns = tbl_create(0, eh);
+
+    parse_args(p, args);
+    parse_expr(p);
+    parse_end(p);
+
+    fn_t *fn = fn_realize(p->fn, eh);
+
+    parse_destroy(p);
 
     return fn;
 }
@@ -75,13 +97,11 @@ fn_t *fn_create_nested(tbl_t *args, parse_t *p, eh_t *eh) {
     p->fn->vars = tbl_create(args ? tbl_len(args) : 0, eh);
     p->fn->fns = tbl_create(0, eh);
 
-    mu_parse_args(p, args);
-    mu_parse_nested(p);
-    p->fn->stack = 25; // TODO make this reasonable
+    parse_args(p, args);
+    parse_stmt(p);
 
     return fn_realize(p->fn, eh);
 }
-
 
 // Called by garbage collector to clean up
 void fn_destroy(void *v) {
@@ -109,6 +129,10 @@ var_t fn_call(fn_t *fn, tbl_t *args, tbl_t *closure, eh_t *eh) {
     tbl_insert(scope, vcstr("args"), vtbl(args), eh);
     scope->tail = closure;
 
+    return mu_exec(fn, args, scope, eh);
+}
+
+var_t fn_call_in(fn_t *fn, tbl_t *args, tbl_t *scope, eh_t *eh) {
     return mu_exec(fn, args, scope, eh);
 }
 

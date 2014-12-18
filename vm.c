@@ -45,14 +45,6 @@ var_t mu_exec(fn_t *f, tbl_t *args, tbl_t *scope, eh_t *eh) {
     register var_t *sp = stack + f->stack;
 
     while (1) {
-        printf("pc: %d\t%02x\t", pc-f->bcode, *pc);
-        printf("sp: %d\t", f->stack-(sp-stack)); 
-        if (sp == stack + f->stack) {
-            printf("-\n");
-        } else {
-            var_print(*sp, eh); printf("\n");
-        }
-
         switch (*pc++ >> 3) {
             case OP_VAR:    sp[-1] = f->vars[arg(pc)]; pc += 2; sp--;                           break;
             case OP_FN:     sp[-1] = vfn(f->fns[arg(pc)], scope); pc += 2; sp--;                break;

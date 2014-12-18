@@ -1,4 +1,3 @@
-
 /* 
  *  Variable types and definitions
  */
@@ -243,9 +242,6 @@ var_t var_iter(var_t v, eh_t *eh);
 
 // Returns a string representation of the variable
 var_t var_repr(var_t v, eh_t *eh);
-
-// Prints variable to stdout for debugging
-void var_print(var_t v, eh_t *eh);
 
 // Table related functions performed on variables
 var_t var_lookup(var_t v, var_t key, eh_t *eh);

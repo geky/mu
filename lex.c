@@ -98,20 +98,21 @@ static mu_noreturn void l_bad(parse_t *p) {
 
 static void l_ws(parse_t *p) {
     wskip(p);
-    return mu_lex(p);
+    return lex(p);
 }
 
 static void l_com(parse_t *p) {
     wskip(p);
-    return mu_lex(p);
+    return lex(p);
 }
 
 static void l_op(parse_t *p) {
     const str_t *kw = p->pos++;
 
     while (p->pos < p->end && (lexs[*p->pos] == l_op ||
-                               lexs[*p->pos] == l_set))
+                               lexs[*p->pos] == l_set)) {
         p->pos++;
+    }
 
     p->val = vstr(p->str, kw-p->str, p->pos-kw);
 
@@ -119,7 +120,9 @@ static void l_op(parse_t *p) {
     wskip(p);
     p->op.rprec = p->pos - kw;
 
-    if (str_equals(p->val, vcstr(".")) && lexs[*p->pos] == l_kw) {
+    if (str_equals(p->val, vcstr("->")) && p->left) {
+        p->tok = T_RETURN;
+    } else if (str_equals(p->val, vcstr(".")) && lexs[*p->pos] == l_kw) {
         p->tok = T_KEY;
     } else if (p->left && lexs[kw[-1]] == l_set) {
         p->tok = T_OPSET;
@@ -133,8 +136,9 @@ static void l_kw(parse_t *p) {
     const str_t *kw = p->pos++;
 
     while (p->pos < p->end && (lexs[*p->pos] == l_kw ||
-                               lexs[*p->pos] == l_num))
+                               lexs[*p->pos] == l_num)) {
         p->pos++;
+    }
 
     p->val = vstr(p->str, kw-p->str, p->pos-kw);
     var_t tok = tbl_lookup(p->keys, p->val);
@@ -260,9 +264,9 @@ void (* const lexs[256])(parse_t *) = {
 
 
 // Performs lexical analysis on the passed string
-void mu_lex(parse_t *p) {
+void lex(parse_t *p) {
     if (p->pos < p->end)
-        return lexs[*p->pos](p);
+        lexs[*p->pos](p);
     else
         p->tok = 0;
 }

@@ -19,6 +19,7 @@ syn keyword muValue nil nan inf
 " Comments
 syn match muSingleComment "`[^`]*`\?"
 syn region muMultiComment start=+``\z(`*\)+ end=+``\z1+
+syn match muHashBang "\%^#!.*"
 
 " Numbers
 syn match muDecNum "\d\+\(\.\d\+\)\?\([eE][+-]\?\d\+\)\?"
@@ -40,6 +41,7 @@ syn region muParen start=+(+  end=+)+  transparent
 " Highlighting
 hi def link muSingleComment Comment
 hi def link muMultiComment Comment
+hi def link muHashBang Comment
 hi def link muDecNum Number
 hi def link muHexNum Number
 hi def link muOctNum Number

@@ -6,7 +6,6 @@
 
 #include <string.h>
 #include <stdlib.h>
-#include <stdio.h>
 
 
 // Returns true if both variables are the
@@ -68,12 +67,6 @@ var_t var_repr(var_t v, eh_t *eh) {
     };
 
     return var_reprs[type(v)](v, eh);
-}
-
-// Prints variable to stdout for debugging
-void var_print(var_t v, eh_t *eh) {
-    var_t repr = var_repr(v, eh);
-    printf("%.*s", getlen(repr), getstr(repr));
 }
 
 
