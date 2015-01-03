@@ -85,10 +85,10 @@ typedef enum op {
 // Return the size taken by the specified opcode
 // Note: size of the jump opcode currently can not change
 // based on argument, because this is not handled by the parser
-int mu_size(op_t op, arg_t arg);
+size_t mu_size(op_t op, uint_t arg);
 
 // Encode the specified opcode and return its size
-void mu_encode(mstr_t *code, op_t op, arg_t arg);
+void mu_encode(data_t *code, op_t op, uint_t arg);
 
 // Execute the bytecode
 var_t mu_exec(fn_t *f, tbl_t *args, tbl_t *scope, eh_t *eh);

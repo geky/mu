@@ -9,147 +9,187 @@
 #include <string.h>
 
 
-// Functions for managing functions
-// Each function is preceded with a reference count
-// which is used as its handle in a var
+// C Function creating functions and macros
+fn_t *fn_bfn(bfn_t *f, eh_t *eh) {
+    fn_t *m = ref_alloc(sizeof(fn_t), eh);
+    m->stack = 25; // TODO make this reasonable
+    m->type = 0;
+    m->closure = 0;
+    m->imms = 0;
+    m->bfn = f;
+    return m;
+}
 
-static fn_t *fn_realize(struct fnparse *fnparse, eh_t *eh) {
-    // this is a bit tricky since fn and p->fn share memory
-    fn_t *fn = (fn_t *)fnparse;
-    tbl_t *vars = fnparse->vars;
-    tbl_t *fns = fnparse->fns;
-    
-    fn->vcount = vars->len;
-    fn->fcount = fns->len;
-    fn->stack = 25; // TODO make this reasonable
+fn_t *fn_sbfn(sbfn_t *f, tbl_t *scope, eh_t *eh) {
+    fn_t *m = ref_alloc(sizeof(fn_t), eh);
+    m->stack = 25; // TODO make this reasonable
+    m->type = 1;
+    m->closure = scope;
+    m->imms = 0;
+    m->sbfn = f;
+    return m;
+}
 
-    fn->vars = mu_alloc(fn->vcount*sizeof(var_t) + 
-                        fn->fcount*sizeof(fn_t *), eh);
+fn_t *fn_closure(fn_t *f, tbl_t *scope, eh_t *eh) {
+    fn_t *m = ref_alloc(sizeof(fn_t), eh);
+    m->stack = f->stack;
+    m->type = f->type;
+    m->closure = scope;
+    m->imms = f->imms;
+    m->bcode = f->bcode;
+    return m;
+}
 
-    tbl_for_begin (k, v, vars) {
-        fn->vars[getraw(v)] = k;
+static fn_t *fn_realize(struct fnparse *f, eh_t *eh) {
+    f->stack = 25; // TODO make this reasonable
+    f->type = 2;
+    f->closure = 0;
+
+    // this is a bit tricky since the fn memory is reused
+    // and we want to keep the resulting imms as a list if possible
+    len_t len = tbl_getlen(f->imms);
+
+    var_t *imms = mu_alloc(len * sizeof(var_t), eh);
+    tbl_for_begin (k, v, f->imms) {
+        imms[getuint(v)] = k;
     } tbl_for_end;
 
-    int i = 0;
-    fn->fns = (fn_t**)&fn->vars[fn->vcount];
+    tbl_dec(f->imms);
+    f->imms = tbl_create(len, eh);
+    len_t i;
 
-    tbl_for_begin (k, v, fns) {
-        fn->fns[i++] = (fn_t*)getraw(v);
-    } tbl_for_end;
-    
-    tbl_dec(vars);
-    tbl_dec(fns);
+    for (i = 0; i < len; i++) {
+        tbl_append(f->imms, imms[i], eh);
+    }
 
-    return fn;
+    mu_dealloc(imms, len);
+
+    return (fn_t *)f;
 }
 
 
 fn_t *fn_create(tbl_t *args, var_t code, eh_t *eh) {
     parse_t *p = parse_create(code, eh);
 
-    p->fn = ref_alloc(sizeof(fn_t), eh);
-    p->fn->ins = 0;
-    p->fn->len = 4;
-    p->fn->bcode = mu_alloc(p->fn->len, eh);
-
-    p->fn->vars = tbl_create(args ? tbl_len(args) : 0, eh);
-    p->fn->fns = tbl_create(0, eh);
+    p->f = ref_alloc(sizeof(fn_t), eh);
+    p->f->ins = 0;
+    p->f->imms = tbl_create(0, eh);
+    p->f->bcode = mstr_create(MU_MINALLOC, eh);
 
     parse_args(p, args);
     parse_stmts(p);
     parse_end(p);
 
-    fn_t *fn = fn_realize(p->fn, eh);
-
+    fn_t *f = fn_realize(p->f, eh);
     parse_destroy(p);
-
-    return fn;
+    return f;
 }
 
 fn_t *fn_create_expr(tbl_t *args, var_t code, eh_t *eh) {
     parse_t *p = parse_create(code, eh);
 
-    p->fn = ref_alloc(sizeof(fn_t), eh);
-    p->fn->ins = 0;
-    p->fn->len = 4;
-    p->fn->bcode = mu_alloc(p->fn->len, eh);
-
-    p->fn->vars = tbl_create(args ? tbl_len(args) : 0, eh);
-    p->fn->fns = tbl_create(0, eh);
+    p->f = ref_alloc(sizeof(fn_t), eh);
+    p->f->ins = 0;
+    p->f->imms = tbl_create(0, eh);
+    p->f->bcode = mstr_create(MU_MINALLOC, eh);
 
     parse_args(p, args);
     parse_expr(p);
     parse_end(p);
 
-    fn_t *fn = fn_realize(p->fn, eh);
-
+    fn_t *f = fn_realize(p->f, eh);
     parse_destroy(p);
-
-    return fn;
+    return f;
 }
 
 fn_t *fn_create_nested(tbl_t *args, parse_t *p, eh_t *eh) {
-    p->fn = ref_alloc(sizeof(fn_t), eh);
-    p->fn->ins = 0;
-    p->fn->len = 4;
-    p->fn->bcode = mu_alloc(p->fn->len, eh);
-
-    p->fn->vars = tbl_create(args ? tbl_len(args) : 0, eh);
-    p->fn->fns = tbl_create(0, eh);
+    p->f = ref_alloc(sizeof(fn_t), eh);
+    p->f->ins = 0;
+    p->f->imms = tbl_create(0, eh);
+    p->f->bcode = mstr_create(MU_MINALLOC, eh);
 
     parse_args(p, args);
     parse_stmt(p);
 
-    return fn_realize(p->fn, eh);
+    return fn_realize(p->f, eh);
 }
 
 // Called by garbage collector to clean up
-void fn_destroy(void *v) {
-    fn_t *fn = v;
-    int i;
+void fn_destroy(fn_t *f) {
+    if (f->closure)
+        tbl_dec(f->closure);
 
-    for (i=0; i < fn->vcount; i++) {
-        var_dec(fn->vars[i]);
+    if (f->type == 2) {
+        tbl_dec(f->imms);
+        str_dec(f->bcode);
     }
 
-    for (i=0; i < fn->fcount; i++) {
-        fn_dec(fn->fns[i]);
-    }
-
-    mu_dealloc((void *)fn->bcode, fn->bcount);
-    mu_dealloc(fn->vars, fn->vcount*sizeof(var_t) + fn->fcount*sizeof(fn_t *));
-    ref_dealloc(v, sizeof(fn_t));
+    ref_dealloc((ref_t *)f, sizeof(fn_t));
 }
 
 
 // Call a function. Each function takes a table
 // of arguments, and returns a single variable.
-var_t fn_call(fn_t *fn, tbl_t *args, tbl_t *closure, eh_t *eh) {
-    tbl_t *scope = tbl_create(1, eh);
-    tbl_insert(scope, vcstr("args"), vtbl(args), eh);
-    scope->tail = closure;
-
-    return mu_exec(fn, args, scope, eh);
+static var_t bfn_call(fn_t *f, tbl_t *args, eh_t *eh) { 
+    return f->bfn(args, eh); 
 }
 
-var_t fn_call_in(fn_t *fn, tbl_t *args, tbl_t *scope, eh_t *eh) {
-    return mu_exec(fn, args, scope, eh);
+static var_t sbfn_call(fn_t *f, tbl_t *args, eh_t *eh) { 
+    return f->sbfn(args, f->closure, eh); 
+}
+
+static var_t mufn_call(fn_t *f, tbl_t *args, eh_t *eh) {
+    tbl_t *scope = tbl_create(1, eh);
+    tbl_insert(scope, vcstr("args", eh), vtbl(args), eh);
+    scope->tail = f->closure;
+
+    return mu_exec(f, args, scope, eh);
+}
+
+var_t fn_call(fn_t *f, tbl_t *args, eh_t *eh) {
+    static var_t (* const fn_calls[3])(fn_t *, tbl_t *, eh_t *) = {
+        bfn_call, sbfn_call, mufn_call
+    };
+
+    return fn_calls[f->type](f, args, eh);
+}
+
+
+static var_t bfn_call_in(fn_t *f, tbl_t *args, tbl_t *scope, eh_t *eh) { 
+    return f->bfn(args, eh); 
+}
+
+static var_t sbfn_call_in(fn_t *f, tbl_t *args, tbl_t *scope, eh_t *eh) { 
+    return f->sbfn(args, scope, eh); 
+}
+
+static var_t mufn_call_in(fn_t *f, tbl_t *args, tbl_t *scope, eh_t *eh) {
+    return mu_exec(f, args, scope, eh);
+}
+
+var_t fn_call_in(fn_t *f, tbl_t *args, tbl_t *scope, eh_t *eh) {
+    static var_t (* const fn_call_ins[3])(fn_t *, tbl_t *, tbl_t *, eh_t *) = {
+        bfn_call_in, sbfn_call_in, mufn_call_in
+    };
+
+    return fn_call_ins[f->type](f, args, scope, eh);
 }
 
 
 // Returns a string representation of a function
-var_t fn_repr(var_t v, eh_t *eh) {
-    uint32_t bits = (uint32_t)getfn(v);
-    mstr_t *out = str_create(13, eh);
-    mstr_t *res = out;
-    int i;
+str_t *fn_repr(fn_t *f, eh_t *eh) {
+    uint_t bits = (uint_t)f->bcode;
 
-    memcpy(res, "fn 0x", 5);
-    res += 5;
+    mstr_t *m = mstr_create(5 + 2*sizeof(uint_t), eh);
+    data_t *out = m->data;
 
-    for (i = 0; i < 8; i++) {
-        *res++ = num_ascii(0xf & (bits >> (8*(4-i))));
+    memcpy(out, "fn 0x", 5);
+    out += 5;
+
+    uint_t i;
+    for (i = 0; i < 2*sizeof(uint_t); i++) {
+        *out++ = num_ascii(0xf & (bits >> (4*(sizeof(uint_t)-i))));
     }
 
-    return vstr(out, 0, 13);
+    return str_intern(m, eh);
 }

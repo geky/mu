@@ -2,13 +2,16 @@
  * Mu stand-alone interpreter
  */
 
-#include <stdio.h>
 #include "mu.h"
 #include "var.h"
-#include "fn.h"
-#include "tbl.h"
+#include "num.h"
 #include "str.h"
-#include "string.h"
+#include "tbl.h"
+#include "fn.h"
+#include "err.h"
+
+#include <string.h>
+#include <stdio.h>
 
 #define PROMPT_A "\033[32m> \033[0m"
 #define PROMPT_B "\033[32m. \033[0m"
@@ -29,27 +32,27 @@ static bool do_default = true;
 
 
 static void printvar(var_t v, eh_t *eh) {
-    var_t out;
+    str_t *out;
 
     if (isstr(v)) {
-        out = v;
+        out = getstr(v);
     } else {
         out = var_repr(v, eh);
     }
 
-    printf("%.*s", getlen(out), getstr(out));
+    printf("%.*s", str_getlen(out), str_getdata(out));
 }
 
 static void printrepr(var_t v, eh_t *eh) {
-    printvar(var_repr(v, eh), eh);
+    printvar(vstr(var_repr(v, eh)), eh);
 }
 
 static void printerr(tbl_t *err) {
     mu_try_begin (eh) {
         printf("%s", ERR_START);
-        printvar(tbl_lookup(err, vcstr("type")), eh);
+        printvar(tbl_lookup(err, vcstr("type", eh)), eh);
         printf(" error: ");
-        printvar(tbl_lookup(err, vcstr("reason")), eh);
+        printvar(tbl_lookup(err, vcstr("reason", eh)), eh);
         printf("%s\n", ERR_END);
     } mu_on_err (err) {
         printf("%serror handling error%s\n", ERR_START, ERR_END);
@@ -62,12 +65,12 @@ static void printoutput(var_t v, eh_t *eh) {
     printf("\n");
 }
 
-static len_t prompt(mstr_t *input) {
+static len_t prompt(data_t *input) {
     printf("%s", PROMPT_A);
     len_t len = 0;
 
     while (1) {
-        char c = getchar();
+        data_t c = getchar();
         input[len++] = c;
         
         if (c == '\n')
@@ -77,17 +80,26 @@ static len_t prompt(mstr_t *input) {
 
 
 // TODO move this scope declaration somewhere else
-static mu_fn var_t b_add(tbl_t *args, eh_t *eh) {
-    return vnum(getnum(tbl_lookup(args, vnum(0))) +
-                getnum(tbl_lookup(args, vnum(1))));
+static var_t b_add(tbl_t *args, eh_t *eh) {
+    return vdouble(getdouble(tbl_lookup(args, vuint(0))) +
+                   getdouble(tbl_lookup(args, vuint(1))));
 }
 
-static mu_fn var_t b_sub(tbl_t *args, eh_t *eh) {
-    return vnum(getnum(tbl_lookup(args, vnum(0))) -
-                getnum(tbl_lookup(args, vnum(1))));
+static var_t b_sub(tbl_t *args, eh_t *eh) {
+    return vdouble(getdouble(tbl_lookup(args, vuint(0))) -
+                   getdouble(tbl_lookup(args, vuint(1))));
 }
 
-static mu_fn var_t b_print(tbl_t *args, eh_t *eh) {
+static var_t b_equals(tbl_t *args, eh_t *eh) {
+    return var_equals(tbl_lookup(args, vuint(0)),
+                      tbl_lookup(args, vuint(1))) ? vuint(1) : vnil;
+}
+
+static var_t b_repr(tbl_t *args, eh_t *eh) {
+    return vstr(var_repr(tbl_lookup(args, vuint(0)), eh));
+}
+
+static var_t b_print(tbl_t *args, eh_t *eh) {
     tbl_for_begin (k, v, args) {
         printvar(v, eh);
     } tbl_for_end;
@@ -100,21 +112,19 @@ static void genscope(eh_t *eh) {
     scope = tbl_create(0, eh);
 
     tbl_t *ops = tbl_create(0, eh);
-    tbl_assign(ops, vcstr("+"), vbfn(b_add), eh);
-    tbl_assign(ops, vcstr("-"), vbfn(b_sub), eh);
-    tbl_assign(scope, vcstr("ops"), vtbl(ops), eh);
-    tbl_assign(scope, vcstr("print"), vbfn(b_print), eh);
+    tbl_assign(ops, vcstr("+", eh), vbfn(b_add, eh), eh);
+    tbl_assign(ops, vcstr("-", eh), vbfn(b_sub, eh), eh);
+    tbl_assign(ops, vcstr("==", eh), vbfn(b_equals, eh), eh);
+    tbl_assign(scope, vcstr("ops", eh), vtbl(ops), eh);
+    tbl_assign(scope, vcstr("repr", eh), vbfn(b_repr, eh), eh);
+    tbl_assign(scope, vcstr("print", eh), vbfn(b_print, eh), eh);
 }
 
 static int genargs(int i, int argc, const char **argv, eh_t *eh) {
     args = tbl_create(argc-i, eh);
 
     for (; i < argc; i++) {
-        len_t len = strlen(argv[i]);
-        mstr_t *str = str_create(len, eh);
-        memcpy(str, argv[i], len);
-
-        tbl_append(args, vstr(str, 0, len), eh);
+        tbl_append(args, vcstr(argv[i], eh), eh);
     }
 
     return i;
@@ -122,32 +132,29 @@ static int genargs(int i, int argc, const char **argv, eh_t *eh) {
 
 
 static void execute(const char *input, eh_t *eh) {
-    len_t len = strlen(input);
-    mstr_t *str = str_create(len, eh);
-    memcpy(str, input, len);
-    fn_t *f = fn_create(0, vstr(str, 0, len), eh);
+    fn_t *f = fn_create(0, vcstr(input, eh), eh);
 
     fn_call_in(f, 0, scope, eh);
 }
 
 static void load_file(FILE *file, eh_t *eh) {
-    mstr_t *buffer = str_create(BUFFER_SIZE, eh);
+    data_t *buffer = mu_alloc(BUFFER_SIZE, eh);
     size_t off = 0;
-    size_t len;
 
-    len = fread(buffer, 1, BUFFER_SIZE, file);
+    size_t len = fread(buffer, 1, BUFFER_SIZE, file);
 
     if (ferror(file)) {
-        mu_cerr(vcstr("io"), vcstr("encountered file reading error"), eh);
+        mu_cerr(vcstr("io", eh), vcstr("encountered file reading error", eh), eh);
     }
 
     if (!memcmp(buffer, "#!", 2)) {
         for (off = 2; buffer[off] != '\n'; off++)
             ;
+
         off++;
     }
 
-    var_t code = vstr(buffer, off, len-off);
+    var_t code = vnstr(buffer+off, len-off, eh);
     fn_t *f = fn_create(0, code, eh);
 
     fn_call_in(f, 0, scope, eh);
@@ -157,7 +164,7 @@ static void load(const char *name, eh_t *eh) {
     FILE *file;
 
     if (!(file = fopen(name, "r"))) {
-        mu_cerr(vcstr("io"), vcstr("could not open file"), eh);
+        mu_cerr(vcstr("io", eh), vcstr("could not open file", eh), eh);
     }
 
     load_file(file, eh);
@@ -166,20 +173,19 @@ static void load(const char *name, eh_t *eh) {
 }
 
 static mu_noreturn int interpret(eh_t *eh) {
-    mstr_t *buffer = str_create(BUFFER_SIZE, eh);
+    data_t *buffer = mu_alloc(BUFFER_SIZE, eh);
 
     while (1) {
         len_t len = prompt(buffer);
-        mstr_t *str = str_create(len, eh);
-        memcpy(str, buffer, len);
+        var_t code = vnstr(buffer, len, eh);
         
         mu_try_begin (eh) {
             fn_t *f;
 
             mu_try_begin (eh) {
-                f = fn_create_expr(0, vstr(str, 0, len), eh);
+                f = fn_create_expr(0, code, eh);
             } mu_on_err (err) {
-                f = fn_create(0, vstr(str, 0, len), eh);
+                f = fn_create(0, code, eh);
             } mu_try_end;
 
             var_t output = fn_call_in(f, 0, scope, eh);
@@ -196,7 +202,7 @@ static mu_noreturn int interpret(eh_t *eh) {
 }
 
 static int run(eh_t *eh) {
-    var_t mainfn = tbl_lookup(scope, vcstr("main"));
+    var_t mainfn = tbl_lookup(scope, vcstr("main", eh));
 
     if (isnil(mainfn))
         return 0;
@@ -225,7 +231,7 @@ static void usage(const char *name) {
 
 static int options(int i, int argc, const char **argv, eh_t *eh) {
     while (i < argc) {
-        int len = strlen(argv[i]);
+        uint_t len = strlen(argv[i]);
 
         if (argv[i][0] != '-') {
             return i;
@@ -306,7 +312,8 @@ int main(int argc, const char **argv) {
     } mu_on_err (err) {
         printerr(err);
 
-        var_t code = tbl_lookup(err, vcstr("code"));
+        // TODO fix this with constant allocations
+        var_t code = tbl_lookup(err, vcstr("code", 0));
         if (isnum(code))
             return (int)getnum(code);
         else

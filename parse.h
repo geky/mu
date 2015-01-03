@@ -5,66 +5,15 @@
 #ifdef MU_DEF
 #ifndef MU_PARSE_DEF
 #define MU_PARSE_DEF
-
 #include "mu.h"
 #include "var.h"
 #include "tbl.h"
 #include "err.h"
 #include "lex.h"
+#include "mem.h"
 
 
-// Specific state structures
-struct opparse {
-    len_t ins;
-    uint8_t lprec;
-    uint8_t rprec;
-};
-
-struct jparse {
-    tbl_t *ctbl;
-    tbl_t *btbl;
-};
-
-struct fnparse {
-    mstr_t *bcode;
-
-    len_t stack;
-    len_t len;
-    len_t ins;
-
-    tbl_t *fns;
-    tbl_t *vars;
-};
-
-// State of a parse
-typedef struct parse {
-    struct fnparse *fn;
-    struct jparse j;
-    struct opparse op;
-    tbl_t *args;
-
-    tbl_t *keys;
-
-    uint8_t indirect;
-    uint8_t stmt;
-    uint8_t left;
-    uint8_t key;
-    uint8_t paren;
-
-    uint8_t jsize;
-    uint8_t jtsize;
-    uint8_t jfsize;
-
-    tok_t tok;
-    var_t val;
-
-    ref_t *ref;
-    str_t *str;
-    str_t *pos;
-    str_t *end;
-
-    eh_t *eh;
-} parse_t;
+typedef struct parse parse_t;
 
 
 #endif
@@ -74,6 +23,66 @@ typedef struct parse {
 #define MU_DEF
 #include "parse.h"
 #undef MU_DEF
+
+
+// Specific state structures
+struct opparse {
+    len_t ins;
+    uintq_t lprec;
+    uintq_t rprec;
+};
+
+struct jparse {
+    tbl_t *ctbl;
+    tbl_t *btbl;
+};
+
+struct fnparse {
+    ref_t ref;
+
+    uintq_t stack;
+    uintq_t type;
+
+    union {
+        tbl_t *closure;
+        struct {
+            len_t ins;
+        };
+    };
+
+    tbl_t *imms;
+    mstr_t *bcode;
+};
+
+// State of a parse
+struct parse {
+    struct fnparse *f;
+    struct jparse j;
+    struct opparse op;
+    tbl_t *args;
+    tbl_t *keys;
+
+    uintq_t indirect;
+    uintq_t stmt;
+    uintq_t left;
+    uintq_t key;
+    uintq_t paren;
+
+    uintq_t jsize;
+    uintq_t jtsize;
+    uintq_t jfsize;
+
+    tok_t tok;
+    var_t val;
+
+    ref_t *ref;
+    const data_t *str;
+    const data_t *pos;
+    const data_t *end;
+
+    eh_t *eh;
+};
+
 
 // Entry points into parsing Mu source into bytecode
 parse_t *parse_create(var_t code, eh_t *eh);

@@ -5,12 +5,11 @@
 #ifdef MU_DEF
 #ifndef MU_MEM_DEF
 #define MU_MEM_DEF
-
 #include "mu.h"
 
 
 // Reference type as word type aligned to 8 bytes
-typedef mu_aligned unsigned int ref_t;
+typedef mu_aligned uinth_t ref_t;
 
 
 #endif
@@ -21,7 +20,6 @@ typedef mu_aligned unsigned int ref_t;
 #include "mem.h"
 #include "err.h"
 #undef MU_DEF
-
 #include <stdlib.h>
 
 
@@ -34,27 +32,39 @@ void mu_dealloc(void *, size_t size);
 
 
 // Garbage collected memory based on reference counting
-// Each block of memory prefixed with ref_t reference
-// count. Deallocated immediately when ref hits zero.
+// Each block of memory starts with a ref_t reference count. 
+// Deallocated immediately when ref hits zero.
+// A reference count of zero indicates a constant variable
+// which could be statically allocated. This nicely handles
+// overflow allowing a small reference count size.
 // It is up to the user to avoid cyclic dependencies.
-void *ref_alloc(size_t size, eh_t *eh);
+mu_inline void *ref_alloc(size_t size, eh_t *eh) {
+    ref_t *ref = mu_alloc(size, eh);
+    *ref = 1;
 
-void ref_dealloc(void *m, size_t size);
+    return ref;
+}
 
+mu_inline void ref_dealloc(void *m, size_t size) {
+    mu_dealloc(m, size);
+}
 
 mu_inline void ref_inc(void *m) {
-    ref_t *ref = (ref_t*)(~0x7 & (uint32_t)m);
+    ref_t *ref = m;
 
     if (*ref != 0)
         (*ref)++;
 }
 
-mu_inline void ref_dec(void *m, void (*dtor)(void*)) {
-    ref_t *ref = (ref_t*)(~0x7 & (uint32_t)m);
+mu_inline void ref_dec(void *m, void (*dtor)(ref_t *)) {
+    ref_t *ref = m;
 
-    if (*ref != 0)
-        if (--(*ref) == 0)
-            dtor(ref + 1);
+    if (*ref != 0) {
+        (*ref)--;
+
+        if (*ref == 0)
+            dtor(ref);
+    }
 }
 
 

@@ -4,8 +4,8 @@ LIBTARGET = libmu.a
 CC = gcc
 AR = ar
 
-SRC += var.c mem.c err.c
-SRC += num.c str.c tbl.c fn.c
+SRC += var.c num.c str.c tbl.c fn.c
+SRC += mem.c err.c
 SRC += parse.c lex.c vm.c
 SRC += mu.c
 OBJ := $(SRC:.c=.o)

@@ -1,51 +1,75 @@
 #include "str.h"
 
 #include "num.h"
-#include "mem.h"
 #include "err.h"
 
 #include <string.h>
 
 
-// Functions for creating strings
-mstr_t *str_create(len_t size, eh_t *eh) {
-    len_t *len = ref_alloc(size + sizeof(len_t), eh);
-    *len = size;
-
-    return (mstr_t *)(len + 1);
+// Functions for creating mutable temporary strings
+mstr_t *mstr_create(len_t len, eh_t *eh) {
+    mstr_t *m = ref_alloc(sizeof(str_t) + len*sizeof(data_t), eh);
+    m->len = len;
+    return m;
 }
 
-// Called by garbage collector to clean up
-void str_destroy(void *m) {
-    ref_dealloc(m, *(len_t *)m + sizeof(len_t));
+void mstr_destroy(mstr_t *m) {
+    ref_dealloc(m, sizeof(str_t) + m->len);
 }
 
-// Returns true if both variables are equal
-bool str_equals(var_t a, var_t b) {
-    return getlen(a) == getlen(b) && 
-           !memcmp(getstr(a), getstr(b), getlen(a));
+// Functions for interning strings
+str_t *str_intern(str_t *m, eh_t *eh) {
+    return m; // TODO interning
 }
 
-// Returns a hash for each string
+void str_destroy(str_t *s) {
+    mstr_destroy((mstr_t *)s); // TODO interning
+}
+
+// String creating functions
+str_t *str_nstr(const data_t *s, len_t len, eh_t *eh) {
+    mstr_t *m = mstr_create(len, eh);
+    memcpy(m->data, s, len);
+    return str_intern(m, eh);
+}
+
+str_t *str_sstr(const data_t *s, size_t len, eh_t *eh) {
+    if (len > MU_MAXLEN)
+        err_len(eh);
+
+    return str_nstr(s, len, eh);
+}
+
+str_t *str_cstr(const char *s, eh_t *eh) {
+    return str_sstr((const data_t *)s, strlen(s), eh);
+}
+
+
+// Equality for non-interned strings
+bool mstr_equals(str_t *a, str_t *b) {
+    return a->len == b->len && !memcmp(a->data, b->data, a->len);
+}
+
+// Hashing for non-interned strings
 // based off the djb2 algorithm
-hash_t str_hash(var_t v) {
-    str_t *str = getstr(v);
-    str_t *end = getend(v);
-    hash_t hash = 5381;
+hash_t mstr_hash(str_t *m) {
+    const data_t *pos = m->data;
+    const data_t *end = m->data + m->len;
+    hash_t hash = 0;
 
-    while (str < end) {
-        // hash = 33*hash + *str++
-        hash = (hash << 5) + hash + *str++;
+    while (pos < end) {
+        hash = (hash << 5) + hash + *pos++;
     }
 
     return hash;
 }
 
+
 // Parses a string and returns a string
-var_t str_parse(const str_t **off, const str_t *end, eh_t *eh) {
-    str_t *pos = *off + 1;
-    str_t quote = **off;
-    int size = 0;
+str_t *str_parse(const data_t **ppos, const data_t *end, eh_t *eh) {
+    const data_t *pos = *ppos + 1;
+    data_t quote = **ppos;
+    size_t size = 0;
 
     while (*pos != quote) {
         if (pos == end)
@@ -107,64 +131,63 @@ var_t str_parse(const str_t **off, const str_t *end, eh_t *eh) {
     if (size > MU_MAXLEN)
         err_len(eh);
 
-    mstr_t *out = str_create(size, eh);
-    mstr_t *res = out;
-    pos = *off + 1;
+    mstr_t *m = mstr_create(size, eh);
+    data_t *out = m->data;
+    pos = *ppos + 1;
 
     while (*pos != quote) {
         if (*pos == '\\') {
             switch (pos[1]) {
                 case 'o':
-                    *res++ = num_val(pos[2])*7*7 +
+                    *out++ = num_val(pos[2])*7*7 +
                              num_val(pos[3])*7 +
                              num_val(pos[4]);
                     pos += 4;
                     break;
 
                 case 'd':
-                    *res++ = num_val(pos[2])*10*10 +
+                    *out++ = num_val(pos[2])*10*10 +
                              num_val(pos[3])*10 +
                              num_val(pos[4]);
                     pos += 4;
                     break;
 
                 case 'x':
-                    *res++ = num_val(pos[2])*16 +
+                    *out++ = num_val(pos[2])*16 +
                              num_val(pos[3]);
                     pos += 3;
                     break;
 
                 case '\n': pos += 2; break;
-                case '\\': *res++ = '\\'; pos += 2; break;
-                case '\'': *res++ = '\''; pos += 2; break;
-                case '"':  *res++ = '"';  pos += 2; break;
-                case 'a':  *res++ = '\a'; pos += 2; break;
-                case 'b':  *res++ = '\b'; pos += 2; break;
-                case 'f':  *res++ = '\f'; pos += 2; break;
-                case 'n':  *res++ = '\n'; pos += 2; break;
-                case 'r':  *res++ = '\r'; pos += 2; break;
-                case 't':  *res++ = '\t'; pos += 2; break;
-                case 'v':  *res++ = '\v'; pos += 2; break;
-                case '0':  *res++ = '\0'; pos += 2; break;
-                default:   *res++ = '\\'; pos += 1; break;
+                case '\\': *out++ = '\\'; pos += 2; break;
+                case '\'': *out++ = '\''; pos += 2; break;
+                case '"':  *out++ = '"';  pos += 2; break;
+                case 'a':  *out++ = '\a'; pos += 2; break;
+                case 'b':  *out++ = '\b'; pos += 2; break;
+                case 'f':  *out++ = '\f'; pos += 2; break;
+                case 'n':  *out++ = '\n'; pos += 2; break;
+                case 'r':  *out++ = '\r'; pos += 2; break;
+                case 't':  *out++ = '\t'; pos += 2; break;
+                case 'v':  *out++ = '\v'; pos += 2; break;
+                case '0':  *out++ = '\0'; pos += 2; break;
+                default:   *out++ = '\\'; pos += 1; break;
             }
         } else {
-            *res++ = *pos++;
+            *out++ = *pos++;
         }
     }
 
+    *ppos = pos + 1;
 
-    *off = pos + 1;
-
-    return vstr(out, 0, size);
+    return str_intern(m, eh);
 }
 
 
 // Returns a string representation of a string
-var_t str_repr(var_t v, eh_t *eh) {
-    str_t *pos = getstr(v);    
-    str_t *end = getend(v);
-    int size = 2;
+str_t *str_repr(str_t *s, eh_t *eh) {
+    const data_t *pos = s->data;
+    const data_t *end = s->data + s->len;
+    size_t size = 2;
 
     while (pos < end) {
         if (*pos < ' ' || *pos > '~' || 
@@ -191,44 +214,44 @@ var_t str_repr(var_t v, eh_t *eh) {
     if (size > MU_MAXLEN)
         err_len(eh);
 
-    mstr_t *out = str_create(size, eh);
-    mstr_t *res = out;
-    pos = getstr(v);
+    mstr_t *m = mstr_create(size, eh);
+    data_t *out = m->data;
+    pos = s->data;
 
-    *res++ = '\'';
+    *out++ = '\'';
 
     while (pos < end) {
         if (*pos < ' ' || *pos > '~' || 
             *pos == '\\' || *pos == '\'') {
-            *res++ = '\\';
+            *out++ = '\\';
 
             switch (*pos) {
-                case '\\': *res++ = '\\'; break;
-                case '\'': *res++ = '\''; break;
-                case '\a': *res++ = 'a'; break;
-                case '\b': *res++ = 'b'; break;
-                case '\f': *res++ = 'f'; break;
-                case '\n': *res++ = 'n'; break;
-                case '\r': *res++ = 'r'; break;
-                case '\t': *res++ = 't'; break;
-                case '\v': *res++ = 'v'; break;
-                case '\0': *res++ = '0'; break;
+                case '\\': *out++ = '\\'; break;
+                case '\'': *out++ = '\''; break;
+                case '\a': *out++ = 'a'; break;
+                case '\b': *out++ = 'b'; break;
+                case '\f': *out++ = 'f'; break;
+                case '\n': *out++ = 'n'; break;
+                case '\r': *out++ = 'r'; break;
+                case '\t': *out++ = 't'; break;
+                case '\v': *out++ = 'v'; break;
+                case '\0': *out++ = '0'; break;
                 default:
-                    *res++ = 'x';
-                    *res++ = num_ascii(*pos / 16);
-                    *res++ = num_ascii(*pos % 16);
+                    *out++ = 'x';
+                    *out++ = num_ascii(*pos / 16);
+                    *out++ = num_ascii(*pos % 16);
                     break;
             }
         } else {
-            *res++ = *pos;
+            *out++ = *pos;
         }
 
         pos++;
     }
 
-    *res++ = '\'';
+    *out++ = '\'';
 
-    return vstr(out, 0, size);
+    return str_intern(m, eh);
 }
 
 

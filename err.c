@@ -1,13 +1,13 @@
 #include "err.h"
 
-#include "var.h"
+#include "str.h"
 #include "tbl.h"
 
 
 void mu_handle(tbl_t *err, eh_t *eh) {
     if (eh->handles) {
         if (setjmp(eh->env) == 0) {
-            var_t type = tbl_lookup(err, vcstr("type"));
+            var_t type = tbl_lookup(err, vcstr("type", eh));
             var_t handle = tbl_lookup(eh->handles, type);
 
             if (isfn(handle)) {
@@ -33,8 +33,8 @@ mu_noreturn void mu_err(tbl_t *err, eh_t *eh) {
 
 mu_noreturn void mu_cerr(var_t type, var_t reason, eh_t *eh) {
     tbl_t *err = tbl_create(2, eh);
-    tbl_insert(err, vcstr("type"), type, eh);
-    tbl_insert(err, vcstr("reason"), reason, eh);
+    tbl_insert(err, vcstr("type", eh), type, eh);
+    tbl_insert(err, vcstr("reason", eh), reason, eh);
 
     mu_err(err, eh);
 }
@@ -46,40 +46,40 @@ mu_noreturn void err_nomem(eh_t *eh) {
     // NOTE: BAD, we're already out of memory
     // This is idiotic but will just fix it later
     tbl_t *err = tbl_create(0, eh);
-    tbl_insert(err, vcstr("type"), vcstr("memory"), eh);
-    tbl_insert(err, vcstr("reason"), vcstr("out of memory"), eh);
+    tbl_insert(err, vcstr("type", eh), vcstr("memory", eh), eh);
+    tbl_insert(err, vcstr("reason", eh), vcstr("out of memory", eh), eh);
 
     mu_err(err, eh);
 }
 
 mu_noreturn void err_len(eh_t *eh) {
     tbl_t *err = tbl_create(0, eh);
-    tbl_insert(err, vcstr("type"), vcstr("length"), eh);
-    tbl_insert(err, vcstr("reason"), vcstr("exceeded max length"), eh);
+    tbl_insert(err, vcstr("type", eh), vcstr("length", eh), eh);
+    tbl_insert(err, vcstr("reason", eh), vcstr("exceeded max length", eh), eh);
 
     mu_err(err, eh);
 }
 
 mu_noreturn void err_readonly(eh_t *eh) {
     tbl_t *err = tbl_create(0, eh);
-    tbl_insert(err, vcstr("type"), vcstr("readonly"), eh);
-    tbl_insert(err, vcstr("reason"), vcstr("assigning to readonly table"), eh);
+    tbl_insert(err, vcstr("type", eh), vcstr("readonly", eh), eh);
+    tbl_insert(err, vcstr("reason", eh), vcstr("assigning to readonly table", eh), eh);
 
     mu_err(err, eh);
 }
 
 mu_noreturn void err_parse(eh_t *eh) {
     tbl_t *err = tbl_create(0, eh);
-    tbl_insert(err, vcstr("type"), vcstr("parse"), eh);
-    tbl_insert(err, vcstr("reason"), vcstr("expression could not be parsed"), eh);
+    tbl_insert(err, vcstr("type", eh), vcstr("parse", eh), eh);
+    tbl_insert(err, vcstr("reason", eh), vcstr("expression could not be parsed", eh), eh);
 
     mu_err(err, eh);
 }
 
 mu_noreturn void err_undefined(eh_t *eh) {
     tbl_t *err = tbl_create(0, eh);
-    tbl_insert(err, vcstr("type"), vcstr("undefined"), eh);
-    tbl_insert(err, vcstr("reason"), vcstr("operation is undefined for type"), eh);
+    tbl_insert(err, vcstr("type", eh), vcstr("undefined", eh), eh);
+    tbl_insert(err, vcstr("reason", eh), vcstr("operation is undefined for type", eh), eh);
 
     mu_err(err, eh);
 }

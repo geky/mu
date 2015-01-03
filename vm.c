@@ -2,6 +2,8 @@
 
 #include "parse.h"
 #include "var.h"
+#include "num.h"
+#include "str.h"
 #include "fn.h"
 #include "tbl.h"
 
@@ -9,18 +11,18 @@
 // bytecode does not need to be portable, as it 
 // is compiled ad hoc, but it does need to worry 
 // about alignment issues.
-mu_inline arg_t arg(const str_t *pc) {
-    return (pc[0] << 8) | pc[1];
+mu_inline uint_t arg(const data_t *pc) {
+    return ((pc[0] << 8) | pc[1]);
 }
 
-mu_inline sarg_t sarg(const str_t *pc) {
-    return (signed)arg(pc);
+mu_inline int_t sarg(const data_t *pc) {
+    return (int16_t)((pc[0] << 8) | pc[1]);
 }
 
 // Return the size taken by the specified opcode
 // Note: size of the jump opcode currently can not change
 // based on argument, because this is not handled by the parser
-int mu_size(op_t op, arg_t arg) {
+size_t mu_size(op_t op, uint_t arg) {
     if (MU_ARG & op)
         return 3;
     else
@@ -28,12 +30,12 @@ int mu_size(op_t op, arg_t arg) {
 }
 
 // Encode the specified opcode and return its size
-void mu_encode(mstr_t *code, op_t op, arg_t arg) {
+void mu_encode(data_t *code, op_t op, uint_t arg) {
     *code++ = op;
 
     if (MU_ARG & op) {
-        *code++ = arg >> 8;
-        *code++ = 0xff & arg;
+        *code++ = (uintq_t)(arg >> 8);
+        *code++ = (uintq_t)(0xff & arg);
     }
 }
 
@@ -41,13 +43,15 @@ void mu_encode(mstr_t *code, op_t op, arg_t arg) {
 var_t mu_exec(fn_t *f, tbl_t *args, tbl_t *scope, eh_t *eh) {
     var_t stack[f->stack]; // TODO check for overflow
 
-    register str_t *pc = f->bcode;
+    register const data_t *pc = f->bcode->data;
     register var_t *sp = stack + f->stack;
 
     while (1) {
         switch (*pc++ >> 3) {
-            case OP_VAR:    sp[-1] = f->vars[arg(pc)]; pc += 2; sp--;                           break;
-            case OP_FN:     sp[-1] = vfn(f->fns[arg(pc)], scope); pc += 2; sp--;                break;
+            case OP_VAR:    sp[-1] = tbl_lookup(f->imms, vuint(arg(pc))); pc += 2; sp--;                           
+                            break;
+            case OP_FN:     sp[-1] = vfn(fn_closure(getfn(tbl_lookup(f->imms, vuint(arg(pc)))), scope, eh)); pc += 2; sp--;
+                            break; // TODO ^- nope
             case OP_NIL:    sp[-1] = vnil; sp--;                                                break;
             case OP_TBL:    sp[-1] = vtbl(tbl_create(0, eh)); sp--;                             break;
             case OP_SCOPE:  sp[-1] = vtbl(scope); sp--;                                         break;
@@ -67,7 +71,7 @@ var_t mu_exec(fn_t *f, tbl_t *args, tbl_t *scope, eh_t *eh) {
             case OP_INSERT: var_insert(sp[2], sp[1], sp[0], eh); sp += 2;                       break;
             case OP_APPEND: var_append(sp[1], sp[0], eh); sp += 1;                              break;
     
-            case OP_ITER:   sp[0] = var_iter(sp[0], eh);                                        break;
+            case OP_ITER:   sp[0] = vfn(var_iter(sp[0], eh));                                   break;
             
             case OP_CALL:   sp[1] = var_call(sp[1], gettbl(sp[0]), eh); sp += 1;                break;
             case OP_TCALL:  return var_call(sp[1], gettbl(sp[0]), eh); // TODO make sure this is tail calling

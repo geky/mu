@@ -5,7 +5,6 @@
 #ifdef MU_DEF
 #ifndef MU_ERR_DEF
 #define MU_ERR_DEF
-
 #include "mu.h"
 
 
@@ -19,7 +18,7 @@ typedef struct eh eh_t;
 #define MU_ERR_H
 #define MU_DEF
 #include "err.h"
-#include "tbl.h"
+#include "var.h"
 #undef MU_DEF
 #include <setjmp.h>
 

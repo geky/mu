@@ -5,39 +5,37 @@
 #include <math.h>
 
 
-// Returns true if both variables are equal
-bool num_equals(var_t a, var_t b) {
-    return getnum(a) == getnum(b);
-}
+// Max length of a string representation of a number
+#define MU_NUMLEN 12
 
+
+// Returns true if both variables are equal
+bool num_equals(num_t a, num_t b) {
+    return a == b;
+}
 
 // Returns a hash for each number
-// For integers this is the number
-hash_t num_hash(var_t v) {
-    union {
-        struct { uint32_t high; uint32_t low; };
-        num_t num;
-    } i, f;
+// For positive integers this is equivalent to the number
+hash_t num_hash(num_t n) {
+    var_t ipart, fpart;
 
-    num_t num = getnum(v);
-
-    // This magic number is the value to puts a number's mantissa 
-    // directly in the integer range. After these operations, 
-    // i.n and f.n will contain the integer and fractional 
+    // This magic number is the value to puts a number's mantissa
+    // directly in the integer range. After these operations,
+    // ipart and fpart will contain the integer and fractional
     // components of the original number.
-    i.num = num + 6755399441055744.0;
-    f.num = num - (i.num - 6755399441055744.0);
+    ipart.num = n + 12582912.0f;
+    fpart.num = n - (ipart.num - 12582912.0f);
 
-    // The int component forms the base of the hash so integers
-    // are linear. The fractional component is also used to distinguish 
-    // between non-integer values.
-    return i.high ^ f.low;
+    // The int component forms the core of the hash so integers
+    // remain linear for table lookups. The fractional component 
+    // is also used keep the hash sane for non-integer values.
+    // TODO use the bits where the exponent was for something
+    return 0x807fffff & (ipart.bits ^ fpart.bits);
 }
 
-
 // Parses a string and returns a number
-var_t num_parse(str_t **off, str_t *end) {
-    str_t *str = *off;
+num_t num_parse(const data_t **off, const data_t *end) {
+    const data_t *str = *off;
     num_t res = 0;
 
     num_t scale, sign;
@@ -45,8 +43,8 @@ var_t num_parse(str_t **off, str_t *end) {
     struct base {
         num_t radix;
         num_t exp;
-        mstr_t expc;
-        mstr_t expC;
+        data_t expc;
+        data_t expC;
     } base = { 10.0, 10.0, 'e', 'E' };
 
 
@@ -85,7 +83,7 @@ var_t num_parse(str_t **off, str_t *end) {
 
         str++;
         res *= base.radix;
-        res += n;
+        res += (num_t)n;
     }
 
     goto done;
@@ -105,7 +103,7 @@ fraction:   // determine fraction component
 
         str++;
         scale /= base.radix;
-        res += scale * n;
+        res += scale * (num_t)n;
     }
 
     goto done;
@@ -127,48 +125,45 @@ exp:        // determine exponent component
         int n = num_val(*str);
 
         if (n >= base.radix) {
-            res *= pow(base.radix, sign*scale);
+            res *= (num_t)pow(base.radix, sign*scale);
             goto done;
         }
 
         str++;
         scale *= base.radix;
-        scale += n;
+        scale += (num_t)n;
     }
 
 done:       // return the result
     *off = str;
 
-    return vnum(res);
+    return res;
 }
 
 
 // Obtains a string representation of a number
-var_t num_repr(var_t v, eh_t *eh) {
-    num_t num = getnum(v);
-
-    if (num == 0) {
-        return vcstr("0");
-    } else if (isnan(num)) {
-        return vcstr("nan");
-    } else if (isinf(num)) {
-        return num > 0.0 ? vcstr("inf") : vcstr("-inf");
+str_t *num_repr(num_t n, eh_t *eh) {
+    if (n == 0) {
+        return getstr(vcstr("0", eh));
+    } else if (isnan(n)) {
+        return getstr(vcstr("nan", eh));
+    } else if (isinf(n)) {
+        return getstr(n > 0.0 ? vcstr("inf", eh) : vcstr("-inf", eh));
     } else {
-        mstr_t *out = str_create(MU_NUMLEN, eh);
-        mstr_t *res = out;
+        mstr_t *m = mstr_create(MU_NUMLEN, eh);
+        data_t *out = m->data;
 
-        if (num < 0.0) {
-            num = -num;
-            *res++ = '-';
+        if (n < 0.0) {
+            n = -n;
+            *out++ = '-';
         }
 
-
-        num_t exp = floor(log10(num));
+        num_t exp = floor(log10(n));
         num_t digit = pow(10.0, exp);
         bool isexp = (exp > MU_NUMLEN-2 || exp < -(MU_NUMLEN-3));
 
         if (isexp) {
-            num /= digit;
+            n /= digit;
             digit = 1.0;
         } else if (digit < 1.0) {
             digit = 1.0;
@@ -178,37 +173,38 @@ var_t num_repr(var_t v, eh_t *eh) {
         int len = isexp ? MU_NUMLEN-6 : MU_NUMLEN-1;
 
         for (; len >= 0; len--) {
-            if (num <= 0.0 && digit < 1.0)
+            if (n <= 0.0 && digit < 1.0)
                 break;
 
             if (digit < 0.5 && digit > 0.05)
-                *res++ = '.';
+                *out++ = '.';
 
-            num_t d = floor(num / digit);
-            *res++ = num_ascii(d);
+            num_t d = floor(n / digit);
+            *out++ = num_ascii((int_t)d);
 
-            num -= d * digit;
-            digit /= 10.0;
+            n -= d * digit;
+            digit /= 10.0f;
         }
 
 
         if (isexp) {
-            *res++ = 'e';
+            *out++ = 'e';
 
             if (exp < 0) {
                 exp = -exp;
-                *res++ = '-';
+                *out++ = '-';
             }
 
             if (exp > 100)
-                *res++ = num_ascii(((int)exp) / 100);
+                *out++ = num_ascii(((int_t)exp) / 100);
 
             // exp will always be greater than 10 here
-            *res++ = num_ascii(((int)exp / 10) % 10);
-            *res++ = num_ascii(((int)exp / 1) % 10);
+            *out++ = num_ascii(((int_t)exp / 10) % 10);
+            *out++ = num_ascii(((int_t)exp / 1) % 10);
         }
 
-        return vstr(out, 0, res - out);
+        m->len = out - m->data;
+        return str_intern(m, eh);
     }
 }
 

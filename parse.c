@@ -3,6 +3,8 @@
 #include "vm.h"
 #include "lex.h"
 #include "var.h"
+#include "num.h"
+#include "str.h"
 #include "tbl.h"
 #include "fn.h"
 
@@ -28,76 +30,83 @@ static void _expect(parse_t *p, tok_t tok, const char *fn) {
 
 
 // Allocation functions for managing bytecode space
-static void enlarge(parse_t *p, int count) {
-    struct fnparse *fn = p->fn;
-    fn->ins += count;
+static void enlarge(parse_t *p, size_t count) {
+    struct fnparse *f = p->f;
+    uint_t ins = f->ins + count;
+    uint_t len = f->bcode->len;
 
-    while (fn->ins > fn->len) {
-        if (((int)fn->len << 1) > MU_MAXLEN)
-            err_len(p->eh);
-
-        fn->len <<= 1;
+    while (ins > len) {
+        len = len << 1;
     }
-        
-    fn->bcode = mu_realloc(fn->bcode, fn->len, fn->len << 1, p->eh);
+
+    if (len > MU_MAXLEN)
+        err_len(p->eh);
+
+    mstr_t *bcode = mstr_create(len, p->eh);
+    memcpy(bcode->data, f->bcode->data, len);
+    str_dec(f->bcode);
+
+    f->ins = ins;
+    f->bcode = bcode;
 }
 
-static void enlargein(parse_t *p, int count, int ins) {
+static void enlargein(parse_t *p, size_t count, uint_t ins) {
     enlarge(p, count);
 
-    memmove(&p->fn->bcode[ins] + count,
-            &p->fn->bcode[ins], 
-            p->fn->ins-count - ins);
+    memmove(&p->f->bcode->data[ins + count],
+            &p->f->bcode->data[ins], 
+            (p->f->ins - count) - ins);
 }
 
 
 // Different encoding calls
-static mu_const int size(op_t op) {
+static mu_const size_t size(op_t op) {
     return mu_size(op << 3, 0);
 }
 
-static mu_const int sizea(op_t op, arg_t arg) {
+static mu_const size_t sizea(op_t op, uint_t arg) {
     return mu_size((op << 3) | MU_ARG, arg);
 }
 
 static void encode(parse_t *p, op_t op) {
-    int count = mu_size(op << 3, 0);
+    size_t count = mu_size(op << 3, 0);
     enlarge(p, count);
-    mu_encode(&p->fn->bcode[p->fn->ins-count], op << 3, 0);
+    mu_encode(&p->f->bcode->data[p->f->ins - count], op << 3, 0);
 }
 
-static void encodea(parse_t *p, op_t op, arg_t arg) {
-    int count = mu_size((op << 3) | MU_ARG, arg);
+static void encodea(parse_t *p, op_t op, uint_t arg) {
+    size_t count = mu_size((op << 3) | MU_ARG, arg);
     enlarge(p, count);
-    mu_encode(&p->fn->bcode[p->fn->ins-count], (op << 3) | MU_ARG, arg);
+    mu_encode(&p->f->bcode->data[p->f->ins - count], (op << 3) | MU_ARG, arg);
 }
 
-static int insert(parse_t *p, op_t op, int ins) {
-    mu_encode(&p->fn->bcode[ins], op << 3, 0);
+static len_t insert(parse_t *p, op_t op, uint_t ins) {
+    mu_encode(&p->f->bcode->data[ins], op << 3, 0);
     return mu_size(op << 3, 0);
 }
 
-static int inserta(parse_t *p, op_t op, arg_t arg, int ins) {
-    mu_encode(&p->fn->bcode[ins], (op << 3) | MU_ARG, arg);
+static len_t inserta(parse_t *p, op_t op, uint_t arg, uint_t ins) {
+    mu_encode(&p->f->bcode->data[ins], (op << 3) | MU_ARG, arg);
     return mu_size((op << 3) | MU_ARG, arg);
 }
 
 
 // Helping functions for code generation
-static arg_t accvar(parse_t *p, var_t v) {
-    var_t index = tbl_lookup(p->fn->vars, v);
+static uint_t accvar(parse_t *p, var_t v) {
+    var_t index = tbl_lookup(p->f->imms, v);
 
     if (!isnil(index))
-        return getraw(index);
+        return getuint(index);
 
-    arg_t arg = p->fn->vars->len;
-    tbl_assign(p->fn->vars, v, vraw(arg), p->eh);
+    uint_t arg = tbl_getlen(p->f->imms);
+    tbl_assign(p->f->imms, v, vuint(arg), p->eh);
     return arg;
 }
 
-static void patch(parse_t *p, tbl_t *jtbl, int ins) {
+static void patch(parse_t *p, tbl_t *jtbl, uint_t ins) {
     tbl_for_begin (k, v, jtbl) {
-        inserta(p, OP_JUMP, ins - (getraw(v)+p->jsize), getraw(v));
+        uint_t jump = getuint(v);
+        inserta(p, OP_JUMP, (ins - (jump + p->jsize)), jump);
     } tbl_for_end;
 
     tbl_dec(jtbl);
@@ -105,10 +114,10 @@ static void patch(parse_t *p, tbl_t *jtbl, int ins) {
 
 static tbl_t *revargs(tbl_t *args, eh_t *eh) {
     tbl_t *res = tbl_create(0, eh);
-    int i;
+    int_t i;
 
     for (i = args->len-1; i >= 0; i--) {
-        tbl_append(res, tbl_lookup(args, vnum(i)), eh);
+        tbl_append(res, tbl_lookup(args, vint(i)), eh);
     }
 
     tbl_dec(args);
@@ -122,13 +131,13 @@ static void unpack(parse_t *p, tbl_t *map) {
         if (istbl(v)) {
             encodea(p, OP_DUP, 1);
             encode(p, OP_NIL);
-            encodea(p, OP_LOOKDN, getnum(k));
+            encodea(p, OP_LOOKDN, getuint(k));
             unpack(p, gettbl(v));
         } else {
             encodea(p, OP_VAR, accvar(p, v));
             encodea(p, OP_DUP, 2);
             encodea(p, OP_DUP, 1);
-            encodea(p, OP_LOOKDN, getnum(k));
+            encodea(p, OP_LOOKDN, getuint(k));
             encode(p, OP_INSERT);
         }
     } tbl_for_end;
@@ -205,16 +214,15 @@ static void p_fn(parse_t *p) {
     expect(p, ')');
 
     tbl_t *args = p->args;
-    struct fnparse *f = p->fn;
+    struct fnparse *f = p->f;
     struct jparse j = p->j;
 
-    fn_t *fn = fn_create_nested(args, p, p->eh);
-    tbl_append(f->fns, vraw((uint32_t)fn), p->eh);
+    fn_t *nested = fn_create_nested(args, p, p->eh);
 
     p->j = j;
-    p->fn = f;
+    p->f = f;
 
-    encodea(p, OP_FN, f->fns->len-1);
+    encodea(p, OP_FN, accvar(p, vfn(nested)));
 }
 
 static void p_if(parse_t *p) {
@@ -223,23 +231,23 @@ static void p_if(parse_t *p) {
     p_value(p);
     expect(p, ')');
 
-    int i_ins = p->fn->ins;
+    uint_t i_ins = p->f->ins;
     enlarge(p, p->jfsize);
     p_phrase(p);
 
     if (p->tok == T_ELSE) {
-        int e_ins = p->fn->ins;
+        uint_t e_ins = p->f->ins;
         enlarge(p, p->jsize);
         p_phrase(p);
 
         inserta(p, OP_JFALSE, (e_ins+p->jsize) - (i_ins+p->jfsize), i_ins);
-        inserta(p, OP_JUMP, p->fn->ins - (e_ins+p->jsize), e_ins);
+        inserta(p, OP_JUMP, p->f->ins - (e_ins+p->jsize), e_ins);
     } else {
         if (!p->stmt) {
             encodea(p, OP_JUMP, size(OP_NIL));
             encode(p, OP_NIL);
         }
-        inserta(p, OP_JFALSE, p->fn->ins - (i_ins+p->jfsize), i_ins);
+        inserta(p, OP_JFALSE, p->f->ins - (i_ins+p->jfsize), i_ins);
     }
 }
 
@@ -248,21 +256,21 @@ static void p_while(parse_t *p) {
     struct jparse j = p->j;
     p->j.ctbl = tbl_create(0, p->eh);
     p->j.btbl = tbl_create(0, p->eh);
-    int w_ins = p->fn->ins;
+    uint_t w_ins = p->f->ins;
 
     lex(p);
     expect(p, '(');
     p_value(p);
     expect(p, ')');
 
-    int j_ins = p->fn->ins;
+    uint_t j_ins = p->f->ins;
     enlarge(p, p->jfsize);
     p_phrase(p);
     if (!p->stmt) 
         encode(p, OP_APPEND);
 
-    inserta(p, OP_JFALSE, (p->fn->ins+p->jsize) - (j_ins+p->jfsize), j_ins);
-    encodea(p, OP_JUMP, w_ins - (p->fn->ins+p->jsize));
+    inserta(p, OP_JFALSE, (p->f->ins+p->jsize) - (j_ins+p->jfsize), j_ins);
+    encodea(p, OP_JUMP, w_ins - (p->f->ins+p->jsize));
 
     patch(p, p->j.ctbl, w_ins);
     tbl_t *btbl = p->j.btbl;
@@ -271,7 +279,7 @@ static void p_while(parse_t *p) {
     if (p->stmt && p->tok == T_ELSE)
         p_stmt(p);
 
-    patch(p, btbl, p->fn->ins);
+    patch(p, btbl, p->f->ins);
 }
 
 static void p_for(parse_t *p) {
@@ -291,7 +299,7 @@ static void p_for(parse_t *p) {
     encode(p, OP_ITER);
     expect(p, ')');
 
-    int f_ins = p->fn->ins;
+    uint_t f_ins = p->f->ins;
     enlarge(p, p->jsize);
 
     unpack(p, args);
@@ -304,15 +312,15 @@ static void p_for(parse_t *p) {
         encode(p, OP_DROP);
     }
 
-    inserta(p, OP_JUMP, p->fn->ins - (f_ins+p->jsize), f_ins);
-    patch(p, p->j.ctbl, p->fn->ins);
+    inserta(p, OP_JUMP, p->f->ins - (f_ins+p->jsize), f_ins);
+    patch(p, p->j.ctbl, p->f->ins);
 
     encodea(p, OP_DUP, 0);
     encode(p, OP_TBL);
     encode(p, OP_CALL);
     encodea(p, OP_DUP, 0);
 
-    encodea(p, OP_JTRUE, (f_ins+p->jsize) - (p->fn->ins+p->jtsize));
+    encodea(p, OP_JTRUE, (f_ins+p->jsize) - (p->f->ins+p->jtsize));
     encode(p, OP_DROP);
 
     tbl_t *btbl = p->j.btbl;
@@ -321,7 +329,7 @@ static void p_for(parse_t *p) {
     if (p->stmt && p->tok == T_ELSE)
         p_stmt(p);
 
-    patch(p, btbl, p->fn->ins);
+    patch(p, btbl, p->f->ins);
     encode(p, OP_DROP);
 }
 
@@ -359,8 +367,8 @@ static void p_expr_op(parse_t *p) {
                         if (p->indirect) encode(p, OP_LOOKUP);
                         encode(p, OP_APPEND);
                         {   struct opparse op = p->op;
-                            arg_t tblarg = accvar(p, vcstr("ops"));
-                            arg_t symarg = accvar(p, p->val);
+                            uint_t tblarg = accvar(p, vcstr("ops", p->eh));
+                            uint_t symarg = accvar(p, p->val);
                             enlargein(p, size(OP_SCOPE) +
                                          sizea(OP_VAR, tblarg) +
                                          size(OP_LOOKUP) +
@@ -387,7 +395,7 @@ static void p_expr_op(parse_t *p) {
         case T_AND:     if (p->op.lprec <= p->op.rprec) return;
                         if (p->indirect) encode(p, OP_LOOKUP);
                         encodea(p, OP_DUP, 0);
-                        {   int a_ins = p->fn->ins;
+                        {   uint_t a_ins = p->f->ins;
                             struct opparse op = p->op;
                             enlarge(p, p->jfsize);
                             encode(p, OP_DROP);
@@ -397,7 +405,7 @@ static void p_expr_op(parse_t *p) {
                             if (p->indirect) encode(p, OP_LOOKUP);
                             p->op = op;
                             inserta(p, OP_JFALSE, 
-                                     p->fn->ins - (a_ins+p->jfsize), a_ins);
+                                    p->f->ins - (a_ins+p->jfsize), a_ins);
                         }
                         p->indirect = false;
                         return p_expr_op(p);
@@ -405,7 +413,7 @@ static void p_expr_op(parse_t *p) {
         case T_OR:      if (p->op.lprec <= p->op.rprec) return;
                         if (p->indirect) encode(p, OP_LOOKUP);
                         encodea(p, OP_DUP, 0);
-                        {   int o_ins = p->fn->ins;
+                        {   uint_t o_ins = p->f->ins;
                             struct opparse op = p->op;
                             enlarge(p, p->jtsize);
                             encode(p, OP_DROP);
@@ -415,7 +423,7 @@ static void p_expr_op(parse_t *p) {
                             if (p->indirect) encode(p, OP_LOOKUP);
                             p->op = op;
                             inserta(p, OP_JTRUE, 
-                                     p->fn->ins - (o_ins+p->jtsize), o_ins);
+                                    p->f->ins - (o_ins+p->jtsize), o_ins);
                         }
                         p->indirect = false;
                         return p_expr_op(p);
@@ -425,7 +433,7 @@ static void p_expr_op(parse_t *p) {
 }
 
 static void p_expr(parse_t *p) {
-    p->op.ins = p->fn->ins;
+    p->op.ins = p->f->ins;
 
     switch (p->tok) {
         case T_IDENT:   encode(p, OP_SCOPE);
@@ -460,7 +468,7 @@ static void p_expr(parse_t *p) {
                         return p_expr_op(p);
 
         case T_OP:      encode(p, OP_SCOPE);
-                        encodea(p, OP_VAR, accvar(p, vcstr("ops")));
+                        encodea(p, OP_VAR, accvar(p, vcstr("ops", p->eh)));
                         encode(p, OP_LOOKUP);
                         encodea(p, OP_VAR, accvar(p, p->val));
                         encode(p, OP_LOOKUP);
@@ -597,7 +605,7 @@ static void p_table_entry(parse_t *p) {
 }
 
 static void p_table(parse_t *p) {
-    uint8_t paren = p->paren;
+    uintq_t paren = p->paren;
     p->paren = false;
 
     p->left = true;
@@ -646,7 +654,7 @@ static void p_stmt_assign(parse_t *p) {
 
         case T_OPSET:   if (!p->indirect) unexpected(p);
                         encode(p, OP_SCOPE);
-                        encodea(p, OP_VAR, accvar(p, vcstr("ops")));
+                        encodea(p, OP_VAR, accvar(p, vcstr("ops", p->eh)));
                         encode(p, OP_LOOKUP);
                         encodea(p, OP_VAR, accvar(p, p->val));
                         encode(p, OP_LOOKUP);
@@ -686,13 +694,13 @@ static void p_stmt(parse_t *p) {
                         return;
 
         case T_CONT:    if (!p->j.ctbl) unexpected(p);
-                        tbl_append(p->j.ctbl, vraw(p->fn->ins), p->eh);
+                        tbl_append(p->j.ctbl, vuint(p->f->ins), p->eh);
                         enlarge(p, p->jsize);
                         lex(p);
                         return;
 
         case T_BREAK:   if (!p->j.btbl) unexpected(p);
-                        tbl_append(p->j.btbl, vraw(p->fn->ins), p->eh);
+                        tbl_append(p->j.btbl, vuint(p->f->ins), p->eh);
                         enlarge(p, p->jsize);
                         lex(p);
                         return;
@@ -723,7 +731,7 @@ static void p_stmt(parse_t *p) {
 }
 
 static void p_stmt_list(parse_t *p) {
-    uint8_t paren = p->paren;
+    uintq_t paren = p->paren;
     p->paren = false;
 
     p->stmt = true;
@@ -745,9 +753,9 @@ parse_t *parse_create(var_t code, eh_t *eh) {
     parse_t *p = mu_alloc(sizeof(parse_t), eh);
 
     p->ref = getref(code);
-    p->str = getstart(code);
-    p->pos = getstr(code);
-    p->end = getend(code);
+    p->str = getdata(code);
+    p->pos = getdata(code);
+    p->end = getdata(code) + getlen(code);
 
     p->key = false;
     p->paren = false;
@@ -767,7 +775,7 @@ void parse_destroy(parse_t *p) {
 }
 
 void parse_args(parse_t *p, tbl_t *args) {
-    if (args && tbl_len(args) > 0) {
+    if (args && tbl_getlen(args) > 0) {
         encode(p, OP_ARGS);
         unpack(p, args);
     }
