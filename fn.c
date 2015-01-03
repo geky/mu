@@ -49,7 +49,7 @@ static fn_t *fn_realize(struct fnparse *f, eh_t *eh) {
     // and we want to keep the resulting imms as a list if possible
     len_t len = tbl_getlen(f->imms);
 
-    var_t *imms = mu_alloc(len * sizeof(var_t), eh);
+    mu_t *imms = mu_alloc(len * sizeof(mu_t), eh);
     tbl_for_begin (k, v, f->imms) {
         imms[getuint(v)] = k;
     } tbl_for_end;
@@ -68,37 +68,37 @@ static fn_t *fn_realize(struct fnparse *f, eh_t *eh) {
 }
 
 
-fn_t *fn_create(tbl_t *args, var_t code, eh_t *eh) {
-    parse_t *p = parse_create(code, eh);
+fn_t *fn_create(tbl_t *args, mu_t code, eh_t *eh) {
+    parse_t *p = mu_parse_create(code, eh);
 
     p->f = ref_alloc(sizeof(fn_t), eh);
     p->f->ins = 0;
     p->f->imms = tbl_create(0, eh);
     p->f->bcode = mstr_create(MU_MINALLOC, eh);
 
-    parse_args(p, args);
-    parse_stmts(p);
-    parse_end(p);
+    mu_parse_args(p, args);
+    mu_parse_stmts(p);
+    mu_parse_end(p);
 
     fn_t *f = fn_realize(p->f, eh);
-    parse_destroy(p);
+    mu_parse_destroy(p);
     return f;
 }
 
-fn_t *fn_create_expr(tbl_t *args, var_t code, eh_t *eh) {
-    parse_t *p = parse_create(code, eh);
+fn_t *fn_create_expr(tbl_t *args, mu_t code, eh_t *eh) {
+    parse_t *p = mu_parse_create(code, eh);
 
     p->f = ref_alloc(sizeof(fn_t), eh);
     p->f->ins = 0;
     p->f->imms = tbl_create(0, eh);
     p->f->bcode = mstr_create(MU_MINALLOC, eh);
 
-    parse_args(p, args);
-    parse_expr(p);
-    parse_end(p);
+    mu_parse_args(p, args);
+    mu_parse_expr(p);
+    mu_parse_end(p);
 
     fn_t *f = fn_realize(p->f, eh);
-    parse_destroy(p);
+    mu_parse_destroy(p);
     return f;
 }
 
@@ -108,8 +108,8 @@ fn_t *fn_create_nested(tbl_t *args, parse_t *p, eh_t *eh) {
     p->f->imms = tbl_create(0, eh);
     p->f->bcode = mstr_create(MU_MINALLOC, eh);
 
-    parse_args(p, args);
-    parse_stmt(p);
+    mu_parse_args(p, args);
+    mu_parse_stmt(p);
 
     return fn_realize(p->f, eh);
 }
@@ -130,24 +130,24 @@ void fn_destroy(fn_t *f) {
 
 // Call a function. Each function takes a table
 // of arguments, and returns a single variable.
-static var_t bfn_call(fn_t *f, tbl_t *args, eh_t *eh) { 
+static mu_t bfn_call(fn_t *f, tbl_t *args, eh_t *eh) { 
     return f->bfn(args, eh); 
 }
 
-static var_t sbfn_call(fn_t *f, tbl_t *args, eh_t *eh) { 
+static mu_t sbfn_call(fn_t *f, tbl_t *args, eh_t *eh) { 
     return f->sbfn(args, f->closure, eh); 
 }
 
-static var_t mufn_call(fn_t *f, tbl_t *args, eh_t *eh) {
+static mu_t mufn_call(fn_t *f, tbl_t *args, eh_t *eh) {
     tbl_t *scope = tbl_create(1, eh);
-    tbl_insert(scope, vcstr("args", eh), vtbl(args), eh);
+    tbl_insert(scope, mcstr("args", eh), mtbl(args), eh);
     scope->tail = f->closure;
 
     return mu_exec(f, args, scope, eh);
 }
 
-var_t fn_call(fn_t *f, tbl_t *args, eh_t *eh) {
-    static var_t (* const fn_calls[3])(fn_t *, tbl_t *, eh_t *) = {
+mu_t fn_call(fn_t *f, tbl_t *args, eh_t *eh) {
+    static mu_t (* const fn_calls[3])(fn_t *, tbl_t *, eh_t *) = {
         bfn_call, sbfn_call, mufn_call
     };
 
@@ -155,20 +155,20 @@ var_t fn_call(fn_t *f, tbl_t *args, eh_t *eh) {
 }
 
 
-static var_t bfn_call_in(fn_t *f, tbl_t *args, tbl_t *scope, eh_t *eh) { 
+static mu_t bfn_call_in(fn_t *f, tbl_t *args, tbl_t *scope, eh_t *eh) { 
     return f->bfn(args, eh); 
 }
 
-static var_t sbfn_call_in(fn_t *f, tbl_t *args, tbl_t *scope, eh_t *eh) { 
+static mu_t sbfn_call_in(fn_t *f, tbl_t *args, tbl_t *scope, eh_t *eh) { 
     return f->sbfn(args, scope, eh); 
 }
 
-static var_t mufn_call_in(fn_t *f, tbl_t *args, tbl_t *scope, eh_t *eh) {
+static mu_t mufn_call_in(fn_t *f, tbl_t *args, tbl_t *scope, eh_t *eh) {
     return mu_exec(f, args, scope, eh);
 }
 
-var_t fn_call_in(fn_t *f, tbl_t *args, tbl_t *scope, eh_t *eh) {
-    static var_t (* const fn_call_ins[3])(fn_t *, tbl_t *, tbl_t *, eh_t *) = {
+mu_t fn_call_in(fn_t *f, tbl_t *args, tbl_t *scope, eh_t *eh) {
+    static mu_t (* const fn_call_ins[3])(fn_t *, tbl_t *, tbl_t *, eh_t *) = {
         bfn_call_in, sbfn_call_in, mufn_call_in
     };
 

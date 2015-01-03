@@ -4,7 +4,7 @@ LIBTARGET = libmu.a
 CC = gcc
 AR = ar
 
-SRC += var.c num.c str.c tbl.c fn.c
+SRC += types.c num.c str.c tbl.c fn.c
 SRC += mem.c err.c
 SRC += parse.c lex.c vm.c
 SRC += mu.c

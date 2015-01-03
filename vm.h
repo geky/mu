@@ -14,7 +14,7 @@
  * or then converted to opcodes for the underlying machine.
  *
  * The bytecode assumes the underlying machine is a stack
- * based architecture where the word size is a var_t. Because
+ * based architecture where the word size is a mu_t. Because
  * function calling is performed by passing tables, no other 
  * assumptions are needed and a simple virtual machine can be 
  * implemented with just a stack pointer and program counter.
@@ -37,8 +37,8 @@ typedef int16_t sarg_t;
 
 typedef enum op {
 /*  opcode    encoding   arg    stack   result      description                                     */
-    OP_VAR    = 0x10, // index  +1      var[i]      places constant variable on stack
-    OP_FN     = 0x11, // index  +1      fn(var[i])  places function bound with scope on the stack
+    OP_IMM    = 0x10, // index  +1      imms[i]     places constant immediate on stack
+    OP_FN     = 0x11, // index  +1      fn(imms[i]) places function bound with scope on the stack
     OP_NIL    = 0x12, // -      +1      nil         places nil on the stack
     OP_TBL    = 0x13, // -      +1      []          creates a new table on the stack
     OP_SCOPE  = 0x14, // -      +1      scope       places the scope on the stack
@@ -73,7 +73,7 @@ typedef enum op {
 #define MU_VM_H
 #define MU_DEF
 #include "vm.h"
-#include "var.h"
+#include "types.h"
 #include "tbl.h"
 #include "fn.h"
 #undef MU_DEF
@@ -91,7 +91,7 @@ size_t mu_size(op_t op, uint_t arg);
 void mu_encode(data_t *code, op_t op, uint_t arg);
 
 // Execute the bytecode
-var_t mu_exec(fn_t *f, tbl_t *args, tbl_t *scope, eh_t *eh);
+mu_t mu_exec(fn_t *f, tbl_t *args, tbl_t *scope, eh_t *eh);
 
 
 #endif

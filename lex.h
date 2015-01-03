@@ -54,7 +54,7 @@ typedef enum tok {
 #define MU_LEX_H
 #define MU_DEF
 #include "lex.h"
-#include "var.h"
+#include "types.h"
 #include "parse.h"
 #undef MU_DEF
 
@@ -64,7 +64,7 @@ mu_const tbl_t *mu_keys(void);
 
 // Performs lexical analysis on current location in string
 // Updates position, stores token type in tok, and value in val
-void lex(parse_t *);
+void mu_lex(parse_t *);
 
 
 #endif

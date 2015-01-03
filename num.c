@@ -17,7 +17,7 @@ bool num_equals(num_t a, num_t b) {
 // Returns a hash for each number
 // For positive integers this is equivalent to the number
 hash_t num_hash(num_t n) {
-    var_t ipart, fpart;
+    mu_t ipart, fpart;
 
     // This magic number is the value to puts a number's mantissa
     // directly in the integer range. After these operations,
@@ -144,11 +144,11 @@ done:       // return the result
 // Obtains a string representation of a number
 str_t *num_repr(num_t n, eh_t *eh) {
     if (n == 0) {
-        return getstr(vcstr("0", eh));
+        return getstr(mcstr("0", eh));
     } else if (isnan(n)) {
-        return getstr(vcstr("nan", eh));
+        return getstr(mcstr("nan", eh));
     } else if (isinf(n)) {
-        return getstr(n > 0.0 ? vcstr("inf", eh) : vcstr("-inf", eh));
+        return getstr(n > 0.0 ? mcstr("inf", eh) : mcstr("-inf", eh));
     } else {
         mstr_t *m = mstr_create(MU_NUMLEN, eh);
         data_t *out = m->data;

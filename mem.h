@@ -56,7 +56,7 @@ mu_inline void ref_inc(void *m) {
         (*ref)++;
 }
 
-mu_inline void ref_dec(void *m, void (*dtor)(ref_t *)) {
+mu_inline void ref_dec(void *m, void (*dtor)(void *)) {
     ref_t *ref = m;
 
     if (*ref != 0) {

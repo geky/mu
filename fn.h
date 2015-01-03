@@ -10,8 +10,8 @@
 
 
 // Definition of C Function types
-typedef union var bfn_t(tbl_t *args, eh_t *eh);
-typedef union var sbfn_t(tbl_t *args, tbl_t *scope, eh_t *eh);
+typedef union mu bfn_t(tbl_t *args, eh_t *eh);
+typedef union mu sbfn_t(tbl_t *args, tbl_t *scope, eh_t *eh);
 
 // Definition of Mu function type
 typedef mu_aligned struct fn fn_t;
@@ -21,7 +21,7 @@ typedef mu_aligned struct fn fn_t;
 #else
 #ifndef MU_FN_H
 #define MU_FN_H
-#include "var.h"
+#include "types.h"
 #define MU_DEF
 #include "parse.h"
 #undef MU_DEF
@@ -48,23 +48,24 @@ struct fn {
 fn_t *fn_bfn(bfn_t *f, eh_t *eh);
 fn_t *fn_sbfn(sbfn_t *f, tbl_t *scope, eh_t *eh);
 
-mu_inline var_t vbfn(bfn_t *f, eh_t *eh) { 
-    return vfn(fn_bfn(f, eh)); 
+mu_inline mu_t mbfn(bfn_t *f, eh_t *eh) { 
+    return mfn(fn_bfn(f, eh)); 
 }
 
-mu_inline var_t vsbfn(sbfn_t *f, tbl_t *s, eh_t *eh) { 
-    return vfn(fn_sbfn(f, s, eh)); 
+mu_inline mu_t msbfn(sbfn_t *f, tbl_t *s, eh_t *eh) { 
+    return mfn(fn_sbfn(f, s, eh)); 
 }
 
 // Mu Function creating functions
-fn_t *fn_create(tbl_t *args, var_t code, eh_t *eh);
-fn_t *fn_create_expr(tbl_t *args, var_t code, eh_t *eh);
+fn_t *fn_create(tbl_t *args, mu_t code, eh_t *eh);
+fn_t *fn_create_expr(tbl_t *args, mu_t code, eh_t *eh);
 fn_t *fn_create_nested(tbl_t *args, parse_t *p, eh_t *eh);
 void fn_destroy(fn_t *f);
 
 // Function reference counting
 mu_inline void fn_inc(fn_t *f) { ref_inc((void *)f); }
-mu_inline void fn_dec(fn_t *f) { ref_dec((void *)f, (void*)fn_destroy); }
+mu_inline void fn_dec(fn_t *f) { ref_dec((void *)f, 
+                                         (void (*)(void *))fn_destroy); }
 
 
 // Closure handling functions
@@ -72,8 +73,8 @@ fn_t *fn_closure(fn_t *f, tbl_t *scope, eh_t *eh);
 
 // Call a function. Each function call takes a table of arguments, 
 // and returns a single variable.
-var_t fn_call(fn_t *f, tbl_t *args, eh_t *eh);
-var_t fn_call_in(fn_t *f, tbl_t *args, tbl_t *scope, eh_t *eh);
+mu_t fn_call(fn_t *f, tbl_t *args, eh_t *eh);
+mu_t fn_call_in(fn_t *f, tbl_t *args, tbl_t *scope, eh_t *eh);
 
 // Function representation
 str_t *fn_repr(fn_t *f, eh_t *eh);

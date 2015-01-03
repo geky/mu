@@ -16,7 +16,7 @@ typedef float num_t;
 #else
 #ifndef MU_NUM_H
 #define MU_NUM_H
-#include "var.h"
+#include "types.h"
 
 
 // Number creating macros
@@ -25,10 +25,10 @@ mu_inline num_t num_double(double n) { return num_float((float)n); }
 mu_inline num_t num_int(int_t n)     { return num_float((float)n); }
 mu_inline num_t num_uint(uint_t n)   { return num_float((float)n); }
 
-mu_inline var_t vint(int_t n)     { return vnum(num_int(n)); }
-mu_inline var_t vuint(uint_t n)   { return vnum(num_uint(n)); }
-mu_inline var_t vfloat(float n)   { return vnum(num_float(n)); }
-mu_inline var_t vdouble(double n) { return vnum(num_double(n)); }
+mu_inline mu_t mint(int_t n)     { return mnum(num_int(n)); }
+mu_inline mu_t muint(uint_t n)   { return mnum(num_uint(n)); }
+mu_inline mu_t mfloat(float n)   { return mnum(num_float(n)); }
+mu_inline mu_t mdouble(double n) { return mnum(num_double(n)); }
 
 // Number accessing macros
 mu_inline int_t  num_getint(num_t n)    { return (int_t)n; }
@@ -36,10 +36,10 @@ mu_inline uint_t num_getuint(num_t n)   { return (uint_t)n; }
 mu_inline float  num_getfloat(num_t n)  { return (float)n; }
 mu_inline double num_getdouble(num_t n) { return (double)n; }
 
-mu_inline int_t  getint(var_t v)    { return num_getint(getnum(v)); }
-mu_inline uint_t getuint(var_t v)   { return num_getuint(getnum(v)); }
-mu_inline float  getfloat(var_t v)  { return num_getfloat(getnum(v)); }
-mu_inline double getdouble(var_t v) { return num_getdouble(getnum(v)); }
+mu_inline int_t  getint(mu_t m)    { return num_getint(getnum(m)); }
+mu_inline uint_t getuint(mu_t m)   { return num_getuint(getnum(m)); }
+mu_inline float  getfloat(mu_t m)  { return num_getfloat(getnum(m)); }
+mu_inline double getdouble(mu_t m) { return num_getdouble(getnum(m)); }
 
 
 // Hashing and equality for numbers
@@ -53,7 +53,7 @@ str_t *num_repr(num_t n, eh_t *eh);
 
 // Check to see if number is equivalent to its hash
 mu_inline bool num_ishash(num_t n) { return num_getuint(n) == num_hash(n); }
-mu_inline bool ishash(var_t v) { return isnum(v) && num_ishash(getnum(v)); }
+mu_inline bool ishash(mu_t m) { return isnum(m) && num_ishash(getnum(m)); }
 
 
 // Obtains ascii value

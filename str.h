@@ -22,7 +22,7 @@ typedef const mu_aligned struct str str_t;
 #else
 #ifndef MU_STR_H
 #define MU_STR_H
-#include "var.h"
+#include "types.h"
 
 
 // Each string is simply stored as a length
@@ -50,23 +50,24 @@ void str_destroy(str_t *s);
 str_t *str_nstr(const data_t *s, len_t len, eh_t *eh);
 str_t *str_cstr(const char *s, eh_t *eh);
 
-mu_inline var_t vnstr(const data_t *s, len_t l, eh_t *eh) {
-    return vstr(str_nstr(s, l, eh));
+mu_inline mu_t mnstr(const data_t *s, len_t l, eh_t *eh) {
+    return mstr(str_nstr(s, l, eh));
 }
 
-mu_inline var_t vcstr(const char *s, eh_t *eh) {
-    return vstr(str_cstr(s, eh));
+mu_inline mu_t mcstr(const char *s, eh_t *eh) {
+    return mstr(str_cstr(s, eh));
 }
 
 // String accessing macros
 mu_inline len_t str_getlen(str_t *s) { return s->len; }
 mu_inline const data_t *str_getdata(str_t *s) { return s->data; }
 
-mu_inline const data_t *getdata(var_t v) { return str_getdata(getstr(v)); }
+mu_inline const data_t *getdata(mu_t m) { return str_getdata(getstr(m)); }
 
 // Reference counting
 mu_inline void str_inc(str_t *s) { ref_inc((void *)s); }
-mu_inline void str_dec(str_t *s) { ref_dec((void *)s, (void *)str_destroy); }
+mu_inline void str_dec(str_t *s) { ref_dec((void *)s, 
+                                           (void (*)(void *))str_destroy); }
 
 
 // Hashing and equality for non-interned strings

@@ -18,7 +18,7 @@ typedef struct eh eh_t;
 #define MU_ERR_H
 #define MU_DEF
 #include "err.h"
-#include "var.h"
+#include "types.h"
 #undef MU_DEF
 #include <setjmp.h>
 
@@ -30,7 +30,7 @@ struct eh {
 
 
 mu_noreturn void mu_err(tbl_t *err, eh_t *eh);
-mu_noreturn void mu_cerr(var_t type, var_t reason, eh_t *eh);
+mu_noreturn void mu_cerr(mu_t type, mu_t reason, eh_t *eh);
 
 void mu_handle(tbl_t *err, eh_t *eh);
 

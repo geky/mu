@@ -6,7 +6,7 @@
 #ifndef MU_PARSE_DEF
 #define MU_PARSE_DEF
 #include "mu.h"
-#include "var.h"
+#include "types.h"
 #include "tbl.h"
 #include "err.h"
 #include "lex.h"
@@ -73,7 +73,7 @@ struct parse {
     uintq_t jfsize;
 
     tok_t tok;
-    var_t val;
+    mu_t val;
 
     ref_t *ref;
     const data_t *str;
@@ -85,14 +85,15 @@ struct parse {
 
 
 // Entry points into parsing Mu source into bytecode
-parse_t *parse_create(var_t code, eh_t *eh);
-void parse_destroy(parse_t *p);
+parse_t *mu_parse_create(mu_t code, eh_t *eh);
+void mu_parse_destroy(parse_t *p);
 
-void parse_args(parse_t *p, tbl_t *args);
-void parse_stmts(parse_t *p);
-void parse_stmt(parse_t *p);
-void parse_expr(parse_t *p);
-void parse_end(parse_t *p);
+void mu_parse_args(parse_t *p, tbl_t *args);
+void mu_parse_stmts(parse_t *p);
+void mu_parse_stmt(parse_t *p);
+void mu_parse_expr(parse_t *p);
+void mu_parse_end(parse_t *p);
+
 
 #endif
 #endif

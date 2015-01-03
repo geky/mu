@@ -1,7 +1,6 @@
 #include "lex.h"
 
 #include "parse.h"
-#include "var.h"
 #include "num.h"
 #include "str.h"
 #include "tbl.h"
@@ -18,18 +17,18 @@ mu_const tbl_t *mu_keys(void) {
     if (keyt) return keyt;
 
     keyt = tbl_create(0, 0);
-    tbl_insert(keyt, vcstr("nil", 0), vuint(T_NIL), 0);
-    tbl_insert(keyt, vcstr("fn", 0), vuint(T_FN), 0);
-    tbl_insert(keyt, vcstr("let", 0), vuint(T_LET), 0);
-    tbl_insert(keyt, vcstr("return", 0), vuint(T_RETURN), 0);
-    tbl_insert(keyt, vcstr("if", 0), vuint(T_IF), 0);
-    tbl_insert(keyt, vcstr("while", 0), vuint(T_WHILE), 0);
-    tbl_insert(keyt, vcstr("for", 0), vuint(T_FOR), 0);
-    tbl_insert(keyt, vcstr("continue", 0), vuint(T_CONT), 0);
-    tbl_insert(keyt, vcstr("break", 0), vuint(T_BREAK), 0);
-    tbl_insert(keyt, vcstr("else", 0), vuint(T_ELSE), 0);
-    tbl_insert(keyt, vcstr("and", 0), vuint(T_AND), 0);
-    tbl_insert(keyt, vcstr("or", 0), vuint(T_OR), 0);
+    tbl_insert(keyt, mcstr("nil", 0), muint(T_NIL), 0);
+    tbl_insert(keyt, mcstr("fn", 0), muint(T_FN), 0);
+    tbl_insert(keyt, mcstr("let", 0), muint(T_LET), 0);
+    tbl_insert(keyt, mcstr("return", 0), muint(T_RETURN), 0);
+    tbl_insert(keyt, mcstr("if", 0), muint(T_IF), 0);
+    tbl_insert(keyt, mcstr("while", 0), muint(T_WHILE), 0);
+    tbl_insert(keyt, mcstr("for", 0), muint(T_FOR), 0);
+    tbl_insert(keyt, mcstr("continue", 0), muint(T_CONT), 0);
+    tbl_insert(keyt, mcstr("break", 0), muint(T_BREAK), 0);
+    tbl_insert(keyt, mcstr("else", 0), muint(T_ELSE), 0);
+    tbl_insert(keyt, mcstr("and", 0), muint(T_AND), 0);
+    tbl_insert(keyt, mcstr("or", 0), muint(T_OR), 0);
     
     return keyt;
 }
@@ -98,12 +97,12 @@ static mu_noreturn void l_bad(parse_t *p) {
 
 static void l_ws(parse_t *p) {
     wskip(p);
-    return lex(p);
+    return mu_lex(p);
 }
 
 static void l_com(parse_t *p) {
     wskip(p);
-    return lex(p);
+    return mu_lex(p);
 }
 
 static void l_op(parse_t *p) {
@@ -116,19 +115,19 @@ static void l_op(parse_t *p) {
     }
 
     kw_end = p->pos;
-    p->val = vnstr(kw_pos, kw_end-kw_pos, p->eh);
+    p->val = mnstr(kw_pos, kw_end-kw_pos, p->eh);
 
     wskip(p);
     p->op.rprec = p->pos - kw_end;
 
     // TODO make these strings preinterned so this is actually reasonable
-    if (var_equals(p->val, vcstr("->", p->eh)) && p->left) {
+    if (mu_equals(p->val, mcstr("->", p->eh)) && p->left) {
         p->tok = T_RETURN;
-    } else if (var_equals(p->val, vcstr(".", p->eh)) && lexs[*p->pos] == l_kw) {
+    } else if (mu_equals(p->val, mcstr(".", p->eh)) && lexs[*p->pos] == l_kw) {
         p->tok = T_KEY;
     } else if (p->left && lexs[kw_end[-1]] == l_set) {
         p->tok = T_OPSET;
-        p->val = vnstr(kw_pos, kw_end-kw_pos-1, p->eh);
+        p->val = mnstr(kw_pos, kw_end-kw_pos-1, p->eh);
     } else {
         p->tok = T_OP;
     }
@@ -144,8 +143,8 @@ static void l_kw(parse_t *p) {
     }
 
     kw_end = p->pos;
-    p->val = vnstr(kw_pos, kw_end-kw_pos, p->eh);
-    var_t tok = tbl_lookup(p->keys, p->val);
+    p->val = mnstr(kw_pos, kw_end-kw_pos, p->eh);
+    mu_t tok = tbl_lookup(p->keys, p->val);
 
     wskip(p);
     p->op.rprec = p->pos - kw_end;
@@ -187,12 +186,12 @@ static void l_nl(parse_t *p) {
 
 static void l_num(parse_t *p) {
     p->tok = T_LIT;
-    p->val = vnum(num_parse(&p->pos, p->end));
+    p->val = mnum(num_parse(&p->pos, p->end));
 }
 
 static void l_str(parse_t *p) {
     p->tok = T_LIT;
-    p->val = vstr(str_parse(&p->pos, p->end, p->eh));
+    p->val = mstr(str_parse(&p->pos, p->end, p->eh));
 }
 
 
@@ -267,7 +266,7 @@ void (* const lexs[256])(parse_t *) = {
 
 
 // Performs lexical analysis on the passed string
-void lex(parse_t *p) {
+void mu_lex(parse_t *p) {
     if (p->pos < p->end)
         lexs[*p->pos](p);
     else

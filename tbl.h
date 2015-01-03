@@ -19,7 +19,7 @@ typedef mu_aligned struct tbl tbl_t;
 #else
 #ifndef MU_TBL_H
 #define MU_TBL_H
-#include "var.h"
+#include "types.h"
 #include "err.h"
 
 
@@ -40,7 +40,7 @@ struct tbl {
 
     union {
         uint_t offset; // offset for implicit ranges
-        var_t *array;  // pointer to stored data
+        mu_t *array;  // pointer to stored data
     };
 };
 
@@ -70,34 +70,34 @@ mu_inline tbl_t *tbl_write(tbl_t *t, eh_t *eh) {
 tbl_t *tbl_create(len_t len, eh_t *eh);
 void tbl_destroy(tbl_t *t);
 
-mu_inline var_t vntbl(len_t l, eh_t *eh) { return vtbl(tbl_create(l, eh)); }
+mu_inline mu_t mntbl(len_t l, eh_t *eh) { return mtbl(tbl_create(l, eh)); }
 
 mu_inline len_t tbl_getlen(tbl_t *t) { return tbl_read(t)->len; }
 
 // Table reference counting
 mu_inline void tbl_inc(tbl_t *t) { ref_inc((void *)tbl_read(t)); }
 mu_inline void tbl_dec(tbl_t *t) { ref_dec((void *)tbl_read(t), 
-                                           (void *)tbl_destroy); }
+                                           (void (*)(void *))tbl_destroy); }
 
 
 // Recursively looks up a key in the table
 // returns either that value or nil
-var_t tbl_lookup(tbl_t *t, var_t key);
+mu_t tbl_lookup(tbl_t *t, mu_t key);
 
 // Recursively looks up either a key or index
 // if key is not found
-var_t tbl_lookdn(tbl_t *t, var_t key, hash_t i);
+mu_t tbl_lookdn(tbl_t *t, mu_t key, hash_t i);
 
 // Recursively assigns a value in the table with the given key
 // decends down the tail chain until its found
-void tbl_assign(tbl_t *t, var_t key, var_t val, eh_t *eh);
+void tbl_assign(tbl_t *t, mu_t key, mu_t val, eh_t *eh);
 
 // Inserts a value in the table with the given key
 // without decending down the tail chain
-void tbl_insert(tbl_t *t, var_t key, var_t val, eh_t *eh);
+void tbl_insert(tbl_t *t, mu_t key, mu_t val, eh_t *eh);
 
 // Sets the next index in the table with the value
-void tbl_append(tbl_t *t, var_t val, eh_t *eh);
+void tbl_append(tbl_t *t, mu_t val, eh_t *eh);
 
 // Performs iteration on a table
 fn_t *tbl_iter(tbl_t *t, eh_t *eh);
@@ -110,19 +110,19 @@ str_t *tbl_repr(tbl_t *t, eh_t *eh);
 // Assign names for k and v, and pass in the 
 // block to execute for each pair in tbl
 #define tbl_for_begin(k, v, tbl) {                  \
-    var_t k;                                        \
-    var_t v;                                        \
+    mu_t k;                                         \
+    mu_t v;                                         \
     tbl_t *_t = tbl_read(tbl);                      \
     uint_t _i, _c = _t->len;                        \
                                                     \
     for (_i=0; _c; _i++) {                          \
         switch (_t->stride) {                       \
             case 0:                                 \
-                k = vuint(_i);                      \
-                v = vuint(_t->offset + _i);         \
+                k = muint(_i);                      \
+                v = muint(_t->offset + _i);         \
                 break;                              \
             case 1:                                 \
-                k = vuint(_i);                      \
+                k = muint(_i);                      \
                 v = _t->array[_i];                  \
                 break;                              \
             case 2:                                 \
