@@ -46,31 +46,31 @@ struct tbl {
 
 
 // Table pointer manipulation with the ro flag
-mu_inline tbl_t *tbl_ro(tbl_t *tbl) {
-    return (tbl_t *)(MU_RO | (uint_t)tbl);
+mu_inline tbl_t *tbl_ro(tbl_t *t) {
+    return (tbl_t *)(MU_RO | (uint_t)t);
 }
 
 mu_inline bool tbl_isro(tbl_t *t) {
     return MU_RO & (uint_t)t;
 }
 
-mu_inline tbl_t *tbl_read(tbl_t *tbl) {
-    return (tbl_t *)(~MU_RO & (uint_t)tbl);
+mu_inline tbl_t *tbl_read(tbl_t *t) {
+    return (tbl_t *)(~MU_RO & (uint_t)t);
 }
 
-mu_inline tbl_t *tbl_write(tbl_t *t, eh_t *eh) {
+mu_inline tbl_t *tbl_write(tbl_t *t) {
     if (tbl_isro(t))
-        err_readonly(eh);
+        mu_err_readonly();
     else
         return t;
 }
 
 
 // Table creating functions and macros
-tbl_t *tbl_create(len_t len, eh_t *eh);
+tbl_t *tbl_create(len_t len);
 void tbl_destroy(tbl_t *t);
 
-mu_inline mu_t mntbl(len_t l, eh_t *eh) { return mtbl(tbl_create(l, eh)); }
+mu_inline mu_t mntbl(len_t l) { return mtbl(tbl_create(l)); }
 
 mu_inline len_t tbl_getlen(tbl_t *t) { return tbl_read(t)->len; }
 
@@ -90,20 +90,20 @@ mu_t tbl_lookdn(tbl_t *t, mu_t key, hash_t i);
 
 // Recursively assigns a value in the table with the given key
 // decends down the tail chain until its found
-void tbl_assign(tbl_t *t, mu_t key, mu_t val, eh_t *eh);
+void tbl_assign(tbl_t *t, mu_t key, mu_t val);
 
 // Inserts a value in the table with the given key
 // without decending down the tail chain
-void tbl_insert(tbl_t *t, mu_t key, mu_t val, eh_t *eh);
+void tbl_insert(tbl_t *t, mu_t key, mu_t val);
 
 // Sets the next index in the table with the value
-void tbl_append(tbl_t *t, mu_t val, eh_t *eh);
+void tbl_append(tbl_t *t, mu_t val);
 
 // Performs iteration on a table
-fn_t *tbl_iter(tbl_t *t, eh_t *eh);
+fn_t *tbl_iter(tbl_t *t);
 
 // Table representation
-str_t *tbl_repr(tbl_t *t, eh_t *eh);
+str_t *tbl_repr(tbl_t *t);
 
 
 // Macro for iterating through a table in c

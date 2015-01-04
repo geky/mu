@@ -48,7 +48,7 @@ hash_t num_hash(num_t n);
 
 // Number parsing and representation
 num_t num_parse(const data_t **off, const data_t *end);
-str_t *num_repr(num_t n, eh_t *eh);
+str_t *num_repr(num_t n);
 
 
 // Check to see if number is equivalent to its hash

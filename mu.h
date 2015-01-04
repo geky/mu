@@ -39,6 +39,9 @@ typedef uinth_t len_t;
 // Definition of alignment for Mu types
 #define mu_aligned __attribute__((aligned(8)))
 
+// Definition of thread local variables
+#define mu_thread __thread
+
 // Definition of const functions
 // TODO replace most of these with seperate const allocations
 #define mu_const __attribute__((const))

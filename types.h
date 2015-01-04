@@ -29,7 +29,6 @@ enum mu_type {
     MU_ROOBJ = MU_RO | MU_OBJ, // readonly object
 };
 
-
 // Declaration of mu type
 typedef union mu {
     // bitwise representations
@@ -55,7 +54,6 @@ typedef union mu {
 #define MU_TYPES_H
 #define MU_DEF
 #include "types.h"
-#include "err.h"
 #undef MU_DEF
 #include "mem.h"
 
@@ -156,20 +154,20 @@ bool mu_equals(mu_t a, mu_t b);
 hash_t mu_hash(mu_t m);
 
 // Performs iteration on variables
-fn_t *mu_iter(mu_t m, eh_t *eh);
+fn_t *mu_iter(mu_t m);
 
 // Returns a string representation of the variable
-str_t *mu_repr(mu_t m, eh_t *eh);
+str_t *mu_repr(mu_t m);
 
 // Table related functions performed on variables
-mu_t mu_lookup(mu_t m, mu_t key, eh_t *eh);
-mu_t mu_lookdn(mu_t m, mu_t key, hash_t i, eh_t *eh);
-void mu_assign(mu_t m, mu_t key, mu_t val, eh_t *eh);
-void mu_insert(mu_t m, mu_t key, mu_t val, eh_t *eh);
-void mu_append(mu_t m, mu_t val, eh_t *eh);
+mu_t mu_lookup(mu_t m, mu_t key);
+mu_t mu_lookdn(mu_t m, mu_t key, hash_t i);
+void mu_assign(mu_t m, mu_t key, mu_t val);
+void mu_insert(mu_t m, mu_t key, mu_t val);
+void mu_append(mu_t m, mu_t val);
 
 // Function calls performed on variables
-mu_t mu_call(mu_t m, tbl_t *args, eh_t *eh);
+mu_t mu_call(mu_t m, tbl_t *args);
 
 
 #endif

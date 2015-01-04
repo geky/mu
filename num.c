@@ -1,7 +1,6 @@
 #include "num.h"
 
 #include "str.h"
-
 #include <math.h>
 
 
@@ -142,15 +141,15 @@ done:       // return the result
 
 
 // Obtains a string representation of a number
-str_t *num_repr(num_t n, eh_t *eh) {
+str_t *num_repr(num_t n) {
     if (n == 0) {
-        return getstr(mcstr("0", eh));
+        return getstr(mcstr("0"));
     } else if (isnan(n)) {
-        return getstr(mcstr("nan", eh));
+        return getstr(mcstr("nan"));
     } else if (isinf(n)) {
-        return getstr(n > 0.0 ? mcstr("inf", eh) : mcstr("-inf", eh));
+        return getstr(n > 0.0 ? mcstr("inf") : mcstr("-inf"));
     } else {
-        mstr_t *m = mstr_create(MU_NUMLEN, eh);
+        mstr_t *m = mstr_create(MU_NUMLEN);
         data_t *out = m->data;
 
         if (n < 0.0) {
@@ -204,7 +203,7 @@ str_t *num_repr(num_t n, eh_t *eh) {
         }
 
         m->len = out - m->data;
-        return str_intern(m, eh);
+        return str_intern(m);
     }
 }
 

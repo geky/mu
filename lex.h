@@ -5,7 +5,6 @@
 #ifdef MU_DEF
 #ifndef MU_LEX_DEF
 #define MU_LEX_DEF
-
 #include "mu.h"
 
 
@@ -54,8 +53,8 @@ typedef enum tok {
 #define MU_LEX_H
 #define MU_DEF
 #include "lex.h"
-#include "types.h"
 #include "parse.h"
+#include "types.h"
 #undef MU_DEF
 
 

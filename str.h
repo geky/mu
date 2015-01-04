@@ -39,23 +39,23 @@ struct str {
 
 
 // Functions for creating mutable temporary strings
-mstr_t *mstr_create(len_t len, eh_t *eh);
+mstr_t *mstr_create(len_t len);
 void mstr_destroy(mstr_t *s);
 
 // Function for interning strings
-str_t *str_intern(str_t *s, eh_t *eh);
+str_t *str_intern(str_t *s);
 void str_destroy(str_t *s);
 
 // String creating functions and macros
-str_t *str_nstr(const data_t *s, len_t len, eh_t *eh);
-str_t *str_cstr(const char *s, eh_t *eh);
+str_t *str_nstr(const data_t *s, len_t len);
+str_t *str_cstr(const char *s);
 
-mu_inline mu_t mnstr(const data_t *s, len_t l, eh_t *eh) {
-    return mstr(str_nstr(s, l, eh));
+mu_inline mu_t mnstr(const data_t *s, len_t l) {
+    return mstr(str_nstr(s, l));
 }
 
-mu_inline mu_t mcstr(const char *s, eh_t *eh) {
-    return mstr(str_cstr(s, eh));
+mu_inline mu_t mcstr(const char *s) {
+    return mstr(str_cstr(s));
 }
 
 // String accessing macros
@@ -75,8 +75,8 @@ bool mstr_equals(str_t *a, str_t *b);
 hash_t mstr_hash(str_t *s);
 
 // String parsing and representation
-str_t *str_parse(const data_t **off, const data_t *end, eh_t *eh);
-str_t *str_repr(str_t *s, eh_t *eh);
+str_t *str_parse(const data_t **off, const data_t *end);
+str_t *str_repr(str_t *s);
 
 
 #endif

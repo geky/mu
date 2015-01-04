@@ -18,16 +18,14 @@ typedef mu_aligned uinth_t ref_t;
 #define MU_MEM_H
 #define MU_DEF
 #include "mem.h"
-#include "err.h"
 #undef MU_DEF
-#include <stdlib.h>
 
 
 // Manual memory management
 // simple wrapper over malloc and free if available
 // returns 0 when size == 0
-void *mu_alloc(size_t size, eh_t *eh);
-void *mu_realloc(void *, size_t prev, size_t size, eh_t *eh);
+void *mu_alloc(size_t size);
+void *mu_realloc(void *, size_t prev, size_t size);
 void mu_dealloc(void *, size_t size);
 
 
@@ -38,8 +36,8 @@ void mu_dealloc(void *, size_t size);
 // which could be statically allocated. This nicely handles
 // overflow allowing a small reference count size.
 // It is up to the user to avoid cyclic dependencies.
-mu_inline void *ref_alloc(size_t size, eh_t *eh) {
-    ref_t *ref = mu_alloc(size, eh);
+mu_inline void *ref_alloc(size_t size) {
+    ref_t *ref = mu_alloc(size);
     *ref = 1;
 
     return ref;

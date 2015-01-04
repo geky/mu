@@ -74,8 +74,6 @@ typedef enum op {
 #define MU_DEF
 #include "vm.h"
 #include "types.h"
-#include "tbl.h"
-#include "fn.h"
 #undef MU_DEF
 
 
@@ -91,7 +89,7 @@ size_t mu_size(op_t op, uint_t arg);
 void mu_encode(data_t *code, op_t op, uint_t arg);
 
 // Execute the bytecode
-mu_t mu_exec(fn_t *f, tbl_t *args, tbl_t *scope, eh_t *eh);
+mu_t mu_exec(fn_t *f, tbl_t *args, tbl_t *scope);
 
 
 #endif

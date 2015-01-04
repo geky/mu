@@ -24,46 +24,51 @@ typedef struct eh eh_t;
 
 
 struct eh {
+    struct eh *prev;
     tbl_t *handles;
     jmp_buf env;
 };
 
 
-mu_noreturn void mu_err(tbl_t *err, eh_t *eh);
-mu_noreturn void mu_cerr(mu_t type, mu_t reason, eh_t *eh);
+eh_t *eh_get(void);
+void eh_set(eh_t *eh);
 
-void mu_handle(tbl_t *err, eh_t *eh);
-
-
-mu_noreturn void err_nomem(eh_t *eh);
-mu_noreturn void err_len(eh_t *eh);
-mu_noreturn void err_readonly(eh_t *eh);
-mu_noreturn void err_parse(eh_t *eh);
-mu_noreturn void err_undefined(eh_t *eh);
+void eh_handle(eh_t *eh, tbl_t *err);
 
 
-#define mu_try_begin(eh) {                  \
-    eh_t _eh;                               \
-    _eh.handles = 0;                        \
-                                            \
+mu_noreturn void mu_err(tbl_t *err);
+mu_noreturn void mu_cerr(str_t *type, str_t *reason);
+
+mu_noreturn void mu_err_nomem(void);
+mu_noreturn void mu_err_len(void);
+mu_noreturn void mu_err_readonly(void);
+mu_noreturn void mu_err_parse(void);
+mu_noreturn void mu_err_undefined(void);
+
+
+#define mu_try_begin {                      \
+    eh_t _eh = {eh_get(), 0};               \
     tbl_t *_err = (tbl_t *)setjmp(_eh.env); \
                                             \
     if (mu_unlikely(_err != 0))             \
-        mu_handle(_err, &_eh);              \
+        eh_handle(&_eh, _err);              \
                                             \
     if (mu_likely(_err == 0)) {             \
-        mu_unused eh_t *eh = &_eh;          \
+        eh_set(&_eh);                       \
 {
 #define mu_on_err(err)                      \
 }                                           \
     } else {                                \
         mu_unused tbl_t *err = _err;        \
+        eh_set(_eh.prev);                   \
 {
 #define mu_try_end                          \
 }                                           \
     }                                       \
+                                            \
+    eh_set(_eh.prev);                       \
 }
-    
+
 
 #endif
 #endif

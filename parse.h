@@ -6,11 +6,6 @@
 #ifndef MU_PARSE_DEF
 #define MU_PARSE_DEF
 #include "mu.h"
-#include "types.h"
-#include "tbl.h"
-#include "err.h"
-#include "lex.h"
-#include "mem.h"
 
 
 typedef struct parse parse_t;
@@ -22,6 +17,9 @@ typedef struct parse parse_t;
 #define MU_PARSE_H
 #define MU_DEF
 #include "parse.h"
+#include "lex.h"
+#include "mem.h"
+#include "types.h"
 #undef MU_DEF
 
 
@@ -55,7 +53,7 @@ struct fnparse {
 };
 
 // State of a parse
-struct parse {
+typedef struct parse {
     struct fnparse *f;
     struct jparse j;
     struct opparse op;
@@ -79,13 +77,11 @@ struct parse {
     const data_t *str;
     const data_t *pos;
     const data_t *end;
-
-    eh_t *eh;
-};
+} parse_t;
 
 
 // Entry points into parsing Mu source into bytecode
-parse_t *mu_parse_create(mu_t code, eh_t *eh);
+parse_t *mu_parse_create(mu_t code);
 void mu_parse_destroy(parse_t *p);
 
 void mu_parse_args(parse_t *p, tbl_t *args);

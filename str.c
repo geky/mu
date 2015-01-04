@@ -2,13 +2,12 @@
 
 #include "num.h"
 #include "err.h"
-
 #include <string.h>
 
 
 // Functions for creating mutable temporary strings
-mstr_t *mstr_create(len_t len, eh_t *eh) {
-    mstr_t *m = ref_alloc(sizeof(str_t) + len*sizeof(data_t), eh);
+mstr_t *mstr_create(len_t len) {
+    mstr_t *m = ref_alloc(sizeof(str_t) + len*sizeof(data_t));
     m->len = len;
     return m;
 }
@@ -18,7 +17,7 @@ void mstr_destroy(mstr_t *m) {
 }
 
 // Functions for interning strings
-str_t *str_intern(str_t *m, eh_t *eh) {
+str_t *str_intern(str_t *m) {
     return m; // TODO interning
 }
 
@@ -27,21 +26,21 @@ void str_destroy(str_t *s) {
 }
 
 // String creating functions
-str_t *str_nstr(const data_t *s, len_t len, eh_t *eh) {
-    mstr_t *m = mstr_create(len, eh);
+str_t *str_nstr(const data_t *s, len_t len) {
+    mstr_t *m = mstr_create(len);
     memcpy(m->data, s, len);
-    return str_intern(m, eh);
+    return str_intern(m);
 }
 
-str_t *str_sstr(const data_t *s, size_t len, eh_t *eh) {
+str_t *str_sstr(const data_t *s, size_t len) {
     if (len > MU_MAXLEN)
-        err_len(eh);
+        mu_err_len();
 
-    return str_nstr(s, len, eh);
+    return str_nstr(s, len);
 }
 
-str_t *str_cstr(const char *s, eh_t *eh) {
-    return str_sstr((const data_t *)s, strlen(s), eh);
+str_t *str_cstr(const char *s) {
+    return str_sstr((const data_t *)s, strlen(s));
 }
 
 
@@ -66,14 +65,14 @@ hash_t mstr_hash(str_t *m) {
 
 
 // Parses a string and returns a string
-str_t *str_parse(const data_t **ppos, const data_t *end, eh_t *eh) {
+str_t *str_parse(const data_t **ppos, const data_t *end) {
     const data_t *pos = *ppos + 1;
     data_t quote = **ppos;
     size_t size = 0;
 
     while (*pos != quote) {
         if (pos == end)
-            err_parse(eh); // Unterminated string
+            mu_err_parse(); // Unterminated string
 
         if (*pos == '\\' && end-pos >= 2) {
             switch (pos[1]) {
@@ -129,9 +128,9 @@ str_t *str_parse(const data_t **ppos, const data_t *end, eh_t *eh) {
     }
 
     if (size > MU_MAXLEN)
-        err_len(eh);
+        mu_err_len();
 
-    mstr_t *m = mstr_create(size, eh);
+    mstr_t *m = mstr_create(size);
     data_t *out = m->data;
     pos = *ppos + 1;
 
@@ -179,12 +178,12 @@ str_t *str_parse(const data_t **ppos, const data_t *end, eh_t *eh) {
 
     *ppos = pos + 1;
 
-    return str_intern(m, eh);
+    return str_intern(m);
 }
 
 
 // Returns a string representation of a string
-str_t *str_repr(str_t *s, eh_t *eh) {
+str_t *str_repr(str_t *s) {
     const data_t *pos = s->data;
     const data_t *end = s->data + s->len;
     size_t size = 2;
@@ -212,9 +211,9 @@ str_t *str_repr(str_t *s, eh_t *eh) {
     }
 
     if (size > MU_MAXLEN)
-        err_len(eh);
+        mu_err_len();
 
-    mstr_t *m = mstr_create(size, eh);
+    mstr_t *m = mstr_create(size);
     data_t *out = m->data;
     pos = s->data;
 
@@ -251,7 +250,7 @@ str_t *str_repr(str_t *s, eh_t *eh) {
 
     *out++ = '\'';
 
-    return str_intern(m, eh);
+    return str_intern(m);
 }
 
 

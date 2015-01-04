@@ -4,7 +4,6 @@
 #include "str.h"
 #include "tbl.h"
 #include "fn.h"
-
 #include <string.h>
 #include <stdlib.h>
 
@@ -46,103 +45,100 @@ hash_t mu_hash(mu_t v) {
 
 
 // Performs iteration on variables
-static fn_t *nil_iter(void *v, eh_t *eh) { err_undefined(eh); }
+static fn_t *nil_iter(void *v) { mu_err_undefined(); }
 
-fn_t *mu_iter(mu_t v, eh_t *eh) {
-    static fn_t *(* const mu_iters[8])(void *, eh_t *) = {
+fn_t *mu_iter(mu_t v) {
+    static fn_t *(* const mu_iters[8])(void *) = {
         nil_iter, nil_iter, nil_iter, nil_iter,
         (void *)tbl_iter, (void *)tbl_iter, 0, 0
     };
 
-    return mu_iters[gettype(v)](getptr(v), eh);
+    return mu_iters[gettype(v)](getptr(v));
 }
     
 
 // Returns a string representation of the variable
-static str_t *nil_repr(void *v, eh_t *eh) { return str_cstr("nil", eh); }
+static str_t *nil_repr(void *v) { return str_cstr("nil"); }
 
-str_t *mu_repr(mu_t v, eh_t *eh) {
-    static str_t *(* const mu_reprs[8])(void *, eh_t *) = {
+str_t *mu_repr(mu_t v) {
+    static str_t *(* const mu_reprs[8])(void *) = {
         nil_repr, (void *)num_repr, (void *)str_repr, (void *)fn_repr,
         (void *)tbl_repr, (void *)tbl_repr, 0, 0
     };
 
-    return mu_reprs[gettype(v)](getptr(v), eh);
+    return mu_reprs[gettype(v)](getptr(v));
 }
 
 
 // Table related functions performed on variables
-static mu_t nil_lookup(void *t, mu_t k, eh_t *eh)  { err_undefined(eh); }
+static mu_t nil_lookup(void *t, mu_t k)  { mu_err_undefined(); }
 
-mu_t mu_lookup(mu_t v, mu_t key, eh_t *eh) {
-    static mu_t (* const mu_lookups[8])(void *, mu_t, eh_t *) = {
+mu_t mu_lookup(mu_t v, mu_t key) {
+    static mu_t (* const mu_lookups[8])(void *, mu_t) = {
         nil_lookup, nil_lookup, nil_lookup, nil_lookup,
         (void *)tbl_lookup, (void *)tbl_lookup, 0, 0
     };
 
-    return mu_lookups[gettype(v)](getptr(v), key, eh);
+    return mu_lookups[gettype(v)](getptr(v), key);
 }
 
-static mu_t nil_lookdn(void *t, mu_t k, hash_t i, eh_t *eh) { err_undefined(eh); }
+static mu_t nil_lookdn(void *t, mu_t k, hash_t i) { mu_err_undefined(); }
 
-mu_t mu_lookdn(mu_t v, mu_t key, hash_t i, eh_t *eh) {
-    static mu_t (* const mu_lookdns[8])(void *, mu_t, hash_t, eh_t *) = {
+mu_t mu_lookdn(mu_t v, mu_t key, hash_t i) {
+    static mu_t (* const mu_lookdns[8])(void *, mu_t, hash_t) = {
         nil_lookdn, nil_lookdn, nil_lookdn, nil_lookdn,
         (void *)tbl_lookdn, (void *)tbl_lookdn, 0, 0
     };
 
-    return mu_lookdns[gettype(v)](getptr(v), key, i, eh);
+    return mu_lookdns[gettype(v)](getptr(v), key, i);
 }
 
 
-static void nil_insert(void *t, mu_t k, mu_t v, eh_t *eh) { err_undefined(eh); }
-static void ro_insert(void *t, mu_t k, mu_t v, eh_t *eh) { err_readonly(eh); }
+static void nil_insert(void *t, mu_t k, mu_t v) { mu_err_undefined(); }
 
-void mu_insert(mu_t v, mu_t key, mu_t val, eh_t *eh) {
-    static void (* const mu_inserts[8])(void *, mu_t, mu_t, eh_t *) = {
+void mu_insert(mu_t v, mu_t key, mu_t val) {
+    static void (* const mu_inserts[8])(void *, mu_t, mu_t) = {
         nil_insert, nil_insert, nil_insert, nil_insert,
-        (void *)tbl_insert, ro_insert, 0, 0
+        (void *)tbl_insert, (void *)tbl_insert, 0, 0
     };
 
-    mu_inserts[gettype(v)](getptr(v), key, val, eh);
+    mu_inserts[gettype(v)](getptr(v), key, val);
 }
 
 
-static void nil_assign(void *t, mu_t k, mu_t v, eh_t *eh) { err_undefined(eh); }
-static void ro_assign(void *t, mu_t k, mu_t v, eh_t *eh) { err_readonly(eh); }
+static void nil_assign(void *t, mu_t k, mu_t v) { mu_err_undefined(); }
 
-void mu_assign(mu_t v, mu_t key, mu_t val, eh_t *eh) {
-    static void (* const mu_assigns[8])(void *, mu_t, mu_t, eh_t *) = {
+void mu_assign(mu_t v, mu_t key, mu_t val) {
+    static void (* const mu_assigns[8])(void *, mu_t, mu_t) = {
         nil_assign, nil_assign, nil_assign, nil_assign,
-        (void *)tbl_assign, ro_assign, 0, 0
+        (void *)tbl_assign, (void *)tbl_assign, 0, 0
     };
 
-    mu_assigns[gettype(v)](getptr(v), key, val, eh);
+    mu_assigns[gettype(v)](getptr(v), key, val);
 }
 
 
-static void nil_append(void *t, mu_t v, eh_t *eh) { err_undefined(eh); }
-static void ro_append(void *t, mu_t v, eh_t *eh) { err_readonly(eh); }
+static void nil_append(void *t, mu_t v) { mu_err_undefined(); }
 
-void mu_append(mu_t v, mu_t val, eh_t *eh) {
-    static void (* const mu_appends[8])(void *, mu_t, eh_t *) = {
+void mu_append(mu_t v, mu_t val) {
+    static void (* const mu_appends[8])(void *, mu_t) = {
         nil_append, nil_append, nil_append, nil_append,
-        (void *)tbl_append, ro_append, 0, 0
+        (void *)tbl_append, (void *)tbl_append, 0, 0
     };
 
-    mu_appends[gettype(v)](getptr(v), val, eh);
+    mu_appends[gettype(v)](getptr(v), val);
 }
 
 
 // Function calls performed on variables
-static mu_t nil_call(void *f, tbl_t *a, eh_t *eh)  { err_undefined(eh); }
+static mu_t nil_call(void *f, tbl_t *a)  { mu_err_undefined(); }
 
-mu_t mu_call(mu_t v, tbl_t *args, eh_t *eh) {
-    static mu_t (* const mu_calls[8])(void *, tbl_t *, eh_t *) = {
+mu_t mu_call(mu_t v, tbl_t *args) {
+    static mu_t (* const mu_calls[8])(void *, tbl_t *) = {
         nil_call, nil_call, nil_call, (void *)fn_call,
         nil_call, nil_call, nil_call, nil_call
     };
 
-    return mu_calls[gettype(v)](getptr(v), args, eh);
+    return mu_calls[gettype(v)](getptr(v), args);
 }
 
