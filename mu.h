@@ -18,13 +18,17 @@ typedef int16_t inth_t;
 typedef uint16_t uinth_t;
 typedef int32_t int_t;
 typedef uint32_t uint_t;
+#define MU_MAXINTQ  INT8_MAX
+#define MU_MAXUINTQ UINT8_MAX
+#define MU_MAXINTH  INT16_MAX
+#define MU_MAXUINTH UINT16_MAX
+#define MU_MAXINT   INT32_MAX
+#define MU_MAXUINT  UINT32_MAX
 
 // Length type is half the size of normal ints
 // to reduce space consumption
 typedef uinth_t len_t;
-
-// Largest storeable length
-#define MU_MAXLEN ((len_t)~0)
+#define MU_MAXLEN MU_MAXUINTH
 
 // Smallest allocatable size
 #define MU_MINALLOC (4*sizeof(void *))

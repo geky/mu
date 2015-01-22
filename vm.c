@@ -46,8 +46,17 @@ mu_t mu_exec(fn_t *f, tbl_t *args, tbl_t *scope) {
     register const data_t *pc = f->bcode->data;
     register mu_t *sp = stack + f->stack;
 
+    printf("stack: %d\nsize: %d\n", f->stack, f->bcode->len);
+
     while (1) {
-        switch (*pc++ >> 3) {
+        if (MU_COLOR & pc[0]) printf("\033[33m");
+        if (MU_ARG & pc[0])
+            printf("> %02x.%02x%02x %s %d\n", 0x7f & pc[0], pc[1], pc[2], op_name(0x7f & pc[0]), sarg(&pc[1]));
+        else
+            printf("> %02x      %s\n", 0x7f & pc[0], op_name(0x7f & pc[0]));
+        if (MU_COLOR & pc[0]) printf("\033[0m");
+
+        switch (0x7f & (*pc++)) {
             case OP_IMM:    sp[-1] = tbl_lookup(f->imms, muint(arg(pc))); pc += 2; sp--;                           
                             break;
             case OP_FN:     sp[-1] = mfn(fn_closure(getfn(tbl_lookup(f->imms, muint(arg(pc)))), scope)); pc += 2; sp--;
@@ -57,17 +66,29 @@ mu_t mu_exec(fn_t *f, tbl_t *args, tbl_t *scope) {
             case OP_SCOPE:  sp[-1] = mtbl(scope); sp--;                                         break;
             case OP_ARGS:   sp[-1] = mtbl(args); sp--;                                          break;
             
-            case OP_DUP:    sp[-1] = sp[arg(pc)]; sp -= 1; pc += 2;                             break;
-            case OP_DROP:   sp += 1;                                                            break;
+            case OP_DUP:    sp[-1] = sp[arg(pc)]; sp--; pc += 2;                             break;
+            case OP_DROP:   sp++;                                                            break;
 
             case OP_JUMP:   pc += sarg(pc)+2;                                                   break;
-            case OP_JFALSE: pc += isnil(*sp++) ? sarg(pc)+2 : 2;                                break;
-            case OP_JTRUE:  pc += !isnil(*sp++) ? sarg(pc)+2 : 2;                               break;
+            case OP_JFALSE: if (isnil(*sp)) {
+                                pc += sarg(pc)+2;
+                            } else {
+//                                sp++;
+                                pc += 2;
+                            }
+                            break;
+            case OP_JTRUE:  if (!isnil(*sp)) {
+                                pc += sarg(pc)+2;
+                            } else {
+//                                sp++;
+                                pc += 2;
+                            }
+                            break;
 
             case OP_LOOKUP: sp[1] = mu_lookup(sp[1], sp[0]); sp += 1;                      break;
-            case OP_LOOKDN: sp[1] = mu_lookdn(sp[1], sp[0], arg(pc)); sp += 1; pc += 2;    break;
+//            case OP_LOOKDN: sp[1] = mu_lookdn(sp[1], sp[0], arg(pc)); sp += 1; pc += 2;    break;
 
-            case OP_ASSIGN: mu_assign(sp[2], sp[1], sp[0]); sp += 3;                       break;
+            case OP_ASSIGN: mu_assign(sp[2], sp[1], sp[0]); sp += 2;                       break;
             case OP_INSERT: mu_insert(sp[2], sp[1], sp[0]); sp += 2;                       break;
             case OP_APPEND: mu_append(sp[1], sp[0]); sp += 1;                              break;
     

@@ -10,6 +10,7 @@
 
 // Definition of single data entry in string type
 typedef unsigned char data_t;
+#define MU_MAXDATA UCHAR_MAX
 
 // Definition of Mu's string types
 // Mutable strings can not be used in Mu itself

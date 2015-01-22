@@ -40,9 +40,9 @@ fn_t *fn_closure(fn_t *f, tbl_t *scope) {
 }
 
 static fn_t *fn_realize(struct fnparse *f) {
-    f->stack = 25; // TODO make this reasonable
-    f->type = 2;
-    f->closure = 0;
+    f->fn.stack = f->stack.max; // TODO make this reasonable
+    f->fn.type = 2;
+    f->fn.closure = 0;
 
     // this is a bit tricky since the fn memory is reused
     // and we want to keep the resulting imms as a list if possible
@@ -63,7 +63,7 @@ static fn_t *fn_realize(struct fnparse *f) {
 
     mu_dealloc(imms, len);
 
-    return (fn_t *)f;
+    return &f->fn;
 }
 
 
@@ -91,6 +91,9 @@ fn_t *fn_create_expr(tbl_t *args, mu_t code) {
     p->f->ins = 0;
     p->f->imms = tbl_create(0);
     p->f->bcode = mstr_create(MU_MINALLOC);
+    p->f->stack.max = 0;
+    p->f->stack.off = 0;
+    p->f->stack.scope = false;
 
     mu_parse_args(p, args);
     mu_parse_expr(p);
@@ -106,6 +109,9 @@ fn_t *fn_create_nested(tbl_t *args, parse_t *p) {
     p->f->ins = 0;
     p->f->imms = tbl_create(0);
     p->f->bcode = mstr_create(MU_MINALLOC);
+    p->f->stack.max = 0;
+    p->f->stack.off = 0;
+    p->f->stack.scope = false;
 
     mu_parse_args(p, args);
     mu_parse_stmt(p);

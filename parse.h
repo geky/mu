@@ -21,6 +21,7 @@ typedef struct parse parse_t;
 #include "mem.h"
 #include "types.h"
 #undef MU_DEF
+#include "fn.h"
 
 
 // Specific state structures
@@ -35,21 +36,25 @@ struct jparse {
     tbl_t *btbl;
 };
 
+struct stparse {
+    uintq_t max;
+    uintq_t off;
+    uintq_t scope;
+};
+
 struct fnparse {
-    ref_t ref;
-
-    uintq_t stack;
-    uintq_t type;
-
     union {
-        tbl_t *closure;
+        fn_t fn;
+
         struct {
+            ref_t ref;
             len_t ins;
+            struct stparse stack;
+
+            tbl_t *imms;
+            mstr_t *bcode;
         };
     };
-
-    tbl_t *imms;
-    mstr_t *bcode;
 };
 
 // State of a parse
