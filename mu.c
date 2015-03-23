@@ -12,6 +12,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <assert.h>
 
 #define PROMPT_A "\033[32m> \033[0m"
 #define PROMPT_B "\033[32m. \033[0m"
@@ -80,44 +81,52 @@ static len_t prompt(data_t *input) {
 
 
 // TODO move this scope declaration somewhere else
-static mu_t b_add(tbl_t *args) {
-    return mdouble(getdouble(tbl_lookup(args, muint(0))) +
-                   getdouble(tbl_lookup(args, muint(1))));
+static f_t b_add(mu_t *frame) {
+    assert(isnum(frame[0]) && isnum(frame[1]));
+    frame[0] = mdouble(getdouble(frame[0]) + getdouble(frame[1]));
+    return 1;
 }
 
-static mu_t b_sub(tbl_t *args) {
-    return mdouble(getdouble(tbl_lookup(args, muint(0))) -
-                   getdouble(tbl_lookup(args, muint(1))));
+static f_t b_sub(mu_t *frame) {
+    assert(isnum(frame[0]) && isnum(frame[1]));
+    frame[0] = mdouble(getdouble(frame[0]) - getdouble(frame[1]));
+    return 1;
 }
 
-static mu_t b_equals(tbl_t *args) {
-    return mu_equals(tbl_lookup(args, muint(0)),
-                      tbl_lookup(args, muint(1))) ? muint(1) : mnil;
+static f_t b_equals(mu_t *frame) {
+    bool r = mu_equals(frame[0], frame[1]);
+    mu_dec(frame[0]); mu_dec(frame[1]);
+    frame[0] = r ? muint(1) : mnil;
+    return 1;
 }
 
-static mu_t b_repr(tbl_t *args) {
-    return mstr(mu_repr(tbl_lookup(args, muint(0))));
+static f_t b_repr(mu_t *frame) {
+    str_t *r = mu_repr(frame[0]);
+    mu_dec(frame[0]);
+    frame[0] = mstr(r);
+    return 1;
 }
 
-static mu_t b_print(tbl_t *args) {
-    tbl_for_begin (k, v, args) {
+static f_t b_print(mu_t *frame) {
+    tbl_for_begin (k, v, gettbl(frame)) {
         printvar(v);
     } tbl_for_end;
 
+    mu_dec(frame[0]);
     printf("\n");
-    return mnil;
+    return 0;
 }
 
 static void genscope() {
     scope = tbl_create(0);
 
     tbl_t *ops = tbl_create(0);
-    tbl_assign(ops, mcstr("+"), mbfn(b_add));
-    tbl_assign(ops, mcstr("-"), mbfn(b_sub));
-    tbl_assign(ops, mcstr("=="), mbfn(b_equals));
+    tbl_assign(ops, mcstr("+"), mbfn(2, b_add));
+    tbl_assign(ops, mcstr("-"), mbfn(2, b_sub));
+    tbl_assign(ops, mcstr("=="), mbfn(2, b_equals));
     tbl_assign(scope, mcstr("ops"), mtbl(ops));
-    tbl_assign(scope, mcstr("repr"), mbfn(b_repr));
-    tbl_assign(scope, mcstr("print"), mbfn(b_print));
+    tbl_assign(scope, mcstr("repr"), mbfn(1, b_repr));
+    tbl_assign(scope, mcstr("print"), mbfn(0xf, b_print));
 }
 
 static int genargs(int i, int argc, const char **argv) {

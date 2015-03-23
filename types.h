@@ -54,8 +54,11 @@ typedef union mu {
 #define MU_TYPES_H
 #define MU_DEF
 #include "types.h"
+#include "vm.h"
 #undef MU_DEF
 #include "mem.h"
+#include <string.h> // TODO rm?
+#include <math.h>
 
 
 // Definitions of literal variables
@@ -65,7 +68,8 @@ typedef union mu {
 
 // Variable constructors
 mu_inline mu_t mnum(num_t num) {
-    return (mu_t){(~7 & *(uint_t *)&num) | MU_NUM};
+    union { num_t n; uint_t u; } u = { num };
+    return (mu_t){(~7 & u.u) | MU_NUM};
 }
 
 mu_inline mu_t mstr(str_t *str) {
@@ -129,9 +133,11 @@ extern void str_destroy(str_t *);
 extern void fn_destroy(fn_t *);
 extern void tbl_destroy(tbl_t *);
 
-mu_inline void mu_inc(mu_t m) {
+mu_inline mu_t mu_inc(mu_t m) {
     if (isref(m))
         ref_inc(getref(m));
+
+    return m;
 }
 
 mu_inline void mu_dec(mu_t m) {
@@ -164,10 +170,10 @@ mu_t mu_lookup(mu_t m, mu_t key);
 mu_t mu_lookdn(mu_t m, mu_t key, hash_t i);
 void mu_assign(mu_t m, mu_t key, mu_t val);
 void mu_insert(mu_t m, mu_t key, mu_t val);
-void mu_append(mu_t m, mu_t val);
 
 // Function calls performed on variables
-mu_t mu_call(mu_t m, tbl_t *args);
+void mu_fcall(mu_t m, c_t c, mu_t *frame);
+mu_t mu_call(mu_t m, c_t c, ...);
 
 
 #endif

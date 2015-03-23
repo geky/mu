@@ -26,809 +26,407 @@ static void _expect(parse_t *p, tok_t tok, const char *fn) {
     }
 }
 
-
-// Allocation functions for managing bytecode space
-static void enlarge(parse_t *p, size_t count) {
-    struct fnparse *f = p->f;
-    uint_t ins = f->ins + count;
-    uint_t len = f->bcode->len;
-
-    while (ins > len) {
-        len = len << 1;
-    }
-
-    if (len > MU_MAXLEN)
-        mu_err_len();
-
-    mstr_t *bcode = mstr_create(len);
-    memcpy(bcode->data, f->bcode->data, len);
-    str_dec(f->bcode);
-
-    f->ins = ins;
-    f->bcode = bcode;
-}
-
-static void enlargein(parse_t *p, size_t count, uint_t ins) {
-    enlarge(p, count);
-
-    memmove(&p->f->bcode->data[ins + count],
-            &p->f->bcode->data[ins], 
-            (p->f->ins - count) - ins);
-}
-
-
-// Different encoding calls
-static mu_const size_t size(op_t op, uint_t arg) {
-    return mu_size(op, arg);
-}
-
-static void addstack(parse_t *p, int_t d) {
-    int_t off = p->f->stack.off + d;
-    assert(off <= MU_MAXUINTQ);
-
-    if (off > p->f->stack.max)
-        p->f->stack.max = off;
-
-    p->f->stack.off = off;
-}
-
-static void encode(parse_t *p, op_t op, uint_t arg) {
-    size_t count = mu_size(op, arg);
-    enlarge(p, count);
-    mu_encode(&p->f->bcode->data[p->f->ins - count], op, arg);
-    addstack(p, op_stack(op));
-}
-
-static len_t insert(parse_t *p, op_t op, uint_t arg, uint_t ins) {
-    mu_encode(&p->f->bcode->data[ins], op, arg);
-    return mu_size(op, arg);
-}
-
-
-// Helping functions for code generation
-static uint_t accvar(parse_t *p, mu_t v) {
-    mu_t index = tbl_lookup(p->f->imms, v);
+static uint_t imm(parse_t *p, mu_t v) {
+    mu_t index = tbl_lookup(p->imms, v);
 
     if (!isnil(index))
         return getuint(index);
 
-    uint_t arg = tbl_getlen(p->f->imms);
-    tbl_assign(p->f->imms, v, muint(arg));
+    uint_t arg = tbl_getlen(p->imms);
+    tbl_assign(p->imms, v, muint(arg));
     return arg;
 }
 
-static void patch(parse_t *p, tbl_t *jtbl, uint_t ins) {
-    tbl_for_begin (k, v, jtbl) {
-        uint_t jump = getuint(v);
-        insert(p, OP_JUMP, (ins - (jump + p->jsize)), jump);
-    } tbl_for_end;
+static struct chunk *chunk_create(void) {
+    struct chunk *ch = (struct chunk *)mstr_create(
+        mu_offset(struct chunk, data) - mu_offset(mstr_t, data));
 
-    tbl_dec(jtbl);
+    ch->len = 0;
+    ch->indirect = false;
+
+    return ch;
 }
 
-static tbl_t *revargs(tbl_t *args) {
-    tbl_t *res = tbl_create(0);
-    int_t i;
-
-    for (i = args->len-1; i >= 0; i--) {
-        tbl_append(res, tbl_lookup(args, mint(i)));
-    }
-
-    tbl_dec(args);
-    return res;
+static void emit(struct chunk **ch, data_t byte) {
+    mstr_insert((mstr_t **)ch, (*ch)->len + mu_offset(struct chunk, data) 
+                               - mu_offset(mstr_t, data), byte);
+    (*ch)->len += 1;
 }
 
-static void unpack(parse_t *p, tbl_t *map) {
-    encode(p, OP_SCOPE, 0);
-
-    tbl_for_begin (k, v, map) {
-        if (istbl(v)) {
-            encode(p, OP_DUP, 1);
-            encode(p, OP_IMM, accvar(p, k));
-            encode(p, OP_LOOKUP, 0);
-            unpack(p, gettbl(v));
-        } else {
-            uint_t karg = accvar(p, k);
-            uint_t varg = accvar(p, v);
-            encode(p, OP_IMM, varg);
-            encode(p, OP_DUP, 2);
-            encode(p, OP_IMM, varg);
-            encode(p, OP_LOOKUP, 0);
-            encode(p, OP_JTRUE, 
-                size(OP_DROP, 0) +
-                size(OP_DUP, 2) +
-                size(OP_IMM, karg) +
-                size(OP_LOOKUP, 0));
-            encode(p, OP_DROP, 0);
-            encode(p, OP_DUP, 2);
-            encode(p, OP_IMM, karg);
-            encode(p, OP_LOOKUP, 0);
-            encode(p, OP_INSERT, 0);
-            
-        }
-    } tbl_for_end;
-
-    encode(p, OP_DROP, 0);
-    encode(p, OP_DROP, 0);
+static void merge(struct chunk **ch, data_t *data, uint_t len) {
+    mstr_nconcat((mstr_t **)ch, (*ch)->len + mu_offset(struct chunk, data)
+                                - mu_offset(mstr_t, data), data, len);
+    (*ch)->len += len;
 }
 
-
-
-// Rules for Mu's grammar
-static void p_value(parse_t *p);
-static void p_phrase(parse_t *p);
-static void p_fn(parse_t *p);
-static void p_if(parse_t *p);
-static void p_while(parse_t *p);
-static void p_for(parse_t *p);
-static void p_expr_op(parse_t *p);
-static void p_expr(parse_t *p);
-static void p_args_follow(parse_t *p);
-static void p_args_entry(parse_t *p);
-static void p_args(parse_t *p);
-static void p_table_follow(parse_t *p);
-static void p_table_assign(parse_t *p);
-static void p_table_entry(parse_t *p);
-static void p_table(parse_t *p);
-static void p_stmt_follow(parse_t *p);
-static void p_stmt_insert(parse_t *p);
-static void p_stmt_assign(parse_t *p);
-static void p_stmt(parse_t *p);
-static void p_stmt_list(parse_t *p);
-static void p_stmt_entry(parse_t *p);
-
-
-static void p_value(parse_t *p) {
-    struct opparse op = p->op;
-    p->op.lprec = -1;
-
-    if (p->stmt) {
-        p->stmt = false;
-        p->left = false;
-        mu_lex(p);
-        p_expr(p);
-        p->stmt = true;
-        p->left = true;
-    } else if (p->left) {
-        p->left = false;
-        mu_lex(p);
-        p_expr(p);
-        p->left = true;
-    } else {
-        mu_lex(p);
-        p_expr(p);
-    }
-
-    p->op = op;
-
-    if (p->indirect)
-        encode(p, OP_LOOKUP, 0);
+static void encode(parse_t *p, op_t op, uint_t arg) {
+    mu_encode((void (*)(void *, data_t))emit, &p->ch, op, arg);
 }
 
-static void p_phrase(parse_t *p) {
-    if (p->stmt)
-        p_stmt(p);
-    else
-        p_value(p);
-}
-
-
-static void p_fn(parse_t *p) {
-    mu_lex(p);
-    expect(p, '(');
-    p_args(p);
-    expect(p, ')');
-
-    tbl_t *args = p->args;
-    struct fnparse *f = p->f;
-    struct jparse j = p->j;
-
-    fn_t *nested = fn_create_nested(args, p);
-
-    p->j = j;
-    p->f = f;
-
-    encode(p, OP_FN, accvar(p, mfn(nested)));
-}
-
-static void p_if(parse_t *p) {
-    mu_lex(p);
-    expect(p, '(');
-    p_value(p);
-    expect(p, ')');
-
-    uint_t i_ins = p->f->ins;
-    enlarge(p, p->jfsize);
-    p_phrase(p);
-
-    if (p->tok == T_ELSE) {
-        uint_t e_ins = p->f->ins;
-        enlarge(p, p->jsize);
-        encode(p, OP_DROP, 0);
-        p_phrase(p);
-
-        insert(p, OP_JFALSE, (e_ins+p->jsize) - (i_ins+p->jfsize), i_ins);
-        insert(p, OP_JUMP, p->f->ins - (e_ins+p->jsize), e_ins);
-    } else {
-        if (!p->stmt) {
-            encode(p, OP_JUMP, size(OP_NIL, 0));
-            encode(p, OP_DROP, 0);
-            encode(p, OP_NIL, 0);
-        }
-        insert(p, OP_JFALSE, p->f->ins - (i_ins+p->jfsize), i_ins);
-    }
-}
-
-static void p_while(parse_t *p) {
-    if (!p->stmt) encode(p, OP_TBL, 0);
-    struct jparse j = p->j;
-    p->j.ctbl = tbl_create(0);
-    p->j.btbl = tbl_create(0);
-    uint_t w_ins = p->f->ins;
-
-    mu_lex(p);
-    expect(p, '(');
-    p_value(p);
-    expect(p, ')');
-
-    uint_t j_ins = p->f->ins;
-    enlarge(p, p->jfsize);
-    p_phrase(p);
-    if (!p->stmt) 
-        encode(p, OP_APPEND, 0);
-
-    insert(p, OP_JFALSE, (p->f->ins+p->jsize) - (j_ins+p->jfsize), j_ins);
-    encode(p, OP_JUMP, w_ins - (p->f->ins+p->jsize));
-    encode(p, OP_DROP, 0);
-
-    patch(p, p->j.ctbl, w_ins);
-    tbl_t *btbl = p->j.btbl;
-    p->j = j;
-
-    if (p->stmt && p->tok == T_ELSE)
-        p_stmt(p);
-
-    patch(p, btbl, p->f->ins);
-}
-
-static void p_for(parse_t *p) {
-    if (!p->stmt) encode(p, OP_TBL, 0);
-
-    struct jparse j = p->j;
-    p->j.ctbl = tbl_create(0);
-    p->j.btbl = tbl_create(0);
-    p->left = true;
-
-    mu_lex(p);
-    expect(p, '(');
-    p_args(p);
-    tbl_t *args = revargs(p->args);
-    expect(p, T_SET);
-    p_value(p);
-    encode(p, OP_ITER, 0);
-    expect(p, ')');
-
-    uint_t f_ins = p->f->ins;
-    enlarge(p, p->jsize);
-
-    addstack(p, 1);
-    unpack(p, args);
-    if (p->stmt) {
-        p_phrase(p);
-    } else {
-        encode(p, OP_DUP, 1);
-        p_phrase(p);
-        encode(p, OP_APPEND, 0);
-        encode(p, OP_DROP, 0);
-    }
-
-    insert(p, OP_JUMP, p->f->ins - (f_ins+p->jsize), f_ins);
-    patch(p, p->j.ctbl, p->f->ins);
-
-    encode(p, OP_DUP, 0);
-    encode(p, OP_TBL, 0);
-    encode(p, OP_CALL, 0);
-    encode(p, OP_JTRUE, (f_ins+p->jsize) - (p->f->ins+p->jtsize));
-    encode(p, OP_DROP, 0);
-
-    tbl_t *btbl = p->j.btbl;
-    p->j = j;
-
-    if (p->stmt && p->tok == T_ELSE)
-        p_stmt(p);
-
-    patch(p, btbl, p->f->ins);
-    encode(p, OP_DROP, 0);
-}
-
-
-static void p_expr_op(parse_t *p) {
-    switch (p->tok) {
-        case T_KEY:     if (p->indirect) encode(p, OP_LOOKUP, 0);
-                        mu_lex(p);
-                        encode(p, OP_IMM, accvar(p, p->val));
-                        mu_lex(p);
-                        p->indirect = true;
-                        return p_expr_op(p);
-
-        case '[':       if (p->indirect) encode(p, OP_LOOKUP, 0);
-                        p->paren++;
-                        p_value(p);
-                        p->paren--;
-                        expect(p, ']');
-                        mu_lex(p);
-                        p->indirect = true;
-                        return p_expr_op(p);
-
-        case '(':       if (p->indirect) encode(p, OP_LOOKUP, 0);
-                        encode(p, OP_TBL, 0);
-                        p->paren++;
-                        p_table(p);
-                        p->paren--;
-                        expect(p, ')');
-                        encode(p, OP_CALL, 0);
-                        mu_lex(p);
-                        p->indirect = false;
-                        return p_expr_op(p);
-
-        case T_OP:      if (p->op.lprec <= p->op.rprec) return addstack(p, -2);
-                        if (p->indirect) encode(p, OP_LOOKUP, 0);
-                        encode(p, OP_APPEND, 0);
-                        {   struct opparse op = p->op;
-                            uint_t tblarg = accvar(p, mcstr("ops"));
-                            uint_t symarg = accvar(p, p->val);
-                            enlargein(p, size(OP_SCOPE, 0) +
-                                         size(OP_IMM, tblarg) +
-                                         size(OP_LOOKUP, 0) +
-                                         size(OP_IMM, symarg) +
-                                         size(OP_LOOKUP, 0) +
-                                         size(OP_TBL, 0), p->op.ins);
-                            p->op.ins += insert(p, OP_SCOPE, 0, p->op.ins);
-                            p->op.ins += insert(p, OP_IMM, tblarg, p->op.ins);
-                            p->op.ins += insert(p, OP_LOOKUP, 0, p->op.ins);
-                            p->op.ins += insert(p, OP_IMM, symarg, p->op.ins);
-                            p->op.ins += insert(p, OP_LOOKUP, 0, p->op.ins);
-                            p->op.ins += insert(p, OP_TBL, 0, p->op.ins);
-                            p->op.lprec = p->op.rprec;
-                            addstack(p, 2);
-                            mu_lex(p);
-                            p_expr(p);
-                            p->op = op;
-                        }
-                        if (p->indirect) encode(p, OP_LOOKUP, 0);
-                        encode(p, OP_APPEND, 0);
-                        encode(p, OP_CALL, 0);
-                        p->indirect = false;
-                        return p_expr_op(p);
-
-        case T_AND:     if (p->op.lprec <= p->op.rprec) return addstack(p, -2);
-                        if (p->indirect) encode(p, OP_LOOKUP, 0);
-                        encode(p, OP_DUP, 0);
-                        {   uint_t a_ins = p->f->ins;
-                            struct opparse op = p->op;
-                            enlarge(p, p->jfsize);
-                            encode(p, OP_DROP, 0);
-                            p->op.lprec = p->op.rprec;
-                            mu_lex(p);
-                            p_expr(p);
-                            if (p->indirect) encode(p, OP_LOOKUP, 0);
-                            p->op = op;
-                            insert(p, OP_JFALSE, 
-                                   p->f->ins - (a_ins+p->jfsize), a_ins);
-                        }
-                        p->indirect = false;
-                        return p_expr_op(p);
-                            
-        case T_OR:      if (p->op.lprec <= p->op.rprec) return addstack(p, -2);
-                        if (p->indirect) encode(p, OP_LOOKUP, 0);
-                        {   uint_t o_ins = p->f->ins;
-                            struct opparse op = p->op;
-                            enlarge(p, p->jtsize);
-                            encode(p, OP_DROP, 0);
-                            p->op.lprec = p->op.rprec;
-                            mu_lex(p);
-                            p_expr(p);
-                            if (p->indirect) encode(p, OP_LOOKUP, 0);
-                            p->op = op;
-                            insert(p, OP_JTRUE, 
-                                   p->f->ins - (o_ins+p->jtsize), o_ins);
-                        }
-                        p->indirect = false;
-                        return p_expr_op(p);
-
-        default:        return addstack(p, -2); // Drop the extra space
-    }
-}
-
-static void p_expr(parse_t *p) {
-    p->op.ins = p->f->ins;
-    addstack(p, 2); // Guess space for binary operators
-
-    switch (p->tok) {
-        case T_IDENT:   encode(p, OP_SCOPE, 0);
-                        encode(p, OP_IMM, accvar(p, p->val));
-                        mu_lex(p);
-                        p->indirect = true;
-                        return p_expr_op(p);
-
-        case T_NIL:     encode(p, OP_SCOPE, 0);
-                        encode(p, OP_NIL, 0);
-                        mu_lex(p);
-                        p->indirect = true;
-                        return p_expr_op(p);
-
-        case T_LIT:     encode(p, OP_IMM, accvar(p, p->val));
-                        mu_lex(p);
-                        p->indirect = false;
-                        return p_expr_op(p);
-
-        case '[':       encode(p, OP_TBL, 0);
-                        p_table(p);
-                        expect(p, ']');
-                        mu_lex(p);
-                        p->indirect = false;
-                        return p_expr_op(p);
-
-        case '(':       p->paren++;
-                        p_value(p);
-                        p->paren--;
-                        expect(p, ')');
-                        mu_lex(p);
-                        return p_expr_op(p);
-
-        case T_OP:      encode(p, OP_SCOPE, 0);
-                        encode(p, OP_IMM, accvar(p, mcstr("ops")));
-                        encode(p, OP_LOOKUP, 0);
-                        encode(p, OP_IMM, accvar(p, p->val));
-                        encode(p, OP_LOOKUP, 0);
-                        encode(p, OP_TBL, 0);
-                        p_value(p);
-                        encode(p, OP_APPEND, 0);
-                        encode(p, OP_CALL, 0);
-                        p->indirect = false;
-                        return p_expr_op(p);
-
-        case T_IF:      p_if(p);
-                        p->indirect = false;
-                        return p_expr_op(p);
-
-        case T_WHILE:   p_while(p);
-                        p->indirect = false;
-                        return p_expr_op(p); 
-
-        case T_FOR:     p_for(p);
-                        p->indirect = false;
-                        return p_expr_op(p);
-
-        case T_FN:      p_fn(p);
-                        p->indirect = false;
-                        return p_expr_op(p);
-
-        default:        unexpected(p);
-    }
-}
-
-
-static void p_args_follow(parse_t *p) {
-    switch (p->tok) {
-        case T_SEP:     return p_args_entry(p);
-
-        default:        return;
-    }
-}
-
-static void p_args_entry(parse_t *p) {
-    mu_lex(p);
-
-    switch (p->tok) {
-        case T_FN:
-        case T_IF:
-        case T_WHILE:
-        case T_FOR:
-        case T_IDENT:  
-        case T_NIL:
-        case T_LIT:     tbl_append(p->args, p->val);
-                        mu_lex(p);
-                        return p_args_follow(p);
-
-        case '[':       {   tbl_t *args = p->args;
-                            p_args(p);
-                            tbl_append(args, mtbl(p->args));
-                            p->args = args;
-                        }
-                        expect(p, ']');
-                        mu_lex(p);
-                        return p_args_follow(p);
-
-        default:        return p_args_follow(p);
-    }
-}
-
-static void p_args(parse_t *p) {
-    p->args = tbl_create(0);
-
-    return p_args_entry(p);
-}
-
-
-static void p_table_follow(parse_t *p) {
-    switch (p->tok) {
-        case T_SEP:     return p_table(p);
-
-        default:        return;
-    }
-}
-
-static void p_table_assign(parse_t *p) {
-    switch (p->tok) {
-        case T_SET:     p_value(p);
-                        encode(p, OP_INSERT, 0);
-                        return p_table_follow(p);
-
-        default:        encode(p, OP_APPEND, 0);
-                        return p_table_follow(p);
-    }
-}
-        
-static void p_table_entry(parse_t *p) {
-    p->key = true;
-    mu_lex(p);
-    p->key = false;
-
-    switch (p->tok) {
-        case T_IDSET:   encode(p, OP_IMM, accvar(p, p->val));
-                        mu_lex(p);
-                        expect(p, T_SET);
-                        p_value(p);
-                        encode(p, OP_INSERT, 0);
-                        return p_table_follow(p);
-
-        case T_FNSET:   mu_lex(p);
-                        expect(p, T_IDENT);
-                        encode(p, OP_IMM, accvar(p, p->val));
-                        p_fn(p);
-                        encode(p, OP_INSERT, 0);
-                        return p_table_follow(p);
-
-        case T_SEP:     return p_table(p);
-
-        case T_IDENT:
-        case T_NIL:
-        case T_FN:
-        case T_IF:
-        case T_WHILE:
-        case T_FOR:
-        case T_LIT:
-        case T_OP:
-        case '[':
-        case '(':       {   struct opparse op = p->op;
-                            p->op.lprec = -1;
-                            p_expr(p);
-                            p->op = op;
-                        }
-                        if (p->indirect) encode(p, OP_LOOKUP, 0);
-                        return p_table_assign(p);
-
-        default:        return;
-    }
-}
-
-static void p_table(parse_t *p) {
-    uintq_t paren = p->paren;
-    p->paren = false;
-
-    p->left = true;
-    p_table_entry(p);
-
-    p->paren = paren;
-}
-
-
-static void p_stmt_follow(parse_t *p) {
-    switch (p->tok) {
-        case T_SEP:     return p_stmt_entry(p);
-
-        default:        return;
-    }
-}
-
-static void p_stmt_insert(parse_t *p) {
-    mu_lex(p);
-
-    switch (p->tok) {
-        case '[':       p_args(p);
-                        expect(p, ']');
-                        mu_lex(p);
-                        expect(p, T_SET);
-                        p_value(p);
-                        unpack(p, p->args);
-                        return;
-
-        default:        p_expr(p);
-                        if (!p->indirect) unexpected(p);
-                        expect(p, T_SET);
-                        p_value(p);
-                        encode(p, OP_INSERT, 0);
-                        encode(p, OP_DROP, 0);
-                        return;
-    }
-}
-
-static void p_stmt_assign(parse_t *p) {
-    switch (p->tok) {
-        case T_SET:     if (!p->indirect) unexpected(p);
-                        p_value(p);
-                        encode(p, OP_ASSIGN, 0);
-                        encode(p, OP_DROP, 0);
-                        return;
-
-        case T_OPSET:   if (!p->indirect) unexpected(p);
-                        encode(p, OP_SCOPE, 0);
-                        encode(p, OP_IMM, accvar(p, mcstr("ops")));
-                        encode(p, OP_LOOKUP, 0);
-                        encode(p, OP_IMM, accvar(p, p->val));
-                        encode(p, OP_LOOKUP, 0);
-                        encode(p, OP_TBL, 0);
-                        encode(p, OP_DUP, 3);
-                        encode(p, OP_DUP, 3);
-                        encode(p, OP_LOOKUP, 0);
-                        encode(p, OP_APPEND, 0);
-                        p_value(p);
-                        encode(p, OP_APPEND, 0);
-                        encode(p, OP_CALL, 0);
-                        encode(p, OP_ASSIGN, 0);
-                        encode(p, OP_DROP, 0);
-                        return;
-                        
-        default:        if (p->indirect) encode(p, OP_LOOKUP, 0);
-                        encode(p, OP_DROP, 0);
-                        return;
-    }
-}
-
-static void p_stmt(parse_t *p) {
-    mu_lex(p);
-
-    switch (p->tok) {
-        case '{':       p_stmt_list(p);
-                        expect(p, '}');
-                        mu_lex(p);
-                        return;
-
-        case T_LET:     return p_stmt_insert(p);
-        case T_IF:      return p_if(p);
-        case T_WHILE:   return p_while(p); 
-        case T_FOR:     return p_for(p);
-
-        case T_RETURN:  p_value(p);
-                        encode(p, OP_RET, 0);
-                        return;
-
-        case T_CONT:    if (!p->j.ctbl) unexpected(p);
-                        tbl_append(p->j.ctbl, muint(p->f->ins));
-                        enlarge(p, p->jsize);
-                        mu_lex(p);
-                        return;
-
-        case T_BREAK:   if (!p->j.btbl) unexpected(p);
-                        tbl_append(p->j.btbl, muint(p->f->ins));
-                        enlarge(p, p->jsize);
-                        mu_lex(p);
-                        return;
-
-        case T_FNSET:   mu_lex(p);
-                        expect(p, T_IDENT);
-                        encode(p, OP_SCOPE, 0);
-                        encode(p, OP_IMM, accvar(p, p->val));
-                        p_fn(p);
-                        encode(p, OP_INSERT, 0);
-                        encode(p, OP_DROP, 0);
-                        return;
-
-        case T_SEP:     return p_stmt_list(p);
-
-        case T_IDENT:
-        case T_FN:
-        case T_LIT:
-        case T_NIL:
-        case T_OP:
-        case '[':
-        case '(':       p_expr(p);
-                        return p_stmt_assign(p);
-
-        default:        return;
-
-    }
-}
-
-static void p_stmt_list(parse_t *p) {
-    uintq_t paren = p->paren;
-    p->paren = false;
-
-    p->stmt = true;
-    p->left = true;
-    p_stmt_entry(p);
-
-    p->paren = paren;
-}
-
-static void p_stmt_entry(parse_t *p) {
-    p_stmt(p);
-    return p_stmt_follow(p);
-}
-
-
-
-// Parses Mu source into bytecode
-parse_t *mu_parse_create(mu_t code) {
+static parse_t *parse_create(str_t *code) {
     parse_t *p = mu_alloc(sizeof(parse_t));
 
-    p->ref = getref(code);
-    p->str = getdata(code);
-    p->pos = getdata(code);
-    p->end = getdata(code) + getlen(code);
+    p->ch = chunk_create();
 
-    p->paren = 0;
-    p->key = false;
-    p->keys = mu_keys();
+    p->imms = tbl_create(0);
+    p->fns = tbl_create(0);
 
-    p->jsize = size(OP_JUMP, 0);
-    p->jtsize = size(OP_JTRUE, 0);
-    p->jfsize = size(OP_JFALSE, 0);
+    p->pos = str_getdata(code);
+    p->end = str_getdata(code) + str_getlen(code);
+
+    mu_lex(p);
 
     return p;
 }
 
-void mu_parse_destroy(parse_t *p) {
-    mu_dealloc(p, sizeof(parse_t));
+
+static uint_t fpack(parse_t *p, tbl_t *keys, tbl_t *vals) {
+    encode(p, OP_TBL, tbl_getlen(vals));
+
+    tbl_for_begin (i, v, vals) {
+        mu_t k = tbl_lookup(keys, i);
+
+        if (isnil(k)) {
+            encode(p, OP_IMM, imm(p, i));
+        } else if (isnum(k)) {
+            fprintf(stderr, "oh no!");
+            assert(false);
+        } else {
+            struct chunk *kch = (struct chunk *)getstr(k);
+            merge(&p->ch, kch->data, kch->len);
+        }
+
+        struct chunk *vch = (struct chunk *)getstr(v);
+        merge(&p->ch, vch->data, vch->len);
+            
+        if (vch->indirect)
+            encode(p, OP_LOOKUP, 0);
+
+        encode(p, OP_FINSERT, 0);
+    } tbl_for_end
+
+    tbl_dec(keys);
+    tbl_dec(vals);
+    return 0xf;
 }
 
-void mu_parse_args(parse_t *p, tbl_t *args) {
-    if (args && tbl_getlen(args) > 0) {
-        encode(p, OP_ARGS, 0);
-        unpack(p, args);
+static c_t lpack(parse_t *p, tbl_t *keys, tbl_t *vals) {
+    uint_t c = 0;
+
+    tbl_for_begin (i, v, vals) {
+        mu_t k = tbl_lookup(keys, i);
+
+        if (!isnil(k)) {
+            struct chunk *kch = (struct chunk *)getstr(k);
+            merge(&p->ch, kch->data, kch->len);
+        }
+
+        struct chunk *vch = (struct chunk *)getstr(v);
+        merge(&p->ch, vch->data, vch->len);
+            
+        if (vch->indirect)
+            encode(p, OP_LOOKUP, 0);
+
+        if (isnil(k)) {
+            if (getuint(i) > MU_FRAME) {
+                encode(p, OP_DROP, 1);
+            } else {
+                c += 1;
+            }
+        } else {
+            encode(p, OP_DROP, 2);
+        }
+    } tbl_for_end
+
+    tbl_dec(keys);
+    tbl_dec(vals);
+
+    return c;
+}
+
+static c_t pack(parse_t *p, tbl_t *keys, tbl_t *vals) {
+    if (tbl_getlen(vals) > MU_FRAME || tbl_getlen(keys) > 0)
+        return fpack(p, keys, vals);
+    else
+        return lpack(p, keys, vals);
+}
+
+static void funpack(parse_t *p, op_t op, tbl_t *keys, tbl_t *vals) {
+    tbl_for_begin (i, v, vals) {
+        mu_t k = tbl_lookup(keys, i);
+
+        if (isnil(k)) {
+            encode(p, OP_IMM, imm(p, i));
+        } else {
+            struct chunk *kch = (struct chunk *)getstr(k);
+            merge(&p->ch, kch->data, kch->len);
+        }
+
+        encode(p, OP_FLOOKUP, 0);
+
+        if (istbl(v)) {
+            funpack(p, op, gettbl(mu_lookup(v, muint(0))),
+                           gettbl(mu_lookup(v, muint(1))));
+        } else {
+            struct chunk *vch = (struct chunk *)getstr(v);
+            
+            if (!vch->indirect)
+                mu_err_parse(); // can't assign direct value
+
+            merge(&p->ch, vch->data, vch->len);
+            encode(p, op, 0);
+        }
+    } tbl_for_end
+
+    encode(p, OP_DROP, 1);
+
+    tbl_dec(keys);
+    tbl_dec(vals);
+}
+
+static void unpack(parse_t *p, op_t op, tbl_t *keys, tbl_t *vals) {
+    len_t len = tbl_getlen(vals);
+
+    if (len > MU_FRAME || tbl_getlen(keys) > 0)
+        return funpack(p, op, keys, vals);
+
+    tbl_for_begin (i, v, vals) {
+        if (istbl(v)) {
+            funpack(p, op, gettbl(mu_lookup(v, muint(0))),
+                           gettbl(mu_lookup(v, muint(1))));
+        } else {
+            struct chunk *vch = (struct chunk *)getstr(v);
+            
+            if (!vch->indirect)
+                mu_err_parse(); // can't assign direct value
+
+            merge(&p->ch, vch->data, vch->len);
+            encode(p, op, len-1 - getuint(i));
+        }
+    } tbl_for_end
+
+    tbl_dec(keys);
+    tbl_dec(vals);
+}
+
+static void assign(parse_t *p, op_t op, tbl_t *lkeys, tbl_t *lvals,
+                                        tbl_t *rkeys, tbl_t *rvals) {
+    len_t llen = tbl_getlen(lvals);
+
+    if (llen > MU_FRAME || tbl_getlen(lkeys) > 0) {
+        fpack(p, rkeys, rvals);
+        funpack(p, op, lkeys, lvals);
+    } else {
+        len_t rlen = lpack(p, rkeys, rvals);
+
+        if (rlen > llen)
+            encode(p, OP_DROP, rlen - llen);
+        else if (llen > rlen)
+            encode(p, OP_PAD, llen - rlen);
+
+        unpack(p, op, lkeys, lvals);
     }
 }
 
-void mu_parse_stmts(parse_t *p) {
-    p->j = (struct jparse){0};
-    p->op.lprec = -1;
-    p->stmt = true;
-    p->left = true;
+static code_t *parse_realize(parse_t *p) {
+    struct code *code = ref_alloc(
+        sizeof(struct code) + 
+        sizeof(mu_t)*tbl_getlen(p->imms) +
+        sizeof(struct code *)*tbl_getlen(p->fns) +
+        p->ch->len);
 
+    code->bcount = p->ch->len;
+    code->icount = tbl_getlen(p->imms);
+    code->fcount = tbl_getlen(p->fns);
+
+    code->flags.stack = 25; // TODO
+    code->flags.scope = 5; // TODO
+    code->flags.args = 0xf; // TODO
+    code->flags.type = 0;
+
+    mu_t *imms = code_imms(code);
+    struct code **fns = code_fns(code);
+    data_t *bcode = (data_t *)code_bcode(code);
+
+    tbl_for_begin (k, v, p->imms) {
+        imms[getuint(v)] = mu_inc(k);
+    } tbl_for_end;
+
+//  TODO
+//    tbl_for_begin (k, v, p->fns) {
+//        fns[getuint(k)] = mu_inc(v);
+//    } tbl_for_end;
+
+    tbl_dec(p->imms);
+    tbl_dec(p->fns);
+
+    memcpy(bcode, p->ch->data, p->ch->len);
+
+    mu_dealloc(p->ch, mu_offset(struct chunk, data) + p->ch->size);
+    mu_dealloc(p, sizeof(parse_t));
+
+    return code;
+}
+
+
+
+
+static void p_postexpr(parse_t *p);
+static void p_expr(parse_t *p);
+static void p_postkey(parse_t *p);
+static void p_entry(parse_t *p);
+static void p_entry_list(parse_t *p);
+static void p_stmt(parse_t *p);
+static void p_stmt_list(parse_t *p);
+
+
+
+
+static void p_expr(parse_t *p) {
+    switch (p->tok) {
+        case T_SYM:     encode(p, OP_SYM, imm(p, p->val));
+                        p->ch->indirect = true;
+                        mu_lex(p);
+                        break;
+
+        case T_IMM:     encode(p, OP_IMM, imm(p, p->val));
+                        p->ch->indirect = false;
+                        mu_lex(p);
+                        break;
+
+        case '[':       {   tbl_t *keys = p->keys;
+                            tbl_t *vals = p->vals;
+                            mu_lex(p);
+                            p_entry_list(p);
+                            fpack(p, p->keys, p->vals);
+                            expect(p, ']');
+                            p->keys = keys;
+                            p->vals = vals;
+                        }
+                        p->ch->indirect = false;
+                        break;
+
+        default:        unexpected(p);
+    }
+
+    // postexpr here
+}
+
+static void p_entry(parse_t *p) {
+    switch (p->tok) {
+        case T_KEY:     encode(p, OP_IMM, imm(p, p->val));
+                        mu_lex(p);
+                        break;
+
+        case T_REST:    tbl_insert(p->keys, muint(tbl_getlen(p->vals)), minf);
+                        mu_lex(p);
+                        p_expr(p);
+                        return;
+
+        case T_IMM:
+        case T_SYM:     
+        case '[':       p_expr(p);
+                        break;
+
+        default:        return;
+    }
+
+    switch (p->tok) {
+        case ':':       if (p->ch->indirect)
+                            encode(p, OP_LOOKUP, 0);
+                        tbl_insert(p->keys, muint(tbl_getlen(p->vals)), 
+                                            mchunk(p->ch));
+                        p->ch = chunk_create();
+                        mu_lex(p);
+                        p_expr(p);
+                        break;
+
+        default:        break;
+    }
+}
+
+static void p_entry_list(parse_t *p) {
+    struct chunk *ch = p->ch;
+    p->keys = tbl_create(0);
+    p->vals = tbl_create(0);
+
+    while (true) {
+        p->ch = chunk_create();
+        p_entry(p);
+        tbl_insert(p->vals, muint(tbl_getlen(p->vals)), mchunk(p->ch));
+
+        if (p->tok != ',')
+            break;
+
+        mu_lex(p);
+    }
+
+    p->ch = ch;
+}
+
+static void p_stmt(parse_t *p) {
+    switch (p->tok) {
+        case T_RETURN:  mu_lex(p);
+                        p_entry_list(p);
+                        encode(p, OP_RET, pack(p, p->keys, p->vals));
+                        return;
+
+        case T_LET:     mu_lex(p);
+                        p_entry_list(p);
+                        expect(p, '=');
+                        {   tbl_t *lkeys = p->keys;
+                            tbl_t *lvals = p->vals;
+                            mu_lex(p);
+                            p_entry_list(p);
+                            assign(p, OP_INSERT, lkeys, lvals, p->keys, p->vals);
+                        }
+                        return;
+
+        default:        p_entry_list(p);
+/*                        if (p->tok == T_OPSET && tbl_getlen(p->vals) == 1) {
+                            // TODO operator assignments?
+                        } else*/  if (p->tok == '=') {
+                            tbl_t *lkeys = p->keys;
+                            tbl_t *lvals = p->vals;
+                            mu_lex(p);
+                            p_entry_list(p);
+                            assign(p, OP_ASSIGN, lkeys, lvals, p->keys, p->vals);
+                        } else {
+                            uint_t n = pack(p, p->keys, p->vals);
+                            encode(p, OP_DROP, n > MU_FRAME ? 1 : n);
+                        }
+                        return;
+    }
+}
+
+static void p_stmt_list(parse_t *p) {
+    while (true) {
+        p_stmt(p);
+
+        if (p->tok != ';')
+            break;
+
+        mu_lex(p);
+    }
+}
+
+code_t *mu_parse_expr(str_t *code) {
+    parse_t *p = parse_create(code);
+    // TODO find best entry point for expressions
+    return parse_realize(p);
+}
+
+code_t *mu_parse_fn(str_t *code) {
+    parse_t *p = parse_create(code);
     p_stmt_list(p);
-
-    mu_assert(p->f->stack.off == 0);
-    encode(p, OP_RETN, 0);
-}
-
-void mu_parse_stmt(parse_t *p) {
-    p->j = (struct jparse){0};
-    p->op.lprec = -1;
-    p->stmt = true;
-    p->left = true;
-
-    p_stmt(p);
-
-    mu_assert(p->f->stack.off == 0);
-    encode(p, OP_RETN, 0);
-}
-
-void mu_parse_expr(parse_t *p) {
-    p->j = (struct jparse){0};
-    p->op.lprec = -1;
-    p->stmt = false;
-    p->left = false;
-    p->paren = true;
-
-    p_value(p);
-
-    mu_assert(p->f->stack.off == 1);
     encode(p, OP_RET, 0);
+    return parse_realize(p);
 }
 
-void mu_parse_end(parse_t *p) {
-    if (p->tok != T_END)
-        unexpected(p);
+code_t *mu_parse_module(str_t *code) {
+    parse_t *p = parse_create(code);
+    p_stmt_list(p);
+    // TODO get scope
+    return parse_realize(p);
 }
 

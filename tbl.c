@@ -43,6 +43,14 @@ tbl_t *tbl_create(len_t size) {
     return t;
 }
 
+tbl_t *tbl_extend(len_t size, tbl_t *parent) {
+    tbl_t *t = tbl_create(size);
+
+    t->tail = parent;
+
+    return t;
+}
+
 void tbl_destroy(tbl_t *t) {
     if (t->stride > 0) {
         uint_t i, cap, len;
@@ -493,85 +501,68 @@ void tbl_assign(tbl_t *t, mu_t key, mu_t val) {
 
 
 // Performs iteration on a table
-mu_t tbl_0_iteration(tbl_t *args, tbl_t *scope) {
+c_t tbl_0_iteration(tbl_t *scope, mu_t *frame) {
     tbl_t *tbl = gettbl(tbl_lookup(scope, muint(0)));
-    tbl_t *ret = gettbl(tbl_lookup(scope, muint(1)));
-    uint_t i = getuint(tbl_lookup(scope, muint(2)));
+    uint_t i = getuint(tbl_lookup(scope, muint(1)));
 
     if (i >= tbl->len)
-        return mnil;
+        return 0;
 
-    tbl_insert(ret, muint(0), muint(tbl->offset + i));
-    tbl_insert(ret, muint(1), muint(i));
-    tbl_insert(ret, muint(2), muint(i));
+    tbl_insert(scope, muint(1), muint(i+1));
 
-    i += 1;
-    tbl_insert(scope, muint(2), muint(i));
-
-    return mtbl(ret);
+    frame[0] = muint(i);
+    frame[1] = muint(tbl->offset + i);
+    return 2;
 }
 
-mu_t tbl_1_iteration(tbl_t *args, tbl_t *scope) {
+c_t tbl_1_iteration(tbl_t *scope, mu_t *frame) {
     tbl_t *tbl = gettbl(tbl_lookup(scope, muint(0)));
-    tbl_t *ret = gettbl(tbl_lookup(scope, muint(1)));
-    uint_t i = getuint(tbl_lookup(scope, muint(2)));
+    uint_t i = getuint(tbl_lookup(scope, muint(1)));
 
     if (i >= tbl->len)
-        return mnil;
+        return 0;
 
-    tbl_insert(ret, muint(0), tbl->array[i]);
-    tbl_insert(ret, muint(1), muint(i));
-    tbl_insert(ret, muint(2), muint(i));
+    tbl_insert(scope, muint(1), muint(i+1));
 
-    i += 1;
-    tbl_insert(scope, muint(2), muint(i));
-
-    return mtbl(ret);
+    frame[0] = muint(i);
+    frame[1] = mu_inc(tbl->array[i]);
+    return 2;
 }
 
-mu_t tbl_2_iteration(tbl_t *args, tbl_t *scope) {
+c_t tbl_2_iteration(tbl_t *scope, mu_t *frame) {
     tbl_t *tbl = gettbl(tbl_lookup(scope, muint(0)));
-    tbl_t *ret = gettbl(tbl_lookup(scope, muint(1)));
-    uint_t i = getuint(tbl_lookup(scope, muint(2)));
-    uint_t j = getuint(tbl_lookup(scope, muint(3)));
+    uint_t i = getuint(tbl_lookup(scope, muint(1)));
     mu_t k, v;
 
     if (i >= tbl->len)
-        return mnil;
+        return 0;
 
     do {
-        k = tbl->array[2*j  ];
-        v = tbl->array[2*j+1];
-
-        j += 1;
+        k = tbl->array[2*i  ];
+        v = tbl->array[2*i+1];
+        i += 1;
     } while (isnil(k) || isnil(v));
 
-    tbl_insert(ret, muint(0), v);
-    tbl_insert(ret, muint(1), k);
-    tbl_insert(ret, muint(2), muint(i));
+    tbl_insert(scope, muint(1), muint(i));
 
-    i += 1;
-    tbl_insert(scope, muint(2), muint(i));
-    tbl_insert(scope, muint(3), muint(j));
-
-    return mtbl(ret);
+    frame[0] = mu_inc(k);
+    frame[1] = mu_inc(v);
+    return 2;
 }
 
-fn_t *tbl_iter(tbl_t *t) {
-    static sbfn_t * const tbl_iters[3] = {
+fn_t *tbl_iter(tbl_t *tbl) {
+    static sbfn_t *const tbl_iters[3] = {
         tbl_0_iteration,
         tbl_1_iteration,
         tbl_2_iteration
     };
 
-    t = tbl_read(t);
-    tbl_t *scope = tbl_create(4);
-    tbl_insert(scope, muint(0), mtbl(t));
-    tbl_insert(scope, muint(1), mntbl(3));
-    tbl_insert(scope, muint(2), muint(0));
-    tbl_insert(scope, muint(3), muint(0));
+    tbl = tbl_read(tbl);
+    tbl_t *scope = tbl_create(2);
+    tbl_insert(scope, muint(0), mtbl(tbl));
+    tbl_insert(scope, muint(1), muint(0));
 
-    return fn_sbfn(tbl_iters[t->stride], scope);
+    return fn_sbfn(0, tbl_iters[tbl->stride], scope);
 }
 
 
@@ -622,5 +613,5 @@ str_t *tbl_repr(tbl_t *t) {
 
     mu_dealloc(reprs, 2*tbl_getlen(t) * sizeof(mu_t));
 
-    return str_intern(m);
+    return str_intern(m, m->len);
 }

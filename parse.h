@@ -25,12 +25,13 @@ typedef struct parse parse_t;
 
 
 // Specific state structures
+
 struct opparse {
     len_t ins;
     uintq_t lprec;
     uintq_t rprec;
 };
-
+/*
 struct jparse {
     tbl_t *ctbl;
     tbl_t *btbl;
@@ -64,7 +65,17 @@ typedef struct parse {
     struct opparse op;
     tbl_t *args;
     tbl_t *keys;
+//
+    tbl_t *lhs;
+    tbl_t *rhs;
+    struct {
+        mstr_t *code;
+        data_t *pos;
+        data_t *end;
+    } b;
 
+    tbl_t *imms;
+//
     uintq_t indirect;
     uintq_t stmt;
     uintq_t left;
@@ -83,18 +94,54 @@ typedef struct parse {
     const data_t *pos;
     const data_t *end;
 } parse_t;
+*/
+
+// TODO use flexible array member with offsetof 
+// to handle alignment issue?
+struct chunk {
+    ref_t ref;
+    len_t size;
+
+    len_t len;
+    uintq_t indirect;
+
+    data_t data[];
+};
+
+mu_inline struct chunk *getchunk(mu_t m) {
+    return (struct chunk *)getstr(m);
+}
+
+mu_inline mu_t mchunk(struct chunk *ch) {
+    return mstr((mstr_t *)ch);
+}
+
+typedef struct parse {
+    tbl_t *keys;
+    tbl_t *vals;
+    struct chunk *ch;
+
+    tbl_t *imms;
+    tbl_t *fns;
+
+    tok_t tok;
+    mu_t val;
+
+    const data_t *pos;
+    const data_t *end;
+
+    uintq_t paren;
+    struct opparse op;
+} parse_t;
 
 
 // Entry points into parsing Mu source into bytecode
-parse_t *mu_parse_create(mu_t code);
-void mu_parse_destroy(parse_t *p);
-
-void mu_parse_args(parse_t *p, tbl_t *args);
-void mu_parse_stmts(parse_t *p);
-void mu_parse_stmt(parse_t *p);
-void mu_parse_expr(parse_t *p);
-void mu_parse_end(parse_t *p);
-
+// The only difference between parsing functions and
+// modules is that modules return their scope for use 
+// in type and module definitions
+code_t *mu_parse_expr(str_t *code);
+code_t *mu_parse_fn(str_t *code);
+code_t *mu_parse_module(str_t *code);
 
 #endif
 #endif

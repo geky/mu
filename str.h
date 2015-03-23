@@ -39,20 +39,30 @@ struct str {
 };
 
 
-// Functions for creating mutable temporary strings
+// Functions for creating mutable strings
 mstr_t *mstr_create(len_t len);
 void mstr_destroy(mstr_t *s);
 
+// Functions to help modify mutable strings
+void mstr_insert(mstr_t **m, uint_t i, data_t c);
+void mstr_concat(mstr_t **m, uint_t i, str_t *s);
+void mstr_nconcat(mstr_t **m, uint_t i, const data_t *s, uint_t len);
+void mstr_cconcat(mstr_t **m, uint_t i, const char *s);
+
+// Hashing and equality for non-interned strings
+bool mstr_equals(str_t *a, str_t *b);
+hash_t mstr_hash(str_t *s);
+
 // Function for interning strings
-str_t *str_intern(str_t *s);
+str_t *str_intern(str_t *s, len_t len);
 void str_destroy(str_t *s);
 
 // String creating functions and macros
-str_t *str_nstr(const data_t *s, len_t len);
+str_t *str_nstr(const data_t *s, uint_t len);
 str_t *str_cstr(const char *s);
 
-mu_inline mu_t mnstr(const data_t *s, len_t l) {
-    return mstr(str_nstr(s, l));
+mu_inline mu_t mnstr(const data_t *s, uint_t len) {
+    return mstr(str_nstr(s, len));
 }
 
 mu_inline mu_t mcstr(const char *s) {
@@ -69,11 +79,6 @@ mu_inline const data_t *getdata(mu_t m) { return str_getdata(getstr(m)); }
 mu_inline void str_inc(str_t *s) { ref_inc((void *)s); }
 mu_inline void str_dec(str_t *s) { ref_dec((void *)s, 
                                            (void (*)(void *))str_destroy); }
-
-
-// Hashing and equality for non-interned strings
-bool mstr_equals(str_t *a, str_t *b);
-hash_t mstr_hash(str_t *s);
 
 // String parsing and representation
 str_t *str_parse(const data_t **off, const data_t *end);

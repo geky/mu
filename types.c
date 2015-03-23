@@ -6,6 +6,7 @@
 #include "fn.h"
 #include <string.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 
 // Returns true if both variables are the
@@ -118,27 +119,37 @@ void mu_assign(mu_t v, mu_t key, mu_t val) {
 }
 
 
-static void nil_append(void *t, mu_t v) { mu_err_undefined(); }
-
-void mu_append(mu_t v, mu_t val) {
-    static void (* const mu_appends[8])(void *, mu_t) = {
-        nil_append, nil_append, nil_append, nil_append,
-        (void *)tbl_append, (void *)tbl_append, 0, 0
-    };
-
-    mu_appends[gettype(v)](getptr(v), val);
-}
-
-
 // Function calls performed on variables
-static mu_t nil_call(void *f, tbl_t *a)  { mu_err_undefined(); }
-
-mu_t mu_call(mu_t v, tbl_t *args) {
-    static mu_t (* const mu_calls[8])(void *, tbl_t *) = {
-        nil_call, nil_call, nil_call, (void *)fn_call,
-        nil_call, nil_call, nil_call, nil_call
-    };
-
-    return mu_calls[gettype(v)](getptr(v), args);
+static void nil_fcall(void *n, c_t c, mu_t *frame) { 
+    mu_err_undefined();
 }
 
+void mu_fcall(mu_t m, c_t c, mu_t *frame) {
+    static void (*const mu_fcalls[8])(void *, c_t, mu_t *) = {
+        nil_fcall, nil_fcall, nil_fcall, (void *)fn_fcall,
+        nil_fcall, nil_fcall, nil_fcall, nil_fcall
+    };
+
+    return mu_fcalls[gettype(m)](getptr(m), c, frame);
+}
+
+mu_t mu_call(mu_t m, c_t c, ...) {
+    va_list args;
+    mu_t frame[MU_FRAME];
+
+    va_start(args, c);
+
+    for (uint_t i = 0; i < (mu_args(c) > MU_FRAME ? 1 : mu_args(c)); i++) {
+        frame[i] = va_arg(args, mu_t);
+    }
+
+    mu_call(m, c, frame);
+
+    for (uint_t i = 1; i < mu_rets(c); i++) {
+        *va_arg(args, mu_t *) = frame[i];
+    }
+
+    va_end(args);
+
+    return mu_rets(c) ? *frame : mnil;
+}

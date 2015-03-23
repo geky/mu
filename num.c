@@ -202,8 +202,7 @@ str_t *num_repr(num_t n) {
             *out++ = num_ascii(((int_t)exp / 1) % 10);
         }
 
-        m->len = out - m->data;
-        return str_intern(m);
+        return str_intern(m, out - m->data);
     }
 }
 

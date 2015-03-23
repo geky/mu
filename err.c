@@ -21,12 +21,8 @@ void eh_handle(eh_t *eh, tbl_t *err) {
         mu_t type = tbl_lookup(err, mcstr("type"));
         mu_t handle = tbl_lookup(eh->handles, type);
 
-        if (isfn(handle)) {
-            tbl_t *args = tbl_create(1);
-            tbl_append(args, mtbl(err));
-
-            mu_call(handle, args);
-        }
+        if (!isnil(handle))
+            mu_call(handle, 0x10, (mu_t []){ mtbl(err) }, 0);
     }
 }
 

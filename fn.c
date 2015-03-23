@@ -3,187 +3,141 @@
 #include "num.h"
 #include "str.h"
 #include "tbl.h"
-#include "parse.h"
 #include "vm.h"
+#include "parse.h"
 #include <string.h>
+#include <stdarg.h>
 
 
 // C Function creating functions and macros
-fn_t *fn_bfn(bfn_t *f) {
-    fn_t *m = ref_alloc(sizeof(fn_t));
-    m->stack = 25; // TODO make this reasonable
-    m->type = 0;
-    m->closure = 0;
-    m->imms = 0;
-    m->bfn = f;
-    return m;
+fn_t *fn_bfn(c_t args, bfn_t *bfn) {
+    fn_t *fn = ref_alloc(sizeof(fn_t));
+    fn->flags.stack = 25;
+    fn->flags.scope = 0;
+    fn->flags.args = mu_args(args);
+    fn->flags.type = 1;
+    fn->closure = 0;
+    fn->bfn = bfn;
+    return fn;
 }
 
-fn_t *fn_sbfn(sbfn_t *f, tbl_t *scope) {
-    fn_t *m = ref_alloc(sizeof(fn_t));
-    m->stack = 25; // TODO make this reasonable
-    m->type = 1;
-    m->closure = scope;
-    m->imms = 0;
-    m->sbfn = f;
-    return m;
+fn_t *fn_sbfn(c_t args, sbfn_t *sbfn, tbl_t *closure) {
+    fn_t *fn = ref_alloc(sizeof(fn_t));
+    fn->flags.stack = 25;
+    fn->flags.scope = 0;
+    fn->flags.args = mu_args(args);
+    fn->flags.type = 2;
+    fn->closure = closure;
+    fn->sbfn = sbfn;
+    return fn;
 }
 
-fn_t *fn_closure(fn_t *f, tbl_t *scope) {
-    fn_t *m = ref_alloc(sizeof(fn_t));
-    m->stack = f->stack;
-    m->type = f->type;
-    m->closure = scope;
-    m->imms = f->imms;
-    m->bcode = f->bcode;
-    return m;
+fn_t *fn_create(code_t *code, tbl_t *closure) {
+    fn_t *fn = ref_alloc(sizeof(fn_t));
+    fn->flags = code->flags;
+    fn->closure = closure;
+    fn->code = code;
+    return fn;
 }
 
-static fn_t *fn_realize(struct fnparse *f) {
-    f->fn.stack = f->stack.max; // TODO make this reasonable
-    f->fn.type = 2;
-    f->fn.closure = 0;
-
-    // this is a bit tricky since the fn memory is reused
-    // and we want to keep the resulting imms as a list if possible
-    len_t len = tbl_getlen(f->imms);
-
-    mu_t *imms = mu_alloc(len * sizeof(mu_t));
-    tbl_for_begin (k, v, f->imms) {
-        imms[getuint(v)] = k;
-    } tbl_for_end;
-
-    tbl_dec(f->imms);
-    f->imms = tbl_create(len);
-    len_t i;
-
-    for (i = 0; i < len; i++) {
-        tbl_append(f->imms, imms[i]);
-    }
-
-    mu_dealloc(imms, len);
-
-    return &f->fn;
+fn_t *fn_parse_fn(str_t *code, tbl_t *closure) {
+    return fn_create(mu_parse_fn(code), closure);
 }
 
-
-fn_t *fn_create(tbl_t *args, mu_t code) {
-    parse_t *p = mu_parse_create(code);
-
-    p->f = ref_alloc(sizeof(fn_t));
-    p->f->ins = 0;
-    p->f->imms = tbl_create(0);
-    p->f->bcode = mstr_create(MU_MINALLOC);
-
-    mu_parse_args(p, args);
-    mu_parse_stmts(p);
-    mu_parse_end(p);
-
-    fn_t *f = fn_realize(p->f);
-    mu_parse_destroy(p);
-    return f;
+fn_t *fn_parse_module(str_t *code, tbl_t *closure) {
+    return fn_create(mu_parse_module(code), closure);
 }
 
-fn_t *fn_create_expr(tbl_t *args, mu_t code) {
-    parse_t *p = mu_parse_create(code);
-
-    p->f = ref_alloc(sizeof(fn_t));
-    p->f->ins = 0;
-    p->f->imms = tbl_create(0);
-    p->f->bcode = mstr_create(MU_MINALLOC);
-    p->f->stack.max = 0;
-    p->f->stack.off = 0;
-    p->f->stack.scope = false;
-
-    mu_parse_args(p, args);
-    mu_parse_expr(p);
-    mu_parse_end(p);
-
-    fn_t *f = fn_realize(p->f);
-    mu_parse_destroy(p);
-    return f;
-}
-
-fn_t *fn_create_nested(tbl_t *args, parse_t *p) {
-    p->f = ref_alloc(sizeof(fn_t));
-    p->f->ins = 0;
-    p->f->imms = tbl_create(0);
-    p->f->bcode = mstr_create(MU_MINALLOC);
-    p->f->stack.max = 0;
-    p->f->stack.off = 0;
-    p->f->stack.scope = false;
-
-    mu_parse_args(p, args);
-    mu_parse_stmt(p);
-
-    return fn_realize(p->f);
-}
 
 // Called by garbage collector to clean up
-void fn_destroy(fn_t *f) {
-    if (f->closure)
-        tbl_dec(f->closure);
+void fn_destroy(fn_t *fn) {
+    if (fn->closure)
+        tbl_dec(fn->closure);
 
-    if (f->type == 2) {
-        tbl_dec(f->imms);
-        str_dec(f->bcode);
+    if (fn->flags.type == 0)
+        code_dec(fn->code);
+
+    ref_dealloc(fn, sizeof(fn_t));
+}
+
+void code_destroy(code_t *code) {
+    for (uint_t i = 0; i < code->icount; i++)
+        mu_dec(((mu_t*)code->data)[i]);
+
+    for (uint_t i = 0; i < code->fcount; i++)
+        code_dec((code_t *)code->data[code->icount + i]);
+
+    ref_dealloc(code, sizeof(code_t) + code->bcount + 
+                      code->icount + code->fcount);
+}
+
+
+// C interface for calling functions
+static void bfn_fcall(fn_t *fn, c_t c, mu_t *frame) {
+    mu_fconvert(mu_args(c), frame, fn->flags.args, frame);
+    c_t rets = fn->bfn(frame);
+    mu_fconvert(rets, frame, mu_rets(c), frame);
+}
+
+static void sbfn_fcall(fn_t *fn, c_t c, mu_t *frame) { 
+    mu_fconvert(mu_args(c), frame, fn->flags.args, frame);
+    uint_t rets = fn->sbfn(fn->closure, frame);
+    mu_fconvert(rets, frame, mu_rets(c), frame);
+}
+
+void fn_fcall(fn_t *fn, c_t c, mu_t *frame) {
+    static void (*const fn_fcalls[3])(fn_t *, c_t, mu_t *) = {
+        mu_exec, bfn_fcall, sbfn_fcall
+    };
+
+    return fn_fcalls[fn->flags.type](fn, c, frame);
+}
+
+mu_t fn_call(fn_t *fn, c_t c, ...) {
+    va_list args;
+    mu_t frame[MU_FRAME];
+
+    va_start(args, c);
+
+    if (mu_args(c) == 0xf) {
+        frame[0] = va_arg(args, mu_t);
+    } else if (mu_args(c) > MU_FRAME) {
+        tbl_t *tbl = tbl_create(mu_args(c));
+        for (uint_t i = 0; i < mu_args(c); i++)
+            tbl_insert(tbl, muint(i), va_arg(args, mu_t));
+        frame[0] = mtbl(tbl);
+    } else {
+        for (uint_t i = 0; i < mu_args(c); i++) {
+            frame[i] = va_arg(args, mu_t);
+        }
     }
 
-    ref_dealloc((ref_t *)f, sizeof(fn_t));
-}
+    fn_fcall(fn, c, frame);
 
+    if (mu_rets(c) != 0xf) {
+        if (mu_rets(c) > MU_FRAME) {
+            tbl_t *tbl = gettbl(frame[0]);
+            frame[0] = tbl_lookup(tbl, muint(0));
+            for (uint_t i = 1; i < mu_rets(c); i++) {
+                *va_arg(args, mu_t *) = tbl_lookup(tbl, muint(i));
+            }
+            tbl_dec(tbl);
+        } else {
+            for (uint_t i = 1; i < mu_rets(c); i++) {
+                *va_arg(args, mu_t *) = frame[i];
+            }
+        }
+    }
 
-// Call a function. Each function takes a table
-// of arguments, and returns a single variable.
-static mu_t bfn_call(fn_t *f, tbl_t *args) { 
-    return f->bfn(args); 
-}
+    va_end(args);
 
-static mu_t sbfn_call(fn_t *f, tbl_t *args) { 
-    return f->sbfn(args, f->closure); 
-}
-
-static mu_t mufn_call(fn_t *f, tbl_t *args) {
-    tbl_t *scope = tbl_create(1);
-    tbl_insert(scope, mcstr("args"), mtbl(args));
-    scope->tail = f->closure;
-
-    return mu_exec(f, args, scope);
-}
-
-mu_t fn_call(fn_t *f, tbl_t *args) {
-    static mu_t (* const fn_calls[3])(fn_t *, tbl_t *) = {
-        bfn_call, sbfn_call, mufn_call
-    };
-
-    return fn_calls[f->type](f, args);
-}
-
-
-static mu_t bfn_call_in(fn_t *f, tbl_t *args, tbl_t *scope) { 
-    return f->bfn(args); 
-}
-
-static mu_t sbfn_call_in(fn_t *f, tbl_t *args, tbl_t *scope) { 
-    return f->sbfn(args, scope); 
-}
-
-static mu_t mufn_call_in(fn_t *f, tbl_t *args, tbl_t *scope) {
-    return mu_exec(f, args, scope);
-}
-
-mu_t fn_call_in(fn_t *f, tbl_t *args, tbl_t *scope) {
-    static mu_t (* const fn_call_ins[3])(fn_t *, tbl_t *, tbl_t *) = {
-        bfn_call_in, sbfn_call_in, mufn_call_in
-    };
-
-    return fn_call_ins[f->type](f, args, scope);
+    return mu_rets(c) ? frame[0] : mnil;
 }
 
 
 // Returns a string representation of a function
-str_t *fn_repr(fn_t *f) {
-    uint_t bits = (uint_t)f->bcode;
+str_t *fn_repr(fn_t *fn) {
+    uint_t bits = (uint_t)fn;
 
     mstr_t *m = mstr_create(5 + 2*sizeof(uint_t));
     data_t *out = m->data;
@@ -191,10 +145,9 @@ str_t *fn_repr(fn_t *f) {
     memcpy(out, "fn 0x", 5);
     out += 5;
 
-    uint_t i;
-    for (i = 0; i < 2*sizeof(uint_t); i++) {
+    for (uint_t i = 0; i < 2*sizeof(uint_t); i++) {
         *out++ = num_ascii(0xf & (bits >> (4*(sizeof(uint_t)-i))));
     }
 
-    return str_intern(m);
+    return str_intern(m, m->len);
 }

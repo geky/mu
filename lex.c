@@ -11,13 +11,11 @@
 mu_const tbl_t *mu_keys(void) {
     // Currently this is initialized at runtime
     // TODO compile them?
-    // TODO currently assumes failure is impossible
     static tbl_t *keyt = 0;
 
     if (keyt) return keyt;
 
     keyt = tbl_create(0);
-    tbl_insert(keyt, mcstr("nil"), muint(T_NIL));
     tbl_insert(keyt, mcstr("fn"), muint(T_FN));
     tbl_insert(keyt, mcstr("let"), muint(T_LET));
     tbl_insert(keyt, mcstr("return"), muint(T_RETURN));
@@ -27,10 +25,30 @@ mu_const tbl_t *mu_keys(void) {
     tbl_insert(keyt, mcstr("continue"), muint(T_CONT));
     tbl_insert(keyt, mcstr("break"), muint(T_BREAK));
     tbl_insert(keyt, mcstr("else"), muint(T_ELSE));
-    tbl_insert(keyt, mcstr("and"), muint(T_AND));
-    tbl_insert(keyt, mcstr("or"), muint(T_OR));
+    tbl_insert(keyt, mcstr("nil"), muint(T_NIL));
+    tbl_insert(keyt, mcstr("args"), muint(T_ARGS));
+    tbl_insert(keyt, mcstr("scope"), muint(T_SCOPE));
     
     return keyt;
+}
+
+mu_const tbl_t *mu_syms(void) {
+    // Currently this is initialized at runtime
+    // TODO compile them
+    static tbl_t *symt = 0;
+
+    if (symt) return symt;
+
+    symt = tbl_create(0);
+    tbl_insert(symt, mcstr("->"), muint(T_ARROW));
+    tbl_insert(symt, mcstr("&&"), muint(T_AND));
+    tbl_insert(symt, mcstr("||"), muint(T_OR));
+    tbl_insert(symt, mcstr("..."), muint(T_REST));
+    tbl_insert(symt, mcstr("."), muint(T_DOT));
+    tbl_insert(symt, mcstr("="), muint(T_ASSIGN));
+    tbl_insert(symt, mcstr(":"), muint(T_COLON));
+
+    return symt;
 }
 
 
@@ -39,57 +57,29 @@ extern void (* const lexs[256])(parse_t *);
 
 static mu_noreturn void l_bad(parse_t *p);
 static void l_ws(parse_t *p);
-static void l_com(parse_t *p);
 static void l_op(parse_t *p);
 static void l_kw(parse_t *p);
 static void l_tok(parse_t *p);
-static void l_set(parse_t *p);
-static void l_sep(parse_t *p);
 static void l_nl(parse_t *p);
 static void l_num(parse_t *p);
 static void l_str(parse_t *p);
 
-
 // Helper function for skipping whitespace
 static void wskip(parse_t *p) {
     while (p->pos < p->end) {
-        if ((lexs[*p->pos] == l_ws) || 
-            (p->paren && *p->pos == '\n')) {
-            p->pos++;
-        } else if (*p->pos == '`') {
-            p->pos++;
-
-            if (p->pos < p->end && *p->pos == '`') {
-                int count = 1;
-                int seen = 0;
-
-                while (p->pos < p->end) {
-                    if (*p->pos++ != '`')
-                        break;
-
-                    count++;
-                }
-
-                while (p->pos < p->end && seen < count) {
-                    if (*p->pos++ == '`')
-                        seen++;
-                    else
-                        seen = 0;
-                }
-            } else {
-                while (p->pos < p->end) {
-                    if (*p->pos == '`' || *p->pos == '\n')
-                        break;
-
-                    p->pos++;
-                }
+        if (*p->pos == '#') {
+            while (p->pos < p->end) {
+                if (*p->pos == '\n')
+                    break;
             }
+        } else if (lexs[*p->pos] == l_ws ||
+                   (p->paren && *p->pos == '\n')) {
+            p->pos++;
         } else {
             return;
         }
     }
 }
-
 
 static mu_noreturn void l_bad(parse_t *p) {
     mu_err_parse();
@@ -100,9 +90,13 @@ static void l_ws(parse_t *p) {
     return mu_lex(p);
 }
 
-static void l_com(parse_t *p) {
-    wskip(p);
-    return mu_lex(p);
+static void l_nl(parse_t *p) {
+    if (!p->paren) {
+        p->tok = ';';
+        p->pos++;
+    } else {
+        return l_ws(p);
+    }
 }
 
 static void l_op(parse_t *p) {
@@ -110,22 +104,24 @@ static void l_op(parse_t *p) {
     const data_t *kw_end;
 
     while (p->pos < p->end && (lexs[*p->pos] == l_op ||
-                               lexs[*p->pos] == l_set)) {
+                               *p->pos == ':' ||
+                               *p->pos == '=')) {
         p->pos++;
     }
 
     kw_end = p->pos;
     p->val = mnstr(kw_pos, kw_end-kw_pos);
+    mu_t tok = tbl_lookup(mu_syms(), p->val);
 
     wskip(p);
     p->op.rprec = p->pos - kw_end;
 
     // TODO make these strings preinterned so this is actually reasonable
-    if (mu_equals(p->val, mcstr("->")) && p->left) {
-        p->tok = T_RETURN;
+    if (!isnil(tok)) {
+        p->tok = getuint(tok);
     } else if (mu_equals(p->val, mcstr(".")) && lexs[*p->pos] == l_kw) {
-        p->tok = T_KEY;
-    } else if (p->left && lexs[kw_end[-1]] == l_set) {
+        p->tok = T_KEY2;
+    } else if (kw_end[-1] == '=') {
         p->tok = T_OPSET;
         p->val = mnstr(kw_pos, kw_end-kw_pos-1);
     } else {
@@ -144,15 +140,15 @@ static void l_kw(parse_t *p) {
 
     kw_end = p->pos;
     p->val = mnstr(kw_pos, kw_end-kw_pos);
-    mu_t tok = tbl_lookup(p->keys, p->val);
+    mu_t tok = tbl_lookup(mu_keys(), p->val);
 
     wskip(p);
     p->op.rprec = p->pos - kw_end;
 
-    if (p->key && lexs[*p->pos] == l_set) {
-        p->tok = T_IDSET;
+    if (*p->pos == ':') {
+        p->tok = T_KEY;
     } else if (isnil(tok)) {
-        p->tok = T_IDENT;
+        p->tok = T_SYM;
     } else if (getuint(tok) == T_FN && lexs[*p->pos] == l_kw) {
         p->tok = T_FNSET;
     } else {
@@ -164,33 +160,13 @@ static void l_tok(parse_t *p) {
     p->tok = *p->pos++;
 }
 
-static void l_set(parse_t *p) {
-    if (!p->left)
-        return l_op(p);
-
-    p->tok = T_SET;
-    p->pos++;
-}
-
-static void l_sep(parse_t *p) {
-    p->tok = T_SEP;
-    p->pos++;
-}
-
-static void l_nl(parse_t *p) {
-    if (p->paren)
-        return l_ws(p);
-    else
-        return l_sep(p);
-}       
-
 static void l_num(parse_t *p) {
-    p->tok = T_LIT;
+    p->tok = T_IMM;
     p->val = mnum(num_parse(&p->pos, p->end));
 }
 
 static void l_str(parse_t *p) {
-    p->tok = T_LIT;
+    p->tok = T_IMM;
     p->val = mstr(str_parse(&p->pos, p->end));
 }
 
@@ -206,14 +182,14 @@ void (* const lexs[256])(parse_t *) = {
 /* 14 15 16 17 */   l_bad,  l_bad,  l_bad,  l_bad,
 /* 18 19 1a 1b */   l_bad,  l_bad,  l_bad,  l_bad,
 /* 1c 1d 1e 1f */   l_bad,  l_bad,  l_bad,  l_bad,
-/*     !  "  # */   l_ws,   l_op,   l_str,  l_op,
+/*     !  "  # */   l_ws,   l_op,   l_str,  l_ws,
 /*  $  %  &  ' */   l_op,   l_op,   l_op,   l_str,
 /*  (  )  *  + */   l_tok,  l_tok,  l_op,   l_op,
-/*  ,  -  .  / */   l_sep,  l_op,   l_op,   l_op,
+/*  ,  -  .  / */   l_tok,  l_op,   l_op,   l_op,
 /*  0  1  2  3 */   l_num,  l_num,  l_num,  l_num,
 /*  4  5  6  7 */   l_num,  l_num,  l_num,  l_num,
-/*  8  9  :  ; */   l_num,  l_num,  l_set,  l_sep,
-/*  <  =  >  ? */   l_op,   l_set,  l_op,   l_op,
+/*  8  9  :  ; */   l_num,  l_num,  l_tok,  l_tok,
+/*  <  =  >  ? */   l_op,   l_tok,  l_op,   l_op,
 /*  @  A  B  C */   l_op,   l_kw,   l_kw,   l_kw,
 /*  D  E  F  G */   l_kw,   l_kw,   l_kw,   l_kw,
 /*  H  I  J  K */   l_kw,   l_kw,   l_kw,   l_kw,
@@ -222,7 +198,7 @@ void (* const lexs[256])(parse_t *) = {
 /*  T  U  V  W */   l_kw,   l_kw,   l_kw,   l_kw,
 /*  X  Y  Z  [ */   l_kw,   l_kw,   l_kw,   l_tok,
 /*  \  ]  ^  _ */   l_tok,  l_tok,  l_op,   l_kw,
-/*  `  a  b  c */   l_com,  l_kw,   l_kw,   l_kw,   
+/*  `  a  b  c */   l_op,   l_kw,   l_kw,   l_kw,   
 /*  d  e  f  g */   l_kw,   l_kw,   l_kw,   l_kw,   
 /*  h  i  j  k */   l_kw,   l_kw,   l_kw,   l_kw,   
 /*  l  p  n  o */   l_kw,   l_kw,   l_kw,   l_kw,   

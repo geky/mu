@@ -33,7 +33,6 @@ typedef uinth_t len_t;
 // Smallest allocatable size
 #define MU_MINALLOC (4*sizeof(void *))
 
-
 // Definition of macro-like inlined functions
 #define mu_inline static inline __attribute__((always_inline))
 
@@ -52,6 +51,9 @@ typedef uinth_t len_t;
 
 // Builtin for a potentially unused variable
 #define mu_unused __attribute__((unused))
+
+// Determine offset of struct member
+#define mu_offset(x, m) __builtin_offsetof(x, m)
 
 // Builtins for the likelyness of branches
 #define mu_likely(x) __builtin_expect(x, 1)

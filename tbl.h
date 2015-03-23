@@ -67,8 +67,10 @@ mu_inline tbl_t *tbl_write(tbl_t *t) {
 
 
 // Table creating functions and macros
-tbl_t *tbl_create(len_t len);
+tbl_t *tbl_create(len_t size);
+tbl_t *tbl_extend(len_t size, tbl_t *parent);
 void tbl_destroy(tbl_t *t);
+
 
 mu_inline mu_t mntbl(len_t l) { return mtbl(tbl_create(l)); }
 
@@ -95,9 +97,6 @@ void tbl_assign(tbl_t *t, mu_t key, mu_t val);
 // Inserts a value in the table with the given key
 // without decending down the tail chain
 void tbl_insert(tbl_t *t, mu_t key, mu_t val);
-
-// Sets the next index in the table with the value
-void tbl_append(tbl_t *t, mu_t val);
 
 // Performs iteration on a table
 fn_t *tbl_iter(tbl_t *t);

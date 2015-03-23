@@ -47,11 +47,13 @@ mu_inline void ref_dealloc(void *m, size_t size) {
     mu_dealloc(m, size);
 }
 
-mu_inline void ref_inc(void *m) {
+mu_inline void *ref_inc(void *m) {
     ref_t *ref = m;
 
     if (*ref != 0)
         (*ref)++;
+
+    return m;
 }
 
 mu_inline void ref_dec(void *m, void (*dtor)(void *)) {
