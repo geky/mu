@@ -9,57 +9,47 @@
 
 
 /* Mu uses bytecode as an intermediary representation
- * during compilation. It is either executed directly
- * or then converted to opcodes for the underlying machine.
+ * during compilation. The virtual machine then converts
+ * these opcodes into implementation specific instructions.
  *
- * The bytecode assumes the underlying machine is a stack
- * based architecture where the word size is a mu_t. Because
- * function calling is performed by passing tables, no other 
- * assumptions are needed and a simple virtual machine can be 
- * implemented with just a stack pointer and program counter.
+ * The bytecode represents the execution of a register based 
+ * machine that operates on Mu values. Operations can have from 
+ * 1 to 3 operands named d, a, and b and their ranges are limited 
+ * by the underlying virtual machine's implementation.
  *
- * Bytecode is represented in 8 bits with optional tailing arguments
- * that can go up to 16 bits. Only 5 bits are used for encoding 
- * opcodes, the other 3 are used for flags that may help code generation.
+ * In order to ensure correct reference counting with significantly
+ * more bytecode, some operations consume their arguments. Reference
+ * counting is indicated by a trailing +/-. Because of reference 
+ * counting, registers may or may not contain valid Mu values, and values
+ * may remain in use after decrementing.
  *
+ * The special register r0 contains the scope of the current function at 
+ * all times and is also used for creating unconditional jumps.
  */
 typedef enum op {
-/*  opcode     encoding   before      after         description                                 */
-    OP_IMM     = 0x18, // -           imm[i]        pushes immediate i
-    OP_SYM     = 0x1a, // -           s imm[i]      pushes scope and immediate i
-    OP_FN      = 0x1c, // -           fn(imm[i],s)  pushes function i bound with scope
-    OP_TBL     = 0x1e, // -           tbl(i)        pushes new table of size i
+/*  opcode     encoding  operation                 description                          */
+    OP_IMM     = 0x3, /* rd = imms[a]              loads immediate                      */
+    OP_FN      = 0x4, /* rd = fn(fns[a], r0)       creates new function in the scope    */
+    OP_TBL     = 0x5, /* rd = tbl(a)               creates new empty table              */
 
-    OP_DUP     = 0x08, // v0..vi      v0..vi v0..vi duplicates i elements
-    OP_PAD     = 0x0a, // -           nil0..nili    pushes i nils
-    OP_DROP    = 0x0b, // v0..vi      -             drops i elements
+    OP_DUP     = 0x6, /* rd = ra+                  copies and increments register       */
+    OP_DROP    = 0x7, /* rd-                       decrements register                  */
 
-    OP_BIND    = 0x01, // t k         bind(t[k],t)  looks up and binds t[k]
-    OP_LOOKUP  = 0x02, // t k         t[k]          looks up t[k]
-    OP_INSERT  = 0x04, // v0..vi t k  v1..vi        inserts t[k] = v0
-    OP_ASSIGN  = 0x06, // v0..vi t k  v1..vi        assigns t[k] = v0
-    OP_FLOOKUP = 0x03, // t k         t t[k]        looks up t[k]
-    OP_FINSERT = 0x05, // t k v       t             inserts t[k] = v
-    OP_FASSIGN = 0x07, // t k v       t             assigns t[k] = v
+    OP_LOOKUP  = 0x8, /* rd = ra-[rb-]             table lookup                         */
+    OP_INSERT  = 0x9, /* ra-[rb-] = rd-            nonrecursive table insert            */
+    OP_ASSIGN  = 0xa, /* ra-[rb-] = rd-            recursive table assign               */
 
-    OP_JUMP    = 0x12, // -           -            jumps to pc + i
-    OP_JTRUE   = 0x14, // v           v            jumps to pc + i if v is not nil
-    OP_JFALSE  = 0x16, // v           v            jumps to pc + i if v is nil
+    OP_ILOOKUP = 0xb, /* rd = ra[rb-]              inplace table lookup                 */
+    OP_IINSERT = 0xc, /* ra[rb-] = rd-             inplace nonrecursive table insert    */ 
+    OP_IASSIGN = 0xd, /* ra[rb-] = rd-             inplace recursive table assign       */
 
-    OP_CALL    = 0x10, // v0..vi f    v0..vj       calls f(v0..vi) -> v0..vj
-    OP_TCALL   = 0x0e, // v0..vi f    -            returns f(v0..vi)
-    OP_RET     = 0x0c, // v0..vi      -            returns v0..vi
+    OP_JTRUE   = 0xe, /* if (rd)  pc = pc + a      conditionally jumps if not nil       */
+    OP_JFALSE  = 0xf, /* if (!rd) pc = pc + a      conditionally jumps if nil           */
+
+    OP_CALL    = 0x2, /* rd..d+b = rd+a+1(rd..d+a) performs function call               */
+    OP_TCALL   = 0x1, /* return rd+a+1(rd..d+a)    performs tail recursive call         */
+    OP_RET     = 0x0, /* return rd..d+a            returns values                       */
 } op_t;
-
-
-mu_inline bool op_noarg(enum op op)     { return op <= OP_ASSIGN; }
-mu_inline bool op_stackarg(enum op op)  { return op >= OP_PAD && op <= OP_CALL; }
-mu_inline bool op_immarg(enum op op)    { return op >= OP_IMM; }
-
-
-extern const char *const op_names[0x20];
-
-mu_inline const char *op_name(enum op op) { return op_names[0x1f & op]; }
 
 
 #endif

@@ -26,9 +26,9 @@ typedef c_t sbfn_t(tbl_t *closure, mu_t *frame);
 
 // Flags used to define operation of functions
 struct fn_flags {
-    uintq_t stack;  // amount of stack usage
+    uintq_t regs;   // number of registers
     uintq_t scope;  // size of scope to allocate
-    c_t args;       // argument count
+    uintq_t args;   // argument count
     uintq_t type;   // function type
 };
 
@@ -113,8 +113,8 @@ mu_inline struct code **code_fns(code_t *code) {
     return (struct code **)&code->data[code->icount];
 }
 
-mu_inline const data_t *code_bcode(code_t *code) {
-    return (const data_t *)&code->data[code->icount + code->fcount];
+mu_inline const void *code_bcode(code_t *code) {
+    return (const void *)&code->data[code->icount + code->fcount];
 }
 
 

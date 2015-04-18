@@ -49,254 +49,221 @@ void mu_fconvert(c_t sc, mu_t *sframe, c_t dc, mu_t *dframe) {
 // Encode the specified opcode and return its size
 // Note: size of the jump opcodes currently can not change based on argument
 void mu_encode(void (*emit)(void *, data_t), void *p,
-               op_t op, uint_t arg) {
-    if (op >= OP_JUMP) {
-        emit(p, (0xf0 & (op << 3)) | (0x0f & (arg >> 8)));
-        emit(p, arg);
-    } else if (op >= OP_CALL) {
-        emit(p, (0xf8 & (op << 3)));
-        emit(p, arg);
+               op_t op, int_t d, int_t a, int_t b) {
+    union {
+        uint16_t i;
+        data_t d[2];
+    } ins = {0};
+
+    mu_assert(op < 0xf);
+    mu_assert(d < 0xf);
+    ins.i |= op << 12;
+    ins.i |= d << 8;
+
+    if (op >= OP_RET && op <= OP_DROP) {
+        mu_assert(a < 0xff);
+        ins.i |= a;
+    } else if (op >= OP_JTRUE && op <= OP_JFALSE) {
+        mu_assert(a < 0xff && a > -0x100);
+        ins.i |= 0xff & (a>>1);
     } else {
-        emit(p, (0xf8 & (op << 3)) | (0x0f & arg));
+        mu_assert(a < 0xf);
+        mu_assert(b < 0xf);
+        ins.i |= a << 4;
+        ins.i |= b;
+    }
+
+    emit(p, ins.d[0]);
+    emit(p, ins.d[1]);
+}
+
+
+// Instruction access functions
+mu_inline enum op op(uint16_t ins) { return (enum op)(ins >> 12); }
+mu_inline uint_t rd(uint16_t ins) { return 0xf & (ins >> 8); }
+mu_inline uint_t ra(uint16_t ins) { return 0xf & (ins >> 4); }
+mu_inline uint_t rb(uint16_t ins) { return 0xf & (ins >> 0); }
+mu_inline uint_t i(uint16_t ins) { return (uint8_t)ins; }
+mu_inline int_t  j(uint16_t ins) { return (int8_t)ins; }
+mu_inline uint_t f(uint16_t ins) { return ra(ins) > MU_FRAME ? 1 : ra(ins); }
+
+
+// Disassemble bytecode for debugging and introspection
+// currently just outputs to stdout
+// Unsure if this should be kept as is, returned as string
+// or just dropped completely.
+void mu_dis(code_t *c) {
+    mu_t *imms = code_imms(c);
+    const uint16_t *pc = code_bcode(c);
+    const uint16_t *end = pc + c->bcount/2;
+    uint16_t ins;
+
+    while (pc < end) {
+        ins = *pc++;
+        printf("%04x ", ins);
+
+        switch (op(ins)) {
+            case OP_IMM:
+                printf("imm r%d, %d", rd(ins), i(ins));
+                { str_t *repr = mu_repr(imms[i(ins)]);
+                  printf("(%.*s)\n", str_getlen(repr), str_getdata(repr));
+                  str_dec(repr);
+                }
+                break;
+            case OP_FN:
+                printf("fn r%d, %d\n", rd(ins), i(ins));
+                break;
+            case OP_TBL:
+                printf("tbl r%d, %d\n", rd(ins), i(ins));
+                break;
+            case OP_DUP:
+                printf("dup r%d, r%d\n", rd(ins), i(ins));
+                break;
+            case OP_DROP:
+                printf("drop r%d\n", rd(ins));
+                break;
+            case OP_LOOKUP:
+                printf("lookup r%d, r%d[r%d]\n", rd(ins), ra(ins), rb(ins));
+                break;
+            case OP_INSERT:
+                printf("insert r%d, r%d[r%d]\n", rd(ins), ra(ins), rb(ins));
+                break;
+            case OP_ASSIGN:
+                printf("assign r%d, r%d[r%d]\n", rd(ins), ra(ins), rb(ins));
+                break;
+            case OP_ILOOKUP:
+                printf("ilookup r%d, r%d[r%d]\n", rd(ins), ra(ins), rb(ins));
+                break;
+            case OP_IINSERT:
+                printf("iinsert r%d, r%d[r%d]\n", rd(ins), ra(ins), rb(ins));
+                break;
+            case OP_IASSIGN:
+                printf("iassign r%d, r%d[r%d]\n", rd(ins), ra(ins), rb(ins));
+                break;
+            case OP_JTRUE:
+                printf("jtrue r%d, %d\n", rd(ins), j(ins));
+                break;
+            case OP_JFALSE:
+                printf("jfalse r%d, %d\n", rd(ins), j(ins));
+                break;
+            case OP_CALL:
+                printf("call r%d, 0x%02x\n", rd(ins), i(ins));
+                break;
+            case OP_TCALL:
+                printf("tcall r%d, 0x%01x\n", rd(ins), mu_args(i(ins)));
+                break;
+            case OP_RET:
+                printf("ret r%d, 0x%01x\n", rd(ins), mu_rets(i(ins)));
+                break;
+        }
     }
 }
 
 
-// bytecode does not need to be portable, as it
-// is compiled ad-hoc, but it does need to worry
-// about alignment issues.
-mu_inline uint_t argi(const data_t *pc) {
-    return ((0xf & pc[0]) << 8) | pc[1];
-}
-
-mu_inline int_t argj(const data_t *pc) {
-    return (int16_t)((0xf & pc[0]) << 8) | pc[1];
-}
-
-mu_inline uint_t argf(const data_t *pc) {
-    return 0x7 & *pc;
-}
-
-mu_inline uint_t argc(const data_t *pc) {
-    return *(pc+1);
-}
-
-
-// Execute the bytecode
+// Execute bytecode
 void mu_exec(fn_t *fn, c_t c, mu_t *frame) {
-    // Allocate registers
-    register const data_t *pc;
-    register mu_t *sp;
-    register tbl_t *scope;
-    register mu_t scratch;
+    // Allocate termporary variables
+    register const uint16_t *pc;
     mu_t *imms;
     struct code **fns;
 
-reenter:
-    {   // Setup the stack
-        mu_t stack[fn->flags.stack];
-        sp = stack + fn->flags.stack;
+    register mu_t scratch;
+    register uint16_t ins;
 
-        mu_fconvert(mu_args(c), frame, fn->flags.args, stack);
-        sp -= fn->flags.args > MU_FRAME ? 1 : fn->flags.args;
+reenter:
+    {   // Setup the registers and scope
+        mu_t regs[fn->flags.regs];
+        mu_fconvert(mu_args(c), frame, fn->flags.args, &regs[1]);
+        regs[0] = mtbl(tbl_extend(fn->flags.scope, fn->closure));
 
         // Setup other state
         imms = code_imms(fn->code);
         fns = code_fns(fn->code);
         pc = code_bcode(fn->code);
-        scope = tbl_extend(fn->flags.scope, fn->closure);
 
         // Enter main execution loop
         while (1) {
-            switch (*pc >> 3) {
-                case OP_IMM:
-                    sp[1] = mu_inc(imms[argi(pc)]);
-                    sp += 1;
-                    pc += 2;
-                    break;
+            ins = *pc++;
 
-                case OP_SYM:
-                    sp[1] = mu_inc(mtbl(scope));
-                    sp[2] = mu_inc(imms[argi(pc)]);
-                    sp += 2;
-                    pc += 2;
+            switch (op(ins)) {
+                case OP_IMM:
+                    regs[rd(ins)] = mu_inc(imms[i(ins)]);
                     break;
 
                 case OP_FN:
-                    sp[1] = mfn(fn_create(fns[argi(pc)], scope));
-                    sp += 1;
-                    pc += 2;
+                    regs[rd(ins)] = mfn(fn_create(fns[i(ins)], gettbl(regs[0])));
                     break;
 
                 case OP_TBL:
-                    sp[1] = mtbl(tbl_create(argi(pc)));
-                    sp += 1;
-                    pc += 2;
+                    regs[rd(ins)] = mtbl(tbl_create(i(ins)));
                     break;
 
                 case OP_DUP:
-                    // fallthroughs intentional
-                    switch (argf(pc)) {
-                        case 7: sp[argf(pc)-6] = mu_inc(sp[-6]);
-                        case 6: sp[argf(pc)-5] = mu_inc(sp[-5]);
-                        case 5: sp[argf(pc)-4] = mu_inc(sp[-4]);
-                        case 4: sp[argf(pc)-3] = mu_inc(sp[-3]);
-                        case 3: sp[argf(pc)-2] = mu_inc(sp[-2]);
-                        case 2: sp[argf(pc)-1] = mu_inc(sp[-1]);
-                        case 1: sp[argf(pc)-0] = mu_inc(sp[-0]);
-                        case 0: break;
-                    }
-                    sp -= argf(pc);
-                    pc += 1;
-                    break;
-
-                case OP_PAD:
-                    // fallthroughs intentional
-                    switch (argf(pc)) {
-                        case 7: sp[7] = mnil;
-                        case 6: sp[6] = mnil;
-                        case 5: sp[5] = mnil;
-                        case 4: sp[4] = mnil;
-                        case 3: sp[3] = mnil;
-                        case 2: sp[2] = mnil;
-                        case 1: sp[1] = mnil;
-                        case 0: break;
-                    }
-                    sp += argf(pc);
-                    pc += 1;
+                    regs[rd(ins)] = mu_inc(regs[i(ins)]);
                     break;
 
                 case OP_DROP:
-                    // fallthroughs intentional
-                    switch (argf(pc)) {
-                        case 7: mu_dec(sp[-6]);
-                        case 6: mu_dec(sp[-5]);
-                        case 5: mu_dec(sp[-4]);
-                        case 4: mu_dec(sp[-3]);
-                        case 3: mu_dec(sp[-2]);
-                        case 2: mu_dec(sp[-1]);
-                        case 1: mu_dec(sp[-0]);
-                        case 0: break;
-                    }
-                    sp -= argf(pc);
-                    pc += 1;
+                    mu_dec(regs[rd(ins)]);
                     break;
-
-                case OP_BIND:
-                    scratch = mu_lookup(sp[-1], sp[0]);
-                    // TODO bind with sp[-1]
-                    mu_dec(sp[-1]);
-                    mu_dec(sp[0]);
-                    sp[-1] = scratch;
-                    sp -= 1;
-                    pc += 1;
 
                 case OP_LOOKUP:
-                    scratch = mu_lookup(sp[-1], sp[0]);
-                    mu_dec(sp[-1]);
-                    mu_dec(sp[0]);
-                    sp[-1] = scratch;
-                    sp -= 1;
-                    pc += 1;
-                    break;
-
-                case OP_FLOOKUP:
-                    scratch = mu_lookup(sp[-1], sp[0]);
-                    mu_dec(sp[0]);
-                    sp[0] = scratch;
-                    pc += 1;
+                    scratch = mu_lookup(regs[ra(ins)], regs[rb(ins)]);
+                    mu_dec(regs[ra(ins)]);
+                    mu_dec(regs[rb(ins)]);
+                    regs[rd(ins)] = scratch;
                     break;
 
                 case OP_INSERT:
-                    mu_insert(sp[-1], sp[0], sp[-2-argf(pc)]);
-                    mu_dec(sp[-1]);
-                    switch (argf(pc)) {
-                        case 7: sp[-9] = sp[-8];
-                        case 6: sp[-8] = sp[-7];
-                        case 5: sp[-7] = sp[-6];
-                        case 4: sp[-6] = sp[-5];
-                        case 3: sp[-5] = sp[-4];
-                        case 2: sp[-4] = sp[-3];
-                        case 1: sp[-3] = sp[-2];
-                        case 0: break;
-                    }
-                    sp -= 3;
-                    pc += 1;
+                    mu_insert(regs[ra(ins)], regs[rb(ins)], regs[rd(ins)]);
+                    mu_dec(regs[ra(ins)]);
                     break;
 
                 case OP_ASSIGN:
-                    mu_assign(sp[-1], sp[0], sp[-2-argf(pc)]);
-                    mu_dec(sp[-1]);
-                    switch (argf(pc)) {
-                        case 7: sp[-9] = sp[-8];
-                        case 6: sp[-8] = sp[-7];
-                        case 5: sp[-7] = sp[-6];
-                        case 4: sp[-6] = sp[-5];
-                        case 3: sp[-5] = sp[-4];
-                        case 2: sp[-4] = sp[-3];
-                        case 1: sp[-3] = sp[-2];
-                        case 0: break;
-                    }
-                    sp -= 3;
-                    pc += 1;
+                    mu_assign(regs[ra(ins)], regs[rb(ins)], regs[rd(ins)]);
+                    mu_dec(regs[ra(ins)]);
                     break;
 
-                case OP_FINSERT:
-                    mu_insert(sp[-2], sp[-1], sp[0]);
-                    sp -= 2;
-                    pc += 1;
+                case OP_ILOOKUP:
+                    scratch = mu_lookup(regs[ra(ins)], regs[rb(ins)]);
+                    mu_dec(regs[rb(ins)]);
+                    regs[rd(ins)] = scratch;
                     break;
 
-                case OP_FASSIGN:
-                    mu_assign(sp[-2], sp[-1], sp[0]);
-                    sp -= 2;
-                    pc += 1;
+                case OP_IINSERT:
+                    mu_insert(regs[ra(ins)], regs[rb(ins)], regs[rd(ins)]);
                     break;
 
-                case OP_JUMP:
-                case OP_JUMP+1:
-                    pc += 2 + argj(pc);
+                case OP_IASSIGN:
+                    mu_assign(regs[ra(ins)], regs[rb(ins)], regs[rd(ins)]);
                     break;
 
                 case OP_JTRUE:
-                case OP_JTRUE+1:
-                    if (!isnil(sp[0]))
-                        pc += 2 + argj(pc);
-                    else
-                        pc += 2;
+                    if (!isnil(regs[rd(ins)]))
+                        pc += j(ins);
                     break;
 
                 case OP_JFALSE:
-                case OP_JFALSE+1:
-                    if (isnil(sp[0]))
-                        pc += 2 + argj(pc);
-                    else
-                        pc += 2;
+                    if (isnil(regs[rd(ins)]))
+                        pc += j(ins);
                     break;
 
                 case OP_CALL:
-                    scratch = sp[0];
-                    sp -= 1 + mu_args(argc(pc));
-                    mu_fcall(scratch, argc(pc), sp);
-                    sp += mu_rets(argc(pc));
-                    pc += 2;
-                    mu_dec(scratch);
+                    scratch = regs[rd(ins)+f(ins)+1];
+                    mu_fcall(scratch, i(ins), &regs[rd(ins)]);
                     break;
 
                 case OP_TCALL:
-                    scratch = sp[0];
-                    c = mu_c(argf(pc), mu_rets(c));
-                    sp -= 1 + argf(pc);
-                    memcpy(frame, sp, argf(pc));
-                    tbl_dec(scope);
+                    scratch = regs[rd(ins)+f(ins)+1];
+                    c = mu_c(ra(ins), mu_rets(c));
+                    memcpy(frame, &regs[rd(ins)], f(ins));
+                    mu_dec(regs[0]);
                     fn_dec(fn);
                     goto tailcall;
 
                 case OP_RET:
-                    sp -= argf(pc);
-                    tbl_dec(scope);
+                    mu_dec(regs[0]);
                     fn_dec(fn);
-                    mu_fconvert(argf(pc), sp, mu_rets(c), frame);
+                    mu_fconvert(rb(ins), &regs[rd(ins)], mu_rets(c), frame);
                     return;
 
                 default:
@@ -310,8 +277,10 @@ reenter:
 
 tailcall:
     // Use a direct goto to garuntee a tail call when the target is
-    // another mu function. Otherwise, we just try our hardest
-    // to get a tail call emitted.
+    // another mu function. Otherwise, we just try our hardest to get
+    // a tail call emitted. This has been shown to be pretty unlikely
+    // on gcc due to the dynamic array for registers which causes some
+    //stack checking to get pushed all the way to the epilogue.
     if (isfn(scratch) && getfn(scratch)->flags.type == 0) {
         fn = getfn(scratch);
         goto reenter;

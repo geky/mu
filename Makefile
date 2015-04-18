@@ -1,4 +1,4 @@
-TARGET = test
+TARGET = mu
 LIBTARGET = libmu.a
 
 CC = gcc
@@ -6,7 +6,7 @@ AR = ar
 
 SRC += types.c num.c str.c tbl.c fn.c
 SRC += mem.c err.c
-SRC += lex.c vm.c ops.c parse.c
+SRC += lex.c vm.c parse.c
 OBJ := $(SRC:.c=.o)
 DEP := $(SRC:.c=.d)
 ASM := $(SRC:.c=.s)

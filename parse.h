@@ -26,112 +26,45 @@ typedef struct parse parse_t;
 
 // Specific state structures
 
-struct opparse {
-    len_t ins;
+struct l_parse {
+    const data_t *pos;
+    const data_t *end;
+
+    uintq_t lookahead : 1;
+    tok_t tok;
+    mu_t val;
+};
+
+struct f_parse {
+    uintq_t tabled : 1;
+    len_t lcount;
+    len_t rcount;
+};
+
+struct op_parse {
     uintq_t lprec;
     uintq_t rprec;
 };
-/*
-struct jparse {
-    tbl_t *ctbl;
-    tbl_t *btbl;
-};
-
-struct stparse {
-    uintq_t max;
-    uintq_t off;
-    uintq_t scope;
-};
-
-struct fnparse {
-    union {
-        fn_t fn;
-
-        struct {
-            ref_t ref;
-            len_t ins;
-            struct stparse stack;
-
-            tbl_t *imms;
-            mstr_t *bcode;
-        };
-    };
-};
-
-// State of a parse
-typedef struct parse {
-    struct fnparse *f;
-    struct jparse j;
-    struct opparse op;
-    tbl_t *args;
-    tbl_t *keys;
-//
-    tbl_t *lhs;
-    tbl_t *rhs;
-    struct {
-        mstr_t *code;
-        data_t *pos;
-        data_t *end;
-    } b;
-
-    tbl_t *imms;
-//
-    uintq_t indirect;
-    uintq_t stmt;
-    uintq_t left;
-    uintq_t key;
-    uintq_t paren;
-
-    uintq_t jsize;
-    uintq_t jtsize;
-    uintq_t jfsize;
-
-    tok_t tok;
-    mu_t val;
-
-    ref_t *ref;
-    const data_t *str;
-    const data_t *pos;
-    const data_t *end;
-} parse_t;
-*/
-
-// TODO use flexible array member with offsetof 
-// to handle alignment issue?
-struct chunk {
-    ref_t ref;
-    len_t size;
-
-    len_t len;
-    uintq_t indirect;
-
-    data_t data[];
-};
-
-mu_inline struct chunk *getchunk(mu_t m) {
-    return (struct chunk *)getstr(m);
-}
-
-mu_inline mu_t mchunk(struct chunk *ch) {
-    return mstr((mstr_t *)ch);
-}
 
 typedef struct parse {
-    tbl_t *keys;
-    tbl_t *vals;
-    struct chunk *ch;
+    mstr_t *bcode;
+    len_t bcount;
 
     tbl_t *imms;
     tbl_t *fns;
-
-    tok_t tok;
-    mu_t val;
-
-    const data_t *pos;
-    const data_t *end;
-
+    len_t sp;
+    len_t smax;
     uintq_t paren;
-    struct opparse op;
+
+    struct op_parse op;
+    struct l_parse l;
+    struct f_parse f;
+
+    uintq_t insert       : 1;
+    uintq_t indirect     : 1;
+    uintq_t rested       : 1;
+    uintq_t scoped       : 1;
+    uintq_t pack         : 1;
 } parse_t;
 
 

@@ -35,13 +35,13 @@ typedef enum tok {
     T_ARROW    = 17,
     T_AND      = 18,
     T_OR       = 19,
-    T_REST     = 20,
 
-    T_NIL      = 21,
-    T_ARGS     = 22,
-    T_SCOPE    = 23,
+    T_NIL      = 20,
+    T_ARGS     = 21,
+    T_SCOPE    = 22,
 
     T_DOT      = '.',
+    T_REST     = '*',
     T_TERM     = ';',
     T_COMMA    = ',',
     T_ASSIGN   = '=',

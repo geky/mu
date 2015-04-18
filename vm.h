@@ -30,6 +30,7 @@ mu_inline c_t mu_rets(c_t c) { return 0xf & c; }
 #ifndef MU_VM_H
 #define MU_VM_H
 #include "types.h"
+#include "fn.h"
 #define MU_DEF
 #include "vm.h"
 #include "ops.h"
@@ -39,13 +40,20 @@ mu_inline c_t mu_rets(c_t c) { return 0xf & c; }
 // Encode the specified opcode and return its size
 // Note: size of the jump opcodes currently can not change based on argument
 void mu_encode(void (*emit)(void *, data_t), void *p,
-               op_t op, uint_t arg);
+               op_t op, int_t d, int_t a, int_t b);
 
 // Conversion between frame types
 void mu_fconvert(c_t sc, mu_t *sframe, c_t dc, mu_t *dframe);
 
 // Execute the bytecode
 void mu_exec(fn_t *fn, c_t c, mu_t *frame);
+
+
+// Disassemble bytecode for debugging and introspection
+// currently just outputs to stdout
+// Unsure if this should be kept as is, returned as string
+// or just dropped completely.
+void mu_dis(code_t *code);
 
 
 #endif

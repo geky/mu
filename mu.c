@@ -9,6 +9,7 @@
 #include "tbl.h"
 #include "fn.h"
 #include "err.h"
+#include "vm.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -61,8 +62,25 @@ static void printerr(tbl_t *err) {
 }
 
 static void printoutput(mu_t v) {
+    tbl_t *f = gettbl(v);
+    int i = tbl_getlen(f);
+
+    if (i == 0)
+        return;
+
     printf("%s", OUTPUT_A);
-    printrepr(v);
+    tbl_for_begin (k, v, f) {
+        if (!isnum(k)) {
+            printrepr(k);
+            printf(": ");
+        }
+
+        printrepr(v);
+
+        if (--i != 0) {
+            printf(", ");
+        }
+    } tbl_for_end
     printf("\n");
 }
 
@@ -81,34 +99,34 @@ static len_t prompt(data_t *input) {
 
 
 // TODO move this scope declaration somewhere else
-static f_t b_add(mu_t *frame) {
+static c_t b_add(mu_t *frame) {
     assert(isnum(frame[0]) && isnum(frame[1]));
     frame[0] = mdouble(getdouble(frame[0]) + getdouble(frame[1]));
     return 1;
 }
 
-static f_t b_sub(mu_t *frame) {
+static c_t b_sub(mu_t *frame) {
     assert(isnum(frame[0]) && isnum(frame[1]));
     frame[0] = mdouble(getdouble(frame[0]) - getdouble(frame[1]));
     return 1;
 }
 
-static f_t b_equals(mu_t *frame) {
+static c_t b_equals(mu_t *frame) {
     bool r = mu_equals(frame[0], frame[1]);
     mu_dec(frame[0]); mu_dec(frame[1]);
     frame[0] = r ? muint(1) : mnil;
     return 1;
 }
 
-static f_t b_repr(mu_t *frame) {
+static c_t b_repr(mu_t *frame) {
     str_t *r = mu_repr(frame[0]);
     mu_dec(frame[0]);
     frame[0] = mstr(r);
     return 1;
 }
 
-static f_t b_print(mu_t *frame) {
-    tbl_for_begin (k, v, gettbl(frame)) {
+static c_t b_print(mu_t *frame) {
+    tbl_for_begin (k, v, gettbl(frame[0])) {
         printvar(v);
     } tbl_for_end;
 
@@ -121,19 +139,19 @@ static void genscope() {
     scope = tbl_create(0);
 
     tbl_t *ops = tbl_create(0);
-    tbl_assign(ops, mcstr("+"), mbfn(2, b_add));
-    tbl_assign(ops, mcstr("-"), mbfn(2, b_sub));
-    tbl_assign(ops, mcstr("=="), mbfn(2, b_equals));
+    tbl_assign(ops, mcstr("+"), mbfn(0x2, b_add));
+    tbl_assign(ops, mcstr("-"), mbfn(0x2, b_sub));
+    tbl_assign(ops, mcstr("=="), mbfn(0x2, b_equals));
     tbl_assign(scope, mcstr("ops"), mtbl(ops));
-    tbl_assign(scope, mcstr("repr"), mbfn(1, b_repr));
+    tbl_assign(scope, mcstr("repr"), mbfn(0x1, b_repr));
     tbl_assign(scope, mcstr("print"), mbfn(0xf, b_print));
 }
 
 static int genargs(int i, int argc, const char **argv) {
-    args = tbl_create(argc-i);
+    tbl_t *args = tbl_create(argc-i);
 
-    for (; i < argc; i++) {
-        tbl_append(args, mcstr(argv[i]));
+    for (uint_t j = 0; j < argc-i; j++) {
+        tbl_insert(args, muint(j), mcstr(argv[i]));
     }
 
     return i;
@@ -141,9 +159,10 @@ static int genargs(int i, int argc, const char **argv) {
 
 
 static void execute(const char *input) {
-    fn_t *f = fn_create(0, mcstr(input));
+    fn_t *f = fn_parse_fn(str_cstr(input), 0);
 
-    fn_call_in(f, 0, scope);
+    //fn_call_in(f, 0, scope);
+    fn_call(f, 0x00);
 }
 
 static void load_file(FILE *file) {
@@ -164,10 +183,10 @@ static void load_file(FILE *file) {
         off++;
     }
 
-    mu_t code = mnstr(buffer+off, len-off);
-    fn_t *f = fn_create(0, code);
+    fn_t *f = fn_parse_fn(str_nstr(buffer+off, len-off), 0);
 
-    fn_call_in(f, 0, scope);
+    //fn_call_in(f, 0, scope);
+    fn_call(f, 0x00);
 }
 
 static void load(const char *name) {
@@ -188,22 +207,24 @@ static mu_noreturn int interpret() {
 
     while (1) {
         len_t len = prompt(buffer);
-        mu_t code = mnstr(buffer, len);
+        str_t *code = str_nstr(buffer, len);
         
         mu_try_begin {
-            fn_t *f;
+            fn_t *f = fn_parse_fn(code, 0);
+//    
+//            mu_try_begin {
+//                f = fn_create_expr(0, code);
+//            } mu_on_err (err) {
+//                f = fn_create(0, code);
+//            } mu_try_end;
 
-            mu_try_begin {
-                f = fn_create_expr(0, code);
-            } mu_on_err (err) {
-                f = fn_create(0, code);
-            } mu_try_end;
+//            mu_t output = fn_call_in(f, 0, scope);
 
-            mu_t output = fn_call_in(f, 0, scope);
+            // TODO use strs?
+            mu_dis(f->code);
 
-            if (!isnil(output))
-                printoutput(output);
-
+            mu_t output = fn_call(f, 0x0f);
+            printoutput(output);
             mu_dec(output);
             fn_dec(f);
         } mu_on_err (err) {
@@ -218,7 +239,7 @@ static int run() {
     if (isnil(mainfn))
         return 0;
 
-    mu_t code = mu_call(mainfn, args);
+    mu_t code = mu_call(mainfn, 0xf1, args);
 
     if (isnil(code) || isnum(code))
         return (int)getnum(code);
@@ -231,7 +252,7 @@ static void usage(const char *name) {
     printf("\n"
            "usage: %s [options] [program] [args]\n"
            "options:\n"
-           "  -e string     execute provided string before program\n"
+           "  -e string     execute string before program\n"
            "  -l file       import and execute file before program\n"
            "  -i            run interactively after program\n"
            "  --            stop handling options\n"
