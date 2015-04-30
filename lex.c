@@ -146,9 +146,7 @@ static void l_kw(parse_t *p) {
     wskip(p);
     p->op.rprec = p->l.pos - kw_end;
 
-    if (*p->l.pos == ':') {
-        p->l.tok = T_KEY;
-    } else if (isnil(tok)) {
+    if (isnil(tok)) {
         p->l.tok = T_SYM;
     } else if (getuint(tok) == T_FN && lexs[*p->l.pos] == l_kw) {
         p->l.tok = T_FNSET;

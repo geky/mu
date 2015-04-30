@@ -4,6 +4,7 @@ LIBTARGET = libmu.a
 CC = gcc
 AR = ar
 
+SRC += mu.c
 SRC += types.c num.c str.c tbl.c fn.c
 SRC += mem.c err.c
 SRC += lex.c vm.c parse.c
@@ -31,20 +32,17 @@ lib: $(LIBTARGET)
 
 asm: $(ASM)
 
-include $(DEP)
+-include $(DEP)
 
 
-$(TARGET): $(TARGET).o $(OBJ)
+$(TARGET): $(OBJ)
 	$(CC) $(CFLAGS) $^ $(LFLAGS) -o $@
 
 $(LIBTARGET): $(OBJ)
 	$(AR) rcs $@ $^
 
-%.o: %.c %.d
-	$(CC) -c $(CFLAGS) $< -o $@
-
-%.d: %.c
-	$(CC) -MM $(CFLAGS) $< > $@
+%.o: %.c
+	$(CC) -c -MMD $(CFLAGS) $< -o $@
 
 %.s: %.c
 	$(CC) -S -fverbose-asm $(CFLAGS) $< -o $@

@@ -30,7 +30,7 @@ struct l_parse {
     const data_t *pos;
     const data_t *end;
 
-    uintq_t lookahead : 1;
+    uintq_t pass : 1;
     tok_t tok;
     mu_t val;
 };
@@ -60,11 +60,11 @@ typedef struct parse {
     struct l_parse l;
     struct f_parse f;
 
-    uintq_t insert       : 1;
-    uintq_t indirect     : 1;
-    uintq_t rested       : 1;
-    uintq_t scoped       : 1;
-    uintq_t pack         : 1;
+    bool indirect     : 1;
+    bool scoped       : 1;
+    bool rested       : 1;
+    bool insert       : 1;
+    bool unpack       : 1;
 } parse_t;
 
 

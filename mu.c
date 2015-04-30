@@ -105,6 +105,12 @@ static c_t b_add(mu_t *frame) {
     return 1;
 }
 
+static c_t b_mul(mu_t *frame) {
+    assert(isnum(frame[0]) && isnum(frame[1]));
+    frame[0] = mdouble(getdouble(frame[0]) * getdouble(frame[1]));
+    return 1;
+}
+
 static c_t b_sub(mu_t *frame) {
     assert(isnum(frame[0]) && isnum(frame[1]));
     frame[0] = mdouble(getdouble(frame[0]) - getdouble(frame[1]));
@@ -140,8 +146,13 @@ static void genscope() {
 
     tbl_t *ops = tbl_create(0);
     tbl_assign(ops, mcstr("+"), mbfn(0x2, b_add));
+    tbl_assign(ops, mcstr("*"), mbfn(0x2, b_mul));
     tbl_assign(ops, mcstr("-"), mbfn(0x2, b_sub));
     tbl_assign(ops, mcstr("=="), mbfn(0x2, b_equals));
+    tbl_assign(scope, mcstr("+"), mbfn(0x2, b_add));
+    tbl_assign(scope, mcstr("-"), mbfn(0x2, b_sub));
+    tbl_assign(scope, mcstr("*"), mbfn(0x2, b_mul));
+    tbl_assign(scope, mcstr("=="), mbfn(0x2, b_equals));
     tbl_assign(scope, mcstr("ops"), mtbl(ops));
     tbl_assign(scope, mcstr("repr"), mbfn(0x1, b_repr));
     tbl_assign(scope, mcstr("print"), mbfn(0xf, b_print));
@@ -210,7 +221,7 @@ static mu_noreturn int interpret() {
         str_t *code = str_nstr(buffer, len);
         
         mu_try_begin {
-            fn_t *f = fn_parse_fn(code, 0);
+            fn_t *f = fn_parse_fn(code, scope);
 //    
 //            mu_try_begin {
 //                f = fn_create_expr(0, code);

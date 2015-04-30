@@ -60,15 +60,15 @@ void mu_encode(void (*emit)(void *, data_t), void *p,
     ins.i |= op << 12;
     ins.i |= d << 8;
 
-    if (op >= OP_RET && op <= OP_DROP) {
-        mu_assert(a < 0xff);
+    if (op >= OP_IMM && op <= OP_DROP) {
+        mu_assert(a <= 0xff);
         ins.i |= a;
     } else if (op >= OP_JTRUE && op <= OP_JFALSE) {
-        mu_assert(a < 0xff && a > -0x100);
+        mu_assert(a <= 0xff && a >= -0x100);
         ins.i |= 0xff & (a>>1);
-    } else {
-        mu_assert(a < 0xf);
-        mu_assert(b < 0xf);
+    } else { 
+        mu_assert(a <= 0xf);
+        mu_assert(b <= 0xf);
         ins.i |= a << 4;
         ins.i |= b;
     }
@@ -85,7 +85,8 @@ mu_inline uint_t ra(uint16_t ins) { return 0xf & (ins >> 4); }
 mu_inline uint_t rb(uint16_t ins) { return 0xf & (ins >> 0); }
 mu_inline uint_t i(uint16_t ins) { return (uint8_t)ins; }
 mu_inline int_t  j(uint16_t ins) { return (int8_t)ins; }
-mu_inline uint_t f(uint16_t ins) { return ra(ins) > MU_FRAME ? 1 : ra(ins); }
+mu_inline uint_t fa(uint16_t ins) { return ra(ins) > MU_FRAME ? 1 : ra(ins); }
+mu_inline uint_t fr(uint16_t ins) { return ra(ins) > MU_FRAME ? 1 : ra(ins); }
 
 
 // Disassemble bytecode for debugging and introspection
@@ -248,14 +249,15 @@ reenter:
                     break;
 
                 case OP_CALL:
-                    scratch = regs[rd(ins)+f(ins)+1];
-                    mu_fcall(scratch, i(ins), &regs[rd(ins)]);
+                    memcpy(frame, &regs[rd(ins)+1], sizeof(mu_t)*fa(ins));
+                    mu_fcall(regs[rd(ins)], i(ins), frame);
+                    memcpy(&regs[rd(ins)], frame, sizeof(mu_t)*fr(ins));
                     break;
 
                 case OP_TCALL:
-                    scratch = regs[rd(ins)+f(ins)+1];
+                    scratch = regs[rd(ins)];
                     c = mu_c(ra(ins), mu_rets(c));
-                    memcpy(frame, &regs[rd(ins)], f(ins));
+                    memcpy(frame, &regs[rd(ins)+1], sizeof(mu_t)*fa(ins));
                     mu_dec(regs[0]);
                     fn_dec(fn);
                     goto tailcall;
@@ -280,7 +282,7 @@ tailcall:
     // another mu function. Otherwise, we just try our hardest to get
     // a tail call emitted. This has been shown to be pretty unlikely
     // on gcc due to the dynamic array for registers which causes some
-    //stack checking to get pushed all the way to the epilogue.
+    // stack checking to get pushed all the way to the epilogue.
     if (isfn(scratch) && getfn(scratch)->flags.type == 0) {
         fn = getfn(scratch);
         goto reenter;

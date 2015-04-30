@@ -14,7 +14,7 @@ fn_t *fn_bfn(c_t args, bfn_t *bfn) {
     fn_t *fn = ref_alloc(sizeof(fn_t));
     fn->flags.regs = 16;
     fn->flags.scope = 0;
-    fn->flags.args = mu_args(args);
+    fn->flags.args = args;
     fn->flags.type = 1;
     fn->closure = 0;
     fn->bfn = bfn;
@@ -25,7 +25,7 @@ fn_t *fn_sbfn(c_t args, sbfn_t *sbfn, tbl_t *closure) {
     fn_t *fn = ref_alloc(sizeof(fn_t));
     fn->flags.regs = 16;
     fn->flags.scope = 0;
-    fn->flags.args = mu_args(args);
+    fn->flags.args = args;
     fn->flags.type = 2;
     fn->closure = closure;
     fn->sbfn = sbfn;
