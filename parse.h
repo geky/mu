@@ -36,9 +36,11 @@ struct l_parse {
 };
 
 struct f_parse {
-    uintq_t tabled : 1;
     len_t lcount;
     len_t rcount;
+    uintq_t tabled  : 1;
+    uintq_t call    : 1;
+    uintq_t unpack  : 1;
 };
 
 struct op_parse {
@@ -49,22 +51,30 @@ struct op_parse {
 typedef struct parse {
     mstr_t *bcode;
     len_t bcount;
-
     tbl_t *imms;
     tbl_t *fns;
+
     len_t sp;
     len_t smax;
     uintq_t paren;
+    uintq_t args;
 
     struct op_parse op;
     struct l_parse l;
     struct f_parse f;
 
-    bool indirect     : 1;
-    bool scoped       : 1;
-    bool rested       : 1;
+    enum {
+        P_DIRECT,
+        P_INDIRECT,
+        P_SCOPED,
+        P_CALLED
+    } state;
+
+    //bool indirect     : 1;
+    //bool scoped       : 1;
+    //bool rested       : 1;
     bool insert       : 1;
-    bool unpack       : 1;
+    //bool unpack       : 1;
 } parse_t;
 
 

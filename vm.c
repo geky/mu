@@ -24,7 +24,7 @@ void mu_fconvert(c_t sc, mu_t *sframe, c_t dc, mu_t *dframe) {
             *dframe = mtbl(tbl);
         }
     } else {
-        if (sc >= MU_FRAME) {
+        if (sc > MU_FRAME) {
             tbl_t *tbl = gettbl(*sframe);
 
             for (uint_t i = 0; i < dc; i++)
@@ -86,7 +86,7 @@ mu_inline uint_t rb(uint16_t ins) { return 0xf & (ins >> 0); }
 mu_inline uint_t i(uint16_t ins) { return (uint8_t)ins; }
 mu_inline int_t  j(uint16_t ins) { return (int8_t)ins; }
 mu_inline uint_t fa(uint16_t ins) { return ra(ins) > MU_FRAME ? 1 : ra(ins); }
-mu_inline uint_t fr(uint16_t ins) { return ra(ins) > MU_FRAME ? 1 : ra(ins); }
+mu_inline uint_t fr(uint16_t ins) { return rb(ins) > MU_FRAME ? 1 : rb(ins); }
 
 
 // Disassemble bytecode for debugging and introspection
@@ -151,10 +151,10 @@ void mu_dis(code_t *c) {
                 printf("call r%d, 0x%02x\n", rd(ins), i(ins));
                 break;
             case OP_TCALL:
-                printf("tcall r%d, 0x%01x\n", rd(ins), mu_args(i(ins)));
+                printf("tcall r%d, 0x%02x\n", rd(ins), i(ins));
                 break;
             case OP_RET:
-                printf("ret r%d, 0x%01x\n", rd(ins), mu_rets(i(ins)));
+                printf("ret r%d, 0x%02x\n", rd(ins), i(ins));
                 break;
         }
     }

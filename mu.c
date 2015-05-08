@@ -141,6 +141,15 @@ static c_t b_print(mu_t *frame) {
     return 0;
 }
 
+static c_t b_test(mu_t *frame) {
+    frame[0] = muint(0);
+    frame[1] = muint(1);
+    frame[2] = muint(2);
+    frame[3] = muint(3);
+
+    return 4;
+}
+
 static void genscope() {
     scope = tbl_create(0);
 
@@ -156,6 +165,7 @@ static void genscope() {
     tbl_assign(scope, mcstr("ops"), mtbl(ops));
     tbl_assign(scope, mcstr("repr"), mbfn(0x1, b_repr));
     tbl_assign(scope, mcstr("print"), mbfn(0xf, b_print));
+    tbl_assign(scope, mcstr("test"), mbfn(0x0, b_test));
 }
 
 static int genargs(int i, int argc, const char **argv) {
