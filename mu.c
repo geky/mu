@@ -204,7 +204,7 @@ static void load_file(FILE *file) {
         off++;
     }
 
-    fn_t *f = fn_parse_fn(str_nstr(buffer+off, len-off), 0);
+    fn_t *f = fn_parse_fn(str_nstr(buffer+off, len-off), scope);
 
     //fn_call_in(f, 0, scope);
     fn_call(f, 0x00);
@@ -242,7 +242,7 @@ static mu_noreturn int interpret() {
 //            mu_t output = fn_call_in(f, 0, scope);
 
             // TODO use strs?
-            mu_dis(f->code);
+//            mu_dis(f->code);
 
             mu_t output = fn_call(f, 0x0f);
             printoutput(output);

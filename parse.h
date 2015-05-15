@@ -54,14 +54,14 @@ typedef struct parse {
     tbl_t *imms;
     tbl_t *fns;
 
-    len_t sp;
-    len_t smax;
+    uintq_t sp;
     uintq_t paren;
     uintq_t args;
 
     struct op_parse op;
     struct l_parse l;
     struct f_parse f;
+    struct fn_flags flags;
 
     enum {
         P_DIRECT,

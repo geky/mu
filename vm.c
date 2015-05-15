@@ -48,6 +48,7 @@ void mu_fconvert(c_t sc, mu_t *sframe, c_t dc, mu_t *dframe) {
 // Encode the specified opcode and return its size
 // Encode the specified opcode and return its size
 // Note: size of the jump opcodes currently can not change based on argument
+// TODO: change asserts to err throwing checks
 void mu_encode(void (*emit)(void *, data_t), void *p,
                op_t op, int_t d, int_t a, int_t b) {
     union {
@@ -63,7 +64,7 @@ void mu_encode(void (*emit)(void *, data_t), void *p,
     if (op >= OP_IMM && op <= OP_DROP) {
         mu_assert(a <= 0xff);
         ins.i |= a;
-    } else if (op >= OP_JTRUE && op <= OP_JFALSE) {
+    } else if (op >= OP_JTRUE && op <= OP_JUMP) {
         mu_assert(a <= 0xff && a >= -0x100);
         ins.i |= 0xff & (a>>1);
     } else { 
@@ -117,6 +118,9 @@ void mu_dis(code_t *c) {
             case OP_TBL:
                 printf("tbl r%d, %d\n", rd(ins), i(ins));
                 break;
+            case OP_MOVE:
+                printf("move r%d, r%d\n", rd(ins), i(ins));
+                break;
             case OP_DUP:
                 printf("dup r%d, r%d\n", rd(ins), i(ins));
                 break;
@@ -126,20 +130,17 @@ void mu_dis(code_t *c) {
             case OP_LOOKUP:
                 printf("lookup r%d, r%d[r%d]\n", rd(ins), ra(ins), rb(ins));
                 break;
+            case OP_LOOKDN:
+                printf("lookdn r%d, r%d[r%d]\n", rd(ins), ra(ins), rb(ins));
+                break;
             case OP_INSERT:
                 printf("insert r%d, r%d[r%d]\n", rd(ins), ra(ins), rb(ins));
                 break;
             case OP_ASSIGN:
                 printf("assign r%d, r%d[r%d]\n", rd(ins), ra(ins), rb(ins));
                 break;
-            case OP_ILOOKUP:
-                printf("ilookup r%d, r%d[r%d]\n", rd(ins), ra(ins), rb(ins));
-                break;
-            case OP_IINSERT:
-                printf("iinsert r%d, r%d[r%d]\n", rd(ins), ra(ins), rb(ins));
-                break;
-            case OP_IASSIGN:
-                printf("iassign r%d, r%d[r%d]\n", rd(ins), ra(ins), rb(ins));
+            case OP_JUMP:
+                printf("jump %d\n", j(ins));
                 break;
             case OP_JTRUE:
                 printf("jtrue r%d, %d\n", rd(ins), j(ins));
@@ -172,6 +173,12 @@ void mu_exec(fn_t *fn, c_t c, mu_t *frame) {
     register uint16_t ins;
 
 reenter:
+    // TODO Just here for debugging
+    printf("-- dis --\n");
+    printf("regs: %u, scope: %u, args: %u\n", 
+           fn->flags.regs, fn->flags.scope, fn->flags.args);
+    mu_dis(fn->code);
+
     {   // Setup the registers and scope
         mu_t regs[fn->flags.regs];
         mu_fconvert(mu_args(c), frame, fn->flags.args, &regs[1]);
@@ -199,6 +206,10 @@ reenter:
                     regs[rd(ins)] = mtbl(tbl_create(i(ins)));
                     break;
 
+                case OP_MOVE:
+                    regs[rd(ins)] = regs[i(ins)];
+                    break;
+
                 case OP_DUP:
                     regs[rd(ins)] = mu_inc(regs[i(ins)]);
                     break;
@@ -209,6 +220,12 @@ reenter:
 
                 case OP_LOOKUP:
                     scratch = mu_lookup(regs[ra(ins)], regs[rb(ins)]);
+                    mu_dec(regs[rb(ins)]);
+                    regs[rd(ins)] = scratch;
+                    break;
+
+                case OP_LOOKDN:
+                    scratch = mu_lookup(regs[ra(ins)], regs[rb(ins)]);
                     mu_dec(regs[ra(ins)]);
                     mu_dec(regs[rb(ins)]);
                     regs[rd(ins)] = scratch;
@@ -216,26 +233,14 @@ reenter:
 
                 case OP_INSERT:
                     mu_insert(regs[ra(ins)], regs[rb(ins)], regs[rd(ins)]);
-                    mu_dec(regs[ra(ins)]);
                     break;
 
                 case OP_ASSIGN:
                     mu_assign(regs[ra(ins)], regs[rb(ins)], regs[rd(ins)]);
-                    mu_dec(regs[ra(ins)]);
                     break;
 
-                case OP_ILOOKUP:
-                    scratch = mu_lookup(regs[ra(ins)], regs[rb(ins)]);
-                    mu_dec(regs[rb(ins)]);
-                    regs[rd(ins)] = scratch;
-                    break;
-
-                case OP_IINSERT:
-                    mu_insert(regs[ra(ins)], regs[rb(ins)], regs[rd(ins)]);
-                    break;
-
-                case OP_IASSIGN:
-                    mu_assign(regs[ra(ins)], regs[rb(ins)], regs[rd(ins)]);
+                case OP_JUMP:
+                    pc += j(ins);
                     break;
 
                 case OP_JTRUE:

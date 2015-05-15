@@ -71,12 +71,15 @@ static void wskip(parse_t *p) {
             while (p->l.pos < p->l.end) {
                 if (*p->l.pos == '\n')
                     break;
+                else
+                    p->l.pos++;
             }
-        } else if (lexs[*p->l.pos] == l_ws ||
-                   (p->paren && *p->l.pos == '\n')) {
+        } else if (lexs[*p->l.pos] == l_ws) {
+            p->l.pos++;
+        } else if (p->paren && *p->l.pos == '\n') {
             p->l.pos++;
         } else {
-            return;
+            break;
         }
     }
 }
