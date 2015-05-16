@@ -30,8 +30,10 @@ struct l_parse {
     const data_t *pos;
     const data_t *end;
 
-    tok_t tok;
     mu_t val;
+    tok_t tok;
+
+    uintq_t lookahead : 1;
 };
 
 struct f_parse {

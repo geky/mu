@@ -14,6 +14,7 @@ ASM := $(SRC:.c=.s)
 
 ifdef DEBUG
 CFLAGS += -O0 -g3 -gdwarf-2 -ggdb -DMU_DEBUG
+CFLAGS += -fkeep-inline-functions
 else
 CFLAGS += -O2
 endif
