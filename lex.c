@@ -122,9 +122,6 @@ static void l_op(parse_t *p) {
     // TODO make these strings preinterned so this is actually reasonable
     if (!isnil(tok)) {
         p->l.tok = getuint(tok);
-
-        if (p->l.tok == T_DOT && lexs[*p->l.pos] == l_kw)
-            p->l.tok = T_KEY2;
     } else if (kw_end[-1] == '=') {
         p->l.tok = T_OPSET;
         p->l.val = mnstr(kw_pos, kw_end-kw_pos-1);

@@ -30,9 +30,6 @@ static void emit(parse_t *p, data_t byte) {
 static void encode(parse_t *p, op_t op,
                    uint_t d, uint_t a, uint_t b, 
                    len_t sdiff) {
-    if (p->l.pass)
-        return;
-
     p->sp += sdiff;
 
     if (p->sp+1 > p->flags.regs)
@@ -44,9 +41,6 @@ static void encode(parse_t *p, op_t op,
 static uint_t imm(parse_t *p, mu_t m) {
     static const ref_t imm_nil = 0;
     
-    if (p->l.pass)
-        return 0;
-
     if (isnil(m))
         m = mtbl((tbl_t *)&imm_nil);
 
@@ -192,8 +186,28 @@ static void p_unpack(parse_t *p);
 static void p_stmt(parse_t *p);
 static void p_stmt_list(parse_t *p);
 
+// Lookahead rules
+static void pp_expr(parse_t *p);
+static void pp_postexpr(parse_t *p);
+static void pp_entry(parse_t *p);
+static void pp_frame(parse_t *p);
+static void pp_pack(parse_t *p);
+static void pp_unpack(parse_t *p);
+static void pp_stmt(parse_t *p);
+static void pp_stmt_list(parse_t *p);
+
+
+static void pp_fn(parse_t *p) {
+    struct f_parse f = p->f;
+    expect(p, '(');
+    pp_frame(p);
+    expect(p, ')');
+
+    pp_stmt(p);
+    p->f = f;
+}
+
 static void p_fn(parse_t *p) {
-    // TODO get rid of this overhead
     parse_t *q = parse_nested(p);
 
     expect(q, '(');
@@ -201,17 +215,12 @@ static void p_fn(parse_t *p) {
     q->f.unpack = true;
     q->insert = true;
 
-    if (!q->l.pass) {
-        struct l_parse l = q->l;
-        q->l.pass = true;
-        q->f.lcount = -1;
-        p_frame(q);
-        q->f.lcount = q->f.rcount;
-        q->l = l;
+    struct l_parse l = q->l;
+    pp_frame(q);
+    q->l = l;
 
-        q->flags.args = q->f.tabled ? 0xf : q->f.lcount;
-        q->sp += q->f.tabled ? 1 : q->f.lcount;
-    }
+    q->flags.args = q->f.tabled ? 0xf : q->f.lcount;
+    q->sp += q->f.tabled ? 1 : q->f.lcount;
 
     p_frame(q);
 
@@ -223,6 +232,35 @@ static void p_fn(parse_t *p) {
     p->l = q->l;
 
     encode(p, OP_FN, p->sp+1, fn(p, parse_realize(q)), 0, +1);
+}
+
+static void pp_expr(parse_t *p) {
+    switch (p->l.tok) {
+        case T_SYM:
+        case T_IMM:
+            mu_lex(p);
+            p->state = P_DIRECT;
+            return pp_postexpr(p);
+
+        case '[':
+            mu_lex(p);
+            {   struct f_parse f = p->f;
+                pp_pack(p);
+                p->f = f;
+            }
+            expect(p, ']');
+            p->state = P_DIRECT;
+            return pp_postexpr(p);
+
+        case T_FN:
+            mu_lex(p);
+            pp_fn(p);
+            p->state = P_DIRECT;
+            return pp_postexpr(p);
+
+        default:
+            unexpected(p);
+    }
 }
 
 static void p_expr(parse_t *p) {
@@ -268,13 +306,46 @@ static void p_expr(parse_t *p) {
     }
 }
 
+static void pp_postexpr(parse_t *p) {
+    switch (p->l.tok) {
+        case T_DOT:
+            mu_lex(p);
+            expect(p, T_SYM);
+            p->state = P_INDIRECT;
+            return pp_postexpr(p);
+
+        case T_REST:
+        case T_OP:
+            if (p->op.lprec <= p->op.rprec)
+                return;
+            mu_lex(p);
+            pp_expr(p);
+            p->state = P_CALLED;
+            return pp_postexpr(p);
+
+        case '(':
+            mu_lex(p);
+            {   struct f_parse f = p->f;
+                pp_pack(p);
+                p->f = f;
+            }
+            expect(p, ')');
+            p->state = P_CALLED;
+            return p_postexpr(p);
+
+        default:
+            return;
+    }
+}
+
 static void p_postexpr(parse_t *p) {
     switch (p->l.tok) {
-        case T_KEY2:
+        case T_DOT:
             mu_lex(p);
             expect_direct(p);
-            encode(p, OP_IMM, p->sp+1, imm(p, p->l.val), 0, +1);
-            mu_lex(p);
+            if (p->l.tok == T_SYM)
+                encode(p, OP_IMM, p->sp+1, imm(p, p->l.val), 0, +1);
+            expect(p, T_SYM);
             p->state = P_INDIRECT;
             return p_postexpr(p);
 
@@ -326,14 +397,27 @@ static void p_postexpr(parse_t *p) {
     }
 }
 
+static void pp_entry(parse_t *p) {
+    pp_expr(p);
+
+    if (p->l.tok == ':') {
+        mu_lex(p);
+        p->f.tabled = true;
+
+        pp_expr(p);
+    } else if (p->l.tok != ',' && 
+               p->f.lcount == 0 && 
+               p->state == P_CALLED) {
+        p->f.call = true;
+    }
+}
+
 static void p_entry(parse_t *p) {
     bool key = false;
 
-    if (!p->l.pass && p->f.unpack && p->f.tabled) {
+    if (p->f.unpack && p->f.tabled) {
         struct l_parse l = p->l;
-        p->l.pass = true;
-        p_expr(p);
-        p->l.pass = false;
+        pp_expr(p);
 
         if (p->l.tok == ':')
             key = true;
@@ -343,7 +427,7 @@ static void p_entry(parse_t *p) {
         p->l = l;
     }
 
-    if (p->l.pass || !p->f.unpack || key) {
+    if (!p->f.unpack || key) {
         switch (p->l.tok) {
             case T_SYM:
                 encode(p, OP_IMM, p->sp+1, imm(p, p->l.val), 0, +1);
@@ -365,13 +449,10 @@ static void p_entry(parse_t *p) {
             mu_lex(p);
             expect_direct(p);
             key = true;
-
-            if (p->l.pass)
-                p->f.tabled = true;
         }
     }
 
-    if (!p->l.pass && p->f.unpack) {
+    if (p->f.unpack) {
         if (p->f.tabled)
             encode(p, p->f.rcount == p->f.lcount-1 ? OP_LOOKDN : OP_LOOKUP,
                    p->sp-(p->f.rcount == p->f.lcount-1), p->sp-1, p->sp, 
@@ -414,9 +495,7 @@ static void p_entry(parse_t *p) {
             encode(p, OP_DROP, p->sp, 0, 0, -1);
             p->f.rcount--;
         }
-    } else if (p->l.tok != ',' && p->f.rcount == 0 && p->state == P_CALLED) {
-        p->f.call = true;
-    } else {
+    } else if (!p->f.call) {
         expect_direct(p);
 
         if (p->f.tabled) {
@@ -429,9 +508,32 @@ static void p_entry(parse_t *p) {
     }
 }
 
+static void pp_frame(parse_t *p) {
+    p->f.lcount = 0;
+    p->f.call = false;
+
+    if (p->l.tok == T_SYM || // TODO get rid of this nonsense
+        p->l.tok == T_IMM ||
+        p->l.tok == '[' ||
+        p->l.tok == T_FN) {
+
+        while (true) {
+            pp_entry(p);
+            p->f.lcount++;
+
+            if (p->l.tok != ',')
+                break;
+
+            mu_lex(p);
+        }
+    }
+
+    if (p->f.lcount > MU_FRAME)
+        p->f.tabled = true;
+}
+
 static void p_frame(parse_t *p) {
     p->f.rcount = 0;
-    p->f.call = false;
 
     if (p->l.tok == T_SYM || // TODO get rid of this nonsense
         p->l.tok == T_IMM ||
@@ -448,60 +550,50 @@ static void p_frame(parse_t *p) {
             mu_lex(p);
         }
     }
+}
 
-    if (p->l.pass && p->f.rcount > MU_FRAME)
-        p->f.tabled = true;
+static void pp_pack(parse_t *p) {
+    pp_frame(p);
 }
 
 static void p_pack(parse_t *p) {
-    if (!p->l.pass) {
-        struct l_parse l = p->l;
-        p->l.pass = true;
-        p->f.lcount = -1;
-        p_frame(p);
-        p->f.lcount = p->f.rcount;
-        p->l = l;
+    struct l_parse l = p->l;
+    pp_frame(p);
+    p->l = l;
 
-        if (p->f.tabled && !p->f.unpack && !p->f.call)
-            encode(p, OP_TBL, p->sp+1, p->f.lcount, 0, +1);
-    }
+    if (p->f.tabled && !p->f.unpack && !p->f.call)
+        encode(p, OP_TBL, p->sp+1, p->f.lcount, 0, +1);
 
     p_frame(p);
 }
 
-static void p_unpack(parse_t *p) {
-    if (p->l.pass) {
-        p_frame(p);
+static void pp_unpack(parse_t *p) {
+    pp_frame(p);
 
-        if (p->l.tok == '=') {
-            mu_lex(p);
-            p_frame(p);
-        }
-
-        return;
+    if (p->l.tok == '=') {
+        mu_lex(p);
+        pp_frame(p);
     }
+}
 
+static void p_unpack(parse_t *p) {
     p->f.tabled = false;
 
     struct l_parse l = p->l;
-    p->l.pass = true;
-    p->f.lcount = -1;
-    p_frame(p);
-    p->f.lcount = p->f.rcount;
+    pp_frame(p);
 
     if (p->insert || p->l.tok == '=') {
         expect(p, '=');
 
         if (p->f.tabled) {
             struct l_parse l = p->l;
-            p_frame(p);
+            pp_frame(p);
             p->l = l;
 
             if (!p->f.call)
                 encode(p, OP_TBL, p->sp+1, p->f.rcount, 0, +1);
         }
 
-        p->l.pass = false;
         p->f.unpack = false;
         p_frame(p);
 
@@ -520,10 +612,7 @@ static void p_unpack(parse_t *p) {
         p_frame(p);
 
         expect(p, '=');
-
-        p->l.pass = true;
-        p_frame(p);
-        p->l.pass = false;
+        pp_frame(p);
 
         if (!p->f.tabled)
             p->sp -= p->f.lcount;
@@ -539,6 +628,29 @@ static void p_unpack(parse_t *p) {
                    0 - (p->args == 0xf ? 2 : p->args+1));
         else
             p->sp -= p->f.tabled ? 1 : p->f.lcount;
+    }
+}
+
+static void pp_stmt(parse_t *p) {
+    switch (p->l.tok) {
+        case '{':
+            mu_lex(p);
+            pp_stmt_list(p);
+            expect(p, '}');
+            return;
+
+        case T_ARROW:
+        case T_RETURN:
+            mu_lex(p);
+            pp_pack(p);
+            return;
+
+        case T_LET:
+            mu_lex(p);
+            return pp_unpack(p);
+
+        default:
+            return pp_unpack(p);
     }
 }
 
@@ -579,6 +691,17 @@ static void p_stmt(parse_t *p) {
             p->f.tabled = false;
             p->insert = false;
             return p_unpack(p);
+    }
+}
+
+static void pp_stmt_list(parse_t *p) {
+    while (true) {
+        pp_stmt(p);
+
+        if (p->l.tok != ';')
+            break;
+
+        mu_lex(p);
     }
 }
 
