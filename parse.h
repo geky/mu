@@ -26,6 +26,7 @@ typedef struct parse parse_t;
 
 // Specific state structures
 
+// TODO move this lex.c?
 struct l_parse {
     const data_t *pos;
     const data_t *end;
@@ -33,6 +34,8 @@ struct l_parse {
     mu_t val;
     tok_t tok;
 
+    uintq_t paren;
+    uintq_t indent;
     uintq_t lookahead : 1;
 };
 
@@ -55,10 +58,6 @@ typedef struct parse {
     tbl_t *imms;
     tbl_t *fns;
 
-    uintq_t sp;
-    uintq_t paren;
-    uintq_t args;
-
     struct op_parse op;
     struct l_parse l;
     struct f_parse f;
@@ -71,11 +70,10 @@ typedef struct parse {
         P_CALLED
     } state;
 
-    //bool indirect     : 1;
-    //bool scoped       : 1;
-    //bool rested       : 1;
-    bool insert       : 1;
-    //bool unpack       : 1;
+    uintq_t sp;
+    uintq_t args;
+
+    bool insert   : 1;
 } parse_t;
 
 

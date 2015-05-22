@@ -76,7 +76,7 @@ static void wskip(parse_t *p) {
             }
         } else if (lexs[*p->l.pos] == l_ws) {
             p->l.pos++;
-        } else if (p->paren && *p->l.pos == '\n') {
+        } else if (p->l.paren && *p->l.pos == '\n') {
             p->l.pos++;
         } else {
             break;
@@ -94,9 +94,31 @@ static void l_ws(parse_t *p) {
 }
 
 static void l_nl(parse_t *p) {
-    if (!p->paren) {
+    if (!p->l.paren) {
+        const data_t *npos = p->l.pos+1;
+
+        while (lexs[*npos] == l_ws && *p->l.pos != '#') {
+            npos++;
+        }
+
+        if (*npos != '\n' && *npos != '#') {
+            int_t nindent = npos - (p->l.pos+1);
+
+            if (nindent > MU_MAXUINTQ) {
+                mu_err_parse(); // TODO better message
+            } else if (nindent > p->l.indent) {
+                p->l.tok = '{';
+                p->l.indent++;
+                return;
+            } else if (nindent < p->l.indent) {
+                p->l.tok = '}';
+                p->l.indent--;
+                return;
+            }
+        }
+
         p->l.tok = ';';
-        p->l.pos++;
+        p->l.pos = npos;
     } else {
         return l_ws(p);
     }
@@ -242,9 +264,28 @@ void (* const lexs[256])(parse_t *) = {
 
 // Performs lexical analysis on the passed string
 void mu_lex(parse_t *p) {
-    if (p->l.pos < p->l.end)
-        lexs[*p->l.pos](p);
-    else
+    static int in = 0;
+    in++;
+
+    if (!p->l.lookahead && in == 1) {
+        if (*p->l.pos == '\n')
+            printf("n");
+    }
+
+    if (p->l.pos >= p->l.end)
         p->l.tok = 0;
+    else
+        lexs[*p->l.pos](p);
+
+    if (!p->l.lookahead && in == 1) {
+        if (p->l.tok == '{')
+            printf("{\n");
+        else if (p->l.tok == '}') 
+            printf("}\n");
+        else if (p->l.tok == ';')
+            printf(";\n");
+    }
+
+    in--;
 }
 

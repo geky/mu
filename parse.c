@@ -503,7 +503,6 @@ static void p_pack(parse_t *p) {
     }
 }
 
-// TODO prevent 'a=', '=2', '=' from being valid?
 static void p_unpack(parse_t *p) {
     if (p->l.lookahead) {
         p_frame(p);
@@ -536,7 +535,9 @@ static void p_unpack(parse_t *p) {
             p->f.unpack = false;
             p_frame(p);
 
-            if (p->f.call) {
+            if (p->f.rcount == 0 || p->f.lcount == 0) {
+                mu_err_parse();
+            } else if (p->f.call) {
                 encode(p, OP_CALL, p->sp-(p->args == 0xf ? 1 : p->args),
                        p->args, p->f.tabled ? 0xf : p->f.lcount,
                        (p->f.tabled ? 1 : p->f.lcount)
@@ -556,7 +557,7 @@ static void p_unpack(parse_t *p) {
             p->l.lookahead = false;
 
             if (!p->f.tabled)
-                p->sp -= p->f.lcount;
+                p->sp -= p->f.rcount;
         } else {
             p->l = l;
             p->f.lcount = 0;
