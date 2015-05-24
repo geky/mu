@@ -10,6 +10,7 @@
 #include <string.h>
 
 
+// TODO make all these expects better messages
 // Parsing error handling
 static mu_noreturn void unexpected(parse_t *p) {
     mu_err_parse();
@@ -577,9 +578,29 @@ static void p_unpack(parse_t *p) {
 static void p_stmt(parse_t *p) {
     switch (p->l.tok) {
         case '{':
-            mu_lex(p);
-            p_stmt_list(p);
-            expect(p, '}');
+            {   int_t indent = 0;
+                while (p->l.tok == '{') {
+                    indent += getuint(p->l.val);
+                    mu_lex(p);
+                }
+
+                while (true) {
+                    p_stmt_list(p);
+                    if (p->l.tok != '}')
+                        mu_err_parse(); // TODO better message blablabla
+
+                    indent -= getuint(p->l.val);
+                    if (indent <= 0)
+                        break;
+
+                    mu_lex(p);
+                }
+
+                if (indent < 0)
+                    p->l.val = muint(-indent);
+                else
+                    mu_lex(p);
+            }
             return;
 
         case T_ARROW:

@@ -97,7 +97,7 @@ static void l_nl(parse_t *p) {
     if (!p->l.paren) {
         const data_t *npos = p->l.pos+1;
 
-        while (lexs[*npos] == l_ws && *p->l.pos != '#') {
+        while (lexs[*npos] == l_ws && *npos != '#') {
             npos++;
         }
 
@@ -107,12 +107,14 @@ static void l_nl(parse_t *p) {
             if (nindent > MU_MAXUINTQ) {
                 mu_err_parse(); // TODO better message
             } else if (nindent > p->l.indent) {
-                p->l.tok = '{';
-                p->l.indent++;
+                p->l.tok = '{'; // TODO does this only happen after \n?
+                p->l.val = muint(nindent - p->l.indent);
+                p->l.indent = nindent;
                 return;
             } else if (nindent < p->l.indent) {
                 p->l.tok = '}';
-                p->l.indent--;
+                p->l.val = muint(p->l.indent - nindent);
+                p->l.indent = nindent;
                 return;
             }
         }
@@ -179,6 +181,9 @@ static void l_kw(parse_t *p) {
 
 static void l_tok(parse_t *p) {
     p->l.tok = *p->l.pos++;
+
+    // Note: this is really just for brackets
+    p->l.val = muint(1);
 }
 
 static void l_num(parse_t *p) {
@@ -264,28 +269,9 @@ void (* const lexs[256])(parse_t *) = {
 
 // Performs lexical analysis on the passed string
 void mu_lex(parse_t *p) {
-    static int in = 0;
-    in++;
-
-    if (!p->l.lookahead && in == 1) {
-        if (*p->l.pos == '\n')
-            printf("n");
-    }
-
     if (p->l.pos >= p->l.end)
         p->l.tok = 0;
     else
         lexs[*p->l.pos](p);
-
-    if (!p->l.lookahead && in == 1) {
-        if (p->l.tok == '{')
-            printf("{\n");
-        else if (p->l.tok == '}') 
-            printf("}\n");
-        else if (p->l.tok == ';')
-            printf(";\n");
-    }
-
-    in--;
 }
 
