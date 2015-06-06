@@ -17,51 +17,30 @@ typedef struct parse parse_t;
 #define MU_PARSE_H
 #define MU_DEF
 #include "parse.h"
-#include "lex.h"
 #include "mem.h"
 #include "types.h"
 #undef MU_DEF
 #include "fn.h"
+#include "lex.h"
 
 
 // Specific state structures
-
-// TODO move this lex.c?
-struct l_parse {
-    const data_t *pos;
-    const data_t *end;
-
-    mu_t val;
-    tok_t tok;
-
-    uintq_t paren;
-    uintq_t indent;
-    uintq_t lookahead : 1;
-};
-
-struct f_parse {
-    len_t lcount;
-    len_t rcount;
-    uintq_t tabled  : 1;
-    uintq_t call    : 1;
-    uintq_t unpack  : 1;
-};
-
-struct op_parse {
-    uintq_t lprec;
-    uintq_t rprec;
-};
-
-typedef struct parse {
+struct parse {
     mstr_t *bcode;
     len_t bcount;
     tbl_t *imms;
     tbl_t *fns;
 
-    struct op_parse op;
-    struct l_parse l;
-    struct f_parse f;
+    lex_t l;
     struct fn_flags flags;
+
+    struct f_parse {
+        len_t lcount;
+        len_t rcount;
+        uintq_t tabled  : 1;
+        uintq_t call    : 1;
+        uintq_t unpack  : 1;
+    } f;
 
     enum {
         P_DIRECT,
@@ -73,8 +52,10 @@ typedef struct parse {
     uintq_t sp;
     uintq_t args;
 
-    bool insert   : 1;
-} parse_t;
+    uintq_t insert  : 1;
+    uintq_t stmt    : 1;
+    uintq_t single  : 1;
+};
 
 
 // Entry points into parsing Mu source into bytecode

@@ -56,15 +56,15 @@ void mu_encode(void (*emit)(void *, data_t), void *p,
         data_t d[2];
     } ins = {0};
 
-    mu_assert(op < 0xf);
-    mu_assert(d < 0xf);
+    mu_assert(op <= 0xf);
+    mu_assert(d <= 0xf);
     ins.i |= op << 12;
     ins.i |= d << 8;
 
     if (op >= OP_IMM && op <= OP_DROP) {
         mu_assert(a <= 0xff);
         ins.i |= a;
-    } else if (op >= OP_JTRUE && op <= OP_JUMP) {
+    } else if (op >= OP_JFALSE && op <= OP_JUMP) {
         mu_assert(a <= 0xff && a >= -0x100);
         ins.i |= 0xff & (a>>1);
     } else { 

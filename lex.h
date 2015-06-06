@@ -56,15 +56,32 @@ typedef enum tok {
 } tok_t;
 
 
+typedef struct lex lex_t;
+
+
 #endif
 #else
 #ifndef MU_LEX_H
 #define MU_LEX_H
 #define MU_DEF
 #include "lex.h"
-#include "parse.h"
 #include "types.h"
 #undef MU_DEF
+
+// State of lexical analysis
+struct lex {
+    const data_t *pos;
+    const data_t *end;
+
+    mu_t val;
+    tok_t tok;
+
+    uintq_t lprec;
+    uintq_t rprec;
+    uintq_t indent;
+    uintq_t paren;
+    uintq_t lookahead : 1;
+};
 
 
 // Creates internal tables for keywords or uses prexisting.
@@ -72,7 +89,7 @@ mu_const tbl_t *mu_keys(void);
 
 // Performs lexical analysis on current location in string
 // Updates position, stores token type in tok, and value in val
-void mu_lex(parse_t *);
+void mu_lex(lex_t *);
 
 
 #endif

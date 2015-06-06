@@ -112,9 +112,14 @@ static c_t b_mul(mu_t *frame) {
 }
 
 static c_t b_sub(mu_t *frame) {
-    assert(isnum(frame[0]) && isnum(frame[1]));
-    frame[0] = mdouble(getdouble(frame[0]) - getdouble(frame[1]));
-    return 1;
+    if (isnil(frame[1])) {
+        frame[0] = mdouble(-getdouble(frame[0]));
+        return 1;
+    } else {
+        assert(isnum(frame[0]) && isnum(frame[1]));
+        frame[0] = mdouble(getdouble(frame[0]) - getdouble(frame[1]));
+        return 1;
+    }
 }
 
 static c_t b_equals(mu_t *frame) {

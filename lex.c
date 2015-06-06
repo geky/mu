@@ -53,153 +53,153 @@ mu_const tbl_t *mu_syms(void) {
 
 
 // Lexer definitions for Mu's tokens
-extern void (* const lexs[256])(parse_t *);
+extern void (* const lexs[256])(lex_t *);
 
-static mu_noreturn void l_bad(parse_t *p);
-static void l_ws(parse_t *p);
-static void l_op(parse_t *p);
-static void l_kw(parse_t *p);
-static void l_tok(parse_t *p);
-static void l_nl(parse_t *p);
-static void l_num(parse_t *p);
-static void l_str(parse_t *p);
+static mu_noreturn void l_bad(lex_t *l);
+static void l_ws(lex_t *l);
+static void l_op(lex_t *l);
+static void l_kw(lex_t *l);
+static void l_tok(lex_t *l);
+static void l_nl(lex_t *l);
+static void l_num(lex_t *l);
+static void l_str(lex_t *l);
 
 // Helper function for skipping whitespace
-static void wskip(parse_t *p) {
-    while (p->l.pos < p->l.end) {
-        if (*p->l.pos == '#') {
-            while (p->l.pos < p->l.end) {
-                if (*p->l.pos == '\n')
+static void wskip(lex_t *l) {
+    while (l->pos < l->end) {
+        if (*l->pos == '#') {
+            while (l->pos < l->end) {
+                if (*l->pos == '\n')
                     break;
                 else
-                    p->l.pos++;
+                    l->pos++;
             }
-        } else if (lexs[*p->l.pos] == l_ws) {
-            p->l.pos++;
-        } else if (p->l.paren && *p->l.pos == '\n') {
-            p->l.pos++;
+        } else if (lexs[*l->pos] == l_ws) {
+            l->pos++;
+        } else if (l->paren && *l->pos == '\n') {
+            l->pos++;
         } else {
             break;
         }
     }
 }
 
-static mu_noreturn void l_bad(parse_t *p) {
+static mu_noreturn void l_bad(lex_t *l) {
     mu_err_parse();
 }
 
-static void l_ws(parse_t *p) {
-    wskip(p);
-    return mu_lex(p);
+static void l_ws(lex_t *l) {
+    wskip(l);
+    return mu_lex(l);
 }
 
-static void l_nl(parse_t *p) {
-    if (!p->l.paren) {
-        const data_t *npos = p->l.pos+1;
+static void l_nl(lex_t *l) {
+    if (!l->paren) {
+        const data_t *npos = l->pos+1;
 
         while (lexs[*npos] == l_ws && *npos != '#') {
             npos++;
         }
 
         if (*npos != '\n' && *npos != '#') {
-            int_t nindent = npos - (p->l.pos+1);
+            int_t nindent = npos - (l->pos+1);
 
             if (nindent > MU_MAXUINTQ) {
                 mu_err_parse(); // TODO better message
-            } else if (nindent > p->l.indent) {
-                p->l.tok = '{'; // TODO does this only happen after \n?
-                p->l.val = muint(nindent - p->l.indent);
-                p->l.indent = nindent;
+            } else if (nindent > l->indent) {
+                l->tok = '{'; // TODO does this only happen after \n?
+                l->val = muint(nindent - l->indent);
+                l->indent = nindent;
                 return;
-            } else if (nindent < p->l.indent) {
-                p->l.tok = '}';
-                p->l.val = muint(p->l.indent - nindent);
-                p->l.indent = nindent;
+            } else if (nindent < l->indent) {
+                l->tok = '}';
+                l->val = muint(l->indent - nindent);
+                l->indent = nindent;
                 return;
             }
         }
 
-        p->l.tok = ';';
-        p->l.pos = npos;
+        l->tok = ';';
+        l->pos = npos;
     } else {
-        return l_ws(p);
+        return l_ws(l);
     }
 }
 
-static void l_op(parse_t *p) {
-    const data_t *kw_pos = p->l.pos++;
+static void l_op(lex_t *l) {
+    const data_t *kw_pos = l->pos++;
     const data_t *kw_end;
 
-    while (p->l.pos < p->l.end && (lexs[*p->l.pos] == l_op ||
-                               *p->l.pos == ':' ||
-                               *p->l.pos == '=')) {
-        p->l.pos++;
+    while (l->pos < l->end && (lexs[*l->pos] == l_op ||
+                               *l->pos == ':' ||
+                               *l->pos == '=')) {
+        l->pos++;
     }
 
-    kw_end = p->l.pos;
-    p->l.val = mnstr(kw_pos, kw_end-kw_pos);
-    mu_t tok = tbl_lookup(mu_syms(), p->l.val);
+    kw_end = l->pos;
+    l->val = mnstr(kw_pos, kw_end-kw_pos);
+    mu_t tok = tbl_lookup(mu_syms(), l->val);
 
-    wskip(p);
-    p->op.rprec = p->l.pos - kw_end;
+    wskip(l);
+    l->rprec = l->pos - kw_end;
 
     // TODO make these strings preinterned so this is actually reasonable
     if (!isnil(tok)) {
-        p->l.tok = getuint(tok);
+        l->tok = getuint(tok);
     } else if (kw_end[-1] == '=') {
-        p->l.tok = T_OPSET;
-        p->l.val = mnstr(kw_pos, kw_end-kw_pos-1);
+        l->tok = T_OPSET;
+        l->val = mnstr(kw_pos, kw_end-kw_pos-1);
     } else {
-        p->l.tok = T_OP;
+        l->tok = T_OP;
     }
 }
 
-static void l_kw(parse_t *p) {
-    const data_t *kw_pos = p->l.pos++;
+static void l_kw(lex_t *l) {
+    const data_t *kw_pos = l->pos++;
     const data_t *kw_end;
 
-    while (p->l.pos < p->l.end && (lexs[*p->l.pos] == l_kw ||
-                               lexs[*p->l.pos] == l_num)) {
-        p->l.pos++;
+    while (l->pos < l->end && (lexs[*l->pos] == l_kw ||
+                               lexs[*l->pos] == l_num)) {
+        l->pos++;
     }
 
-    kw_end = p->l.pos;
-    p->l.val = mnstr(kw_pos, kw_end-kw_pos);
-    mu_t tok = tbl_lookup(mu_keys(), p->l.val);
+    kw_end = l->pos;
+    l->val = mnstr(kw_pos, kw_end-kw_pos);
+    mu_t tok = tbl_lookup(mu_keys(), l->val);
 
-    wskip(p);
-    p->op.rprec = p->l.pos - kw_end;
+    wskip(l);
+    l->rprec = l->pos - kw_end;
 
     if (isnil(tok)) {
-        p->l.tok = T_SYM;
-    } else if (getuint(tok) == T_FN && lexs[*p->l.pos] == l_kw) {
-        p->l.tok = T_FNSET;
+        l->tok = T_SYM;
+    } else if (getuint(tok) == T_FN && lexs[*l->pos] == l_kw) {
+        l->tok = T_FNSET;
     } else {
-        p->l.tok = getuint(tok);
+        l->tok = getuint(tok);
     }
 }
 
-static void l_tok(parse_t *p) {
-    p->l.tok = *p->l.pos++;
+static void l_tok(lex_t *l) {
+    l->tok = *l->pos++;
 
     // Note: this is really just for brackets
-    p->l.val = muint(1);
+    l->val = muint(1);
 }
 
-static void l_num(parse_t *p) {
-    p->l.tok = T_IMM;
-    p->l.val = mnum(num_parse(&p->l.pos, p->l.end));
+static void l_num(lex_t *l) {
+    l->tok = T_IMM;
+    l->val = mnum(num_parse(&l->pos, l->end));
 }
 
-static void l_str(parse_t *p) {
-    p->l.tok = T_IMM;
-    p->l.val = mstr(str_parse(&p->l.pos, p->l.end));
+static void l_str(lex_t *l) {
+    l->tok = T_IMM;
+    l->val = mstr(str_parse(&l->pos, l->end));
 }
 
 
 // Lookup table of lex functions based 
 // only on first character of token
-void (* const lexs[256])(parse_t *) = {
+void (* const lexs[256])(lex_t *) = {
 /* 00 01 02 03 */   l_bad,  l_bad,  l_bad,  l_bad,
 /* 04 05 06 \a */   l_bad,  l_bad,  l_bad,  l_bad,
 /* \b \t \n \v */   l_bad,  l_ws,   l_nl,   l_ws,
@@ -268,10 +268,10 @@ void (* const lexs[256])(parse_t *) = {
 
 
 // Performs lexical analysis on the passed string
-void mu_lex(parse_t *p) {
-    if (p->l.pos >= p->l.end)
-        p->l.tok = 0;
+void mu_lex(lex_t *l) {
+    if (l->pos >= l->end)
+        l->tok = 0;
     else
-        lexs[*p->l.pos](p);
+        lexs[*l->pos](l);
 }
 

@@ -37,7 +37,7 @@ mu_inline c_t mu_rets(c_t c) { return 0xf & c; }
 #undef MU_DEF
 
 
-// Encode the specified opcode and return its size
+// Encode the specified opcode
 // Note: size of the jump opcodes currently can not change based on argument
 void mu_encode(void (*emit)(void *, data_t), void *p,
                op_t op, int_t d, int_t a, int_t b);
