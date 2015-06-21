@@ -275,3 +275,8 @@ void mu_lex(lex_t *l) {
         lexs[*l->pos](l);
 }
 
+// TODO implement this correctly
+void mu_scan(lex_t *l) {
+    return mu_lex(l);
+}
+

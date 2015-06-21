@@ -80,7 +80,6 @@ struct lex {
     uintq_t rprec;
     uintq_t indent;
     uintq_t paren;
-    uintq_t lookahead : 1;
 };
 
 
@@ -90,6 +89,11 @@ mu_const tbl_t *mu_keys(void);
 // Performs lexical analysis on current location in string
 // Updates position, stores token type in tok, and value in val
 void mu_lex(lex_t *);
+
+// Performs lexical analysis on current location in string
+// Updates position, stores token type in tok, but does not create 
+// values on the heap
+void mu_scan(lex_t *);
 
 
 #endif
