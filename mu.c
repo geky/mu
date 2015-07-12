@@ -9,7 +9,6 @@
 #include "tbl.h"
 #include "fn.h"
 #include "err.h"
-#include "vm.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -99,19 +98,19 @@ static len_t prompt(data_t *input) {
 
 
 // TODO move this scope declaration somewhere else
-static c_t b_add(mu_t *frame) {
+static frame_t b_add(mu_t *frame) {
     assert(isnum(frame[0]) && isnum(frame[1]));
     frame[0] = mdouble(getdouble(frame[0]) + getdouble(frame[1]));
     return 1;
 }
 
-static c_t b_mul(mu_t *frame) {
+static frame_t b_mul(mu_t *frame) {
     assert(isnum(frame[0]) && isnum(frame[1]));
     frame[0] = mdouble(getdouble(frame[0]) * getdouble(frame[1]));
     return 1;
 }
 
-static c_t b_sub(mu_t *frame) {
+static frame_t b_sub(mu_t *frame) {
     if (isnil(frame[1])) {
         frame[0] = mdouble(-getdouble(frame[0]));
         return 1;
@@ -122,13 +121,13 @@ static c_t b_sub(mu_t *frame) {
     }
 }
 
-static c_t b_concat(mu_t *frame) {
+static frame_t b_concat(mu_t *frame) {
     assert(istbl(frame[0]) && istbl(frame[1]));
     frame[0] = mtbl(tbl_concat(gettbl(frame[0]), gettbl(frame[1]), frame[2]));
     return 1;
 }
 
-static c_t b_pop(mu_t *frame) {
+static frame_t b_pop(mu_t *frame) {
     assert(istbl(frame[0]));
     if (isnil(frame[1])) {
         frame[1] = muint(getlen(frame[0])-1);
@@ -137,7 +136,7 @@ static c_t b_pop(mu_t *frame) {
     return 1;
 }
 
-static c_t b_push(mu_t *frame) {
+static frame_t b_push(mu_t *frame) {
     assert(istbl(frame[0]));
     if (isnil(frame[2])) {
         frame[2] = muint(getlen(frame[0]));
@@ -146,21 +145,21 @@ static c_t b_push(mu_t *frame) {
     return 0;
 }
 
-static c_t b_equals(mu_t *frame) {
+static frame_t b_equals(mu_t *frame) {
     bool r = mu_equals(frame[0], frame[1]);
     mu_dec(frame[0]); mu_dec(frame[1]);
     frame[0] = r ? muint(1) : mnil;
     return 1;
 }
 
-static c_t b_repr(mu_t *frame) {
+static frame_t b_repr(mu_t *frame) {
     str_t *r = mu_repr(frame[0]);
     mu_dec(frame[0]);
     frame[0] = mstr(r);
     return 1;
 }
 
-static c_t b_print(mu_t *frame) {
+static frame_t b_print(mu_t *frame) {
     tbl_for_begin (k, v, gettbl(frame[0])) {
         printvar(v);
     } tbl_for_end;
@@ -170,7 +169,7 @@ static c_t b_print(mu_t *frame) {
     return 0;
 }
 
-static c_t b_test(mu_t *frame) {
+static frame_t b_test(mu_t *frame) {
     frame[0] = muint(0);
     frame[1] = muint(1);
     frame[2] = muint(2);

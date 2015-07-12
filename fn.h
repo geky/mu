@@ -7,8 +7,22 @@
 #define MU_FN_DEF
 #include "mu.h"
 
+
 // Definition of Mu function type
 typedef mu_aligned struct fn fn_t;
+
+// Number of elements that can be stored in a frame.
+// Passing more than 'MU_FRAME' elements simply stores
+// a full table in the first element.
+#define MU_FRAME 4
+
+// Type for specifying input and output frame counts 
+// during function calls. 
+// Highest nibble: argument count
+// Lowest nibble: return count
+// 0xf should be used to indicate more than 'MU_FRAME'.
+typedef unsigned char frame_t;
+
     
 #endif
 #else
@@ -16,19 +30,19 @@ typedef mu_aligned struct fn fn_t;
 #define MU_FN_H
 #include "types.h"
 #define MU_DEF
-#include "vm.h"
+#include "fn.h"
 #undef MU_DEF
 
 
 // Definition of C Function types
-typedef c_t bfn_t(mu_t *frame);
-typedef c_t sbfn_t(tbl_t *closure, mu_t *frame);
+typedef frame_t bfn_t(mu_t *frame);
+typedef frame_t sbfn_t(tbl_t *closure, mu_t *frame);
 
 // Flags used to define operation of functions
 struct fn_flags {
     uintq_t regs;   // number of registers
     uintq_t scope;  // size of scope to allocate
-    uintq_t args;   // argument count
+    frame_t args;   // argument count
     uintq_t type;   // function type
 };
 
@@ -68,16 +82,22 @@ struct fn {
 
 
 // C Function creating functions and macros
-fn_t *fn_bfn(c_t args, bfn_t *bfn);
-fn_t *fn_sbfn(c_t args, sbfn_t *sbfn, tbl_t *closure);
+fn_t *fn_bfn(frame_t args, bfn_t *bfn);
+fn_t *fn_sbfn(frame_t args, sbfn_t *sbfn, tbl_t *closure);
 
-mu_inline mu_t mbfn(c_t args, bfn_t *bfn) {
+mu_inline mu_t mbfn(frame_t args, bfn_t *bfn) {
     return mfn(fn_bfn(args, bfn));
 }
 
-mu_inline mu_t msbfn(c_t args, sbfn_t *sbfn, tbl_t *closure) { 
+mu_inline mu_t msbfn(frame_t args, sbfn_t *sbfn, tbl_t *closure) { 
     return mfn(fn_sbfn(args, sbfn, closure)); 
 }
+
+
+// Conversion between different frame types
+// Supports inplace conversion
+void mu_fconvert(frame_t dcount, mu_t *dframe,
+                 frame_t scount, mu_t *sframe);
 
 
 // Mu Function creating functions
@@ -119,9 +139,9 @@ mu_inline const void *code_bcode(code_t *code) {
 
 
 // C interface for calling functions
-void fn_fcall(fn_t *fn, c_t c, mu_t *frame);
+void fn_fcall(fn_t *fn, frame_t c, mu_t *frame);
 
-mu_t fn_call(fn_t *fn, c_t c, ...);
+mu_t fn_call(fn_t *fn, frame_t c, ...);
 
 
 // Function representation

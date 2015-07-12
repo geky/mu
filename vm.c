@@ -10,41 +10,6 @@
 #include <string.h>
 
 
-// Conversion function for handling frames
-void mu_fconvert(c_t sc, mu_t *sframe, c_t dc, mu_t *dframe) {
-    if (dc > MU_FRAME) {
-        if (sc > MU_FRAME) {
-            *dframe = *sframe;
-        } else {
-            tbl_t *tbl = tbl_create(sc);
-
-            for (uint_t i = 0; i < sc; i++)
-                tbl_insert(tbl, muint(i), sframe[i]);
-
-            *dframe = mtbl(tbl);
-        }
-    } else {
-        if (sc > MU_FRAME) {
-            tbl_t *tbl = gettbl(*sframe);
-
-            for (uint_t i = 0; i < dc; i++)
-                dframe[i] = tbl_lookup(tbl, muint(i));
-
-            tbl_dec(tbl);
-        } else {
-            for (uint_t i = 0; i < sc && i < dc; i++)
-                dframe[i] = sframe[i];
-
-            for (uint_t i = dc; i < sc; i++)
-                mu_dec(sframe[i]);
-
-            for (uint_t i = sc; i < dc; i++)
-                dframe[i] = mnil;
-        }
-    }
-}
-
-
 // Encode the specified opcode and return its size
 // Encode the specified opcode and return its size
 // Note: size of the jump opcodes currently can not change based on argument
@@ -163,7 +128,7 @@ void mu_dis(code_t *c) {
 
 
 // Execute bytecode
-void mu_exec(fn_t *fn, c_t c, mu_t *frame) {
+void mu_exec(fn_t *fn, frame_t c, mu_t *frame) {
     // Allocate temporary variables
     register const uint16_t *pc;
     mu_t *imms;
@@ -181,7 +146,7 @@ reenter:
 
     {   // Setup the registers and scope
         mu_t regs[fn->flags.regs];
-        mu_fconvert(mu_args(c), frame, fn->flags.args, &regs[1]);
+        mu_fconvert(fn->flags.args, &regs[1], c >> 4, frame);
         regs[0] = mtbl(tbl_extend(fn->flags.scope, fn->closure));
 
         // Setup other state
@@ -261,7 +226,7 @@ reenter:
 
                 case OP_TCALL:
                     scratch = regs[rd(ins)];
-                    c = mu_c(ra(ins), mu_rets(c));
+                    c = (ra(ins) << 4) | (c & 0xf);
                     memcpy(frame, &regs[rd(ins)+1], sizeof(mu_t)*fa(ins));
                     mu_dec(regs[0]);
                     fn_dec(fn);
@@ -270,7 +235,7 @@ reenter:
                 case OP_RET:
                     mu_dec(regs[0]);
                     fn_dec(fn);
-                    mu_fconvert(rb(ins), &regs[rd(ins)], mu_rets(c), frame);
+                    mu_fconvert(c & 0xf, frame, rb(ins), &regs[rd(ins)]);
                     return;
 
                 default:

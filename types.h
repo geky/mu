@@ -54,7 +54,6 @@ typedef union mu {
 #define MU_TYPES_H
 #define MU_DEF
 #include "types.h"
-#include "vm.h"
 #undef MU_DEF
 #include "mem.h"
 #include <string.h> // TODO rm?
@@ -172,8 +171,8 @@ void mu_assign(mu_t m, mu_t key, mu_t val);
 void mu_insert(mu_t m, mu_t key, mu_t val);
 
 // Function calls performed on variables
-void mu_fcall(mu_t m, c_t c, mu_t *frame);
-mu_t mu_call(mu_t m, c_t c, ...);
+void mu_fcall(mu_t m, frame_t c, mu_t *frame);
+mu_t mu_call(mu_t m, frame_t c, ...);
 
 
 #endif

@@ -501,7 +501,7 @@ void tbl_assign(tbl_t *t, mu_t key, mu_t val) {
 
 
 // Performs iteration on a table
-c_t tbl_0_iteration(tbl_t *scope, mu_t *frame) {
+frame_t tbl_0_iteration(tbl_t *scope, mu_t *frame) {
     tbl_t *tbl = gettbl(tbl_lookup(scope, muint(0)));
     uint_t i = getuint(tbl_lookup(scope, muint(1)));
 
@@ -515,7 +515,7 @@ c_t tbl_0_iteration(tbl_t *scope, mu_t *frame) {
     return 2;
 }
 
-c_t tbl_1_iteration(tbl_t *scope, mu_t *frame) {
+frame_t tbl_1_iteration(tbl_t *scope, mu_t *frame) {
     tbl_t *tbl = gettbl(tbl_lookup(scope, muint(0)));
     uint_t i = getuint(tbl_lookup(scope, muint(1)));
 
@@ -529,7 +529,7 @@ c_t tbl_1_iteration(tbl_t *scope, mu_t *frame) {
     return 2;
 }
 
-c_t tbl_2_iteration(tbl_t *scope, mu_t *frame) {
+frame_t tbl_2_iteration(tbl_t *scope, mu_t *frame) {
     tbl_t *tbl = gettbl(tbl_lookup(scope, muint(0)));
     uint_t i = getuint(tbl_lookup(scope, muint(1)));
     mu_t k, v;

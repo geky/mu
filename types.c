@@ -120,12 +120,12 @@ void mu_assign(mu_t v, mu_t key, mu_t val) {
 
 
 // Function calls performed on variables
-static void nil_fcall(void *n, c_t c, mu_t *frame) { 
+static void nil_fcall(void *n, frame_t c, mu_t *frame) { 
     mu_err_undefined();
 }
 
-void mu_fcall(mu_t m, c_t c, mu_t *frame) {
-    static void (*const mu_fcalls[8])(void *, c_t, mu_t *) = {
+void mu_fcall(mu_t m, frame_t c, mu_t *frame) {
+    static void (*const mu_fcalls[8])(void *, frame_t, mu_t *) = {
         nil_fcall, nil_fcall, nil_fcall, (void *)fn_fcall,
         nil_fcall, nil_fcall, nil_fcall, nil_fcall
     };
@@ -133,23 +133,45 @@ void mu_fcall(mu_t m, c_t c, mu_t *frame) {
     return mu_fcalls[gettype(m)](getptr(m), c, frame);
 }
 
-mu_t mu_call(mu_t m, c_t c, ...) {
+mu_t mu_call(mu_t m, frame_t c, ...) {
     va_list args;
     mu_t frame[MU_FRAME];
 
     va_start(args, c);
 
-    for (uint_t i = 0; i < (mu_args(c) > MU_FRAME ? 1 : mu_args(c)); i++) {
-        frame[i] = va_arg(args, mu_t);
+    if ((c >> 4) == 0xf) {
+        frame[0] = va_arg(args, mu_t);
+    } else if ((c >> 4) > MU_FRAME) {
+        tbl_t *tbl = tbl_create(c >> 4);
+
+        for (uint_t i = 0; i < (c >> 4); i++)
+            tbl_insert(tbl, muint(i), va_arg(args, mu_t));
+
+        frame[0] = mtbl(tbl);
+    } else {
+        for (uint_t i = 0; i < (c >> 4); i++)
+            frame[i] = va_arg(args, mu_t);
     }
 
-    mu_call(m, c, frame);
+    mu_fcall(m, c, frame);
 
-    for (uint_t i = 1; i < mu_rets(c); i++) {
-        *va_arg(args, mu_t *) = frame[i];
+    if ((c & 0xf) != 0xf) {
+        if ((c & 0xf) > MU_FRAME) {
+            tbl_t *tbl = gettbl(frame[0]);
+            frame[0] = tbl_lookup(tbl, muint(0));
+
+            for (uint_t i = 1; i < (c & 0xf); i++)
+                *va_arg(args, mu_t *) = tbl_lookup(tbl, muint(i));
+
+            tbl_dec(tbl);
+        } else {
+            for (uint_t i = 1; i < (c & 0xf); i++) {
+                *va_arg(args, mu_t *) = frame[i];
+            }
+        }
     }
 
     va_end(args);
 
-    return mu_rets(c) ? *frame : mnil;
+    return (c & 0xf) ? frame[0] : mnil;
 }

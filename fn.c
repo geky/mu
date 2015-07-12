@@ -3,14 +3,51 @@
 #include "num.h"
 #include "str.h"
 #include "tbl.h"
-#include "vm.h"
 #include "parse.h"
+#include "vm.h"
 #include <string.h>
 #include <stdarg.h>
 
 
+// Conversion between different frame types
+// Supports inplace conversion
+void mu_fconvert(frame_t dcount, mu_t *dframe,
+                 frame_t scount, mu_t *sframe) {
+    if (dcount > MU_FRAME) {
+        if (scount > MU_FRAME) {
+            *dframe = *sframe;
+        } else {
+            tbl_t *tbl = tbl_create(scount);
+
+            for (uint_t i = 0; i < scount; i++)
+                tbl_insert(tbl, muint(i), sframe[i]);
+
+            *dframe = mtbl(tbl);
+        }
+    } else {
+        if (scount > MU_FRAME) {
+            tbl_t *tbl = gettbl(*sframe);
+
+            for (uint_t i = 0; i < dcount; i++)
+                dframe[i] = tbl_lookup(tbl, muint(i));
+
+            tbl_dec(tbl);
+        } else {
+            for (uint_t i = 0; i < scount && i < dcount; i++)
+                dframe[i] = sframe[i];
+
+            for (uint_t i = dcount; i < scount; i++)
+                mu_dec(sframe[i]);
+
+            for (uint_t i = scount; i < dcount; i++)
+                dframe[i] = mnil;
+        }
+    }
+}
+
+
 // C Function creating functions and macros
-fn_t *fn_bfn(c_t args, bfn_t *bfn) {
+fn_t *fn_bfn(frame_t args, bfn_t *bfn) {
     fn_t *fn = ref_alloc(sizeof(fn_t));
     fn->flags.regs = 16;
     fn->flags.scope = 0;
@@ -21,7 +58,7 @@ fn_t *fn_bfn(c_t args, bfn_t *bfn) {
     return fn;
 }
 
-fn_t *fn_sbfn(c_t args, sbfn_t *sbfn, tbl_t *closure) {
+fn_t *fn_sbfn(frame_t args, sbfn_t *sbfn, tbl_t *closure) {
     fn_t *fn = ref_alloc(sizeof(fn_t));
     fn->flags.regs = 16;
     fn->flags.scope = 0;
@@ -73,57 +110,59 @@ void code_destroy(code_t *code) {
 
 
 // C interface for calling functions
-static void bfn_fcall(fn_t *fn, c_t c, mu_t *frame) {
-    mu_fconvert(mu_args(c), frame, fn->flags.args, frame);
-    c_t rets = fn->bfn(frame);
-    mu_fconvert(rets, frame, mu_rets(c), frame);
+static void bfn_fcall(fn_t *fn, frame_t c, mu_t *frame) {
+    mu_fconvert(fn->flags.args, frame, c >> 4, frame);
+    frame_t rets = fn->bfn(frame);
+    mu_fconvert(c & 0xf, frame, rets, frame);
 }
 
-static void sbfn_fcall(fn_t *fn, c_t c, mu_t *frame) { 
-    mu_fconvert(mu_args(c), frame, fn->flags.args, frame);
+static void sbfn_fcall(fn_t *fn, frame_t c, mu_t *frame) {
+    mu_fconvert(fn->flags.args, frame, c >> 4, frame);
     uint_t rets = fn->sbfn(fn->closure, frame);
-    mu_fconvert(rets, frame, mu_rets(c), frame);
+    mu_fconvert(c & 0xf, frame, rets, frame);
 }
 
-void fn_fcall(fn_t *fn, c_t c, mu_t *frame) {
-    static void (*const fn_fcalls[3])(fn_t *, c_t, mu_t *) = {
+void fn_fcall(fn_t *fn, frame_t c, mu_t *frame) {
+    static void (*const fn_fcalls[3])(fn_t *, frame_t, mu_t *) = {
         mu_exec, bfn_fcall, sbfn_fcall
     };
 
     return fn_fcalls[fn->flags.type](fn, c, frame);
 }
 
-mu_t fn_call(fn_t *fn, c_t c, ...) {
+mu_t fn_call(fn_t *fn, frame_t c, ...) {
     va_list args;
     mu_t frame[MU_FRAME];
 
     va_start(args, c);
 
-    if (mu_args(c) == 0xf) {
+    if ((c >> 4) == 0xf) {
         frame[0] = va_arg(args, mu_t);
-    } else if (mu_args(c) > MU_FRAME) {
-        tbl_t *tbl = tbl_create(mu_args(c));
-        for (uint_t i = 0; i < mu_args(c); i++)
+    } else if ((c >> 4) > MU_FRAME) {
+        tbl_t *tbl = tbl_create(c >> 4);
+
+        for (uint_t i = 0; i < (c >> 4); i++)
             tbl_insert(tbl, muint(i), va_arg(args, mu_t));
+
         frame[0] = mtbl(tbl);
     } else {
-        for (uint_t i = 0; i < mu_args(c); i++) {
+        for (uint_t i = 0; i < (c >> 4); i++)
             frame[i] = va_arg(args, mu_t);
-        }
     }
 
     fn_fcall(fn, c, frame);
 
-    if (mu_rets(c) != 0xf) {
-        if (mu_rets(c) > MU_FRAME) {
+    if ((c & 0xf) != 0xf) {
+        if ((c & 0xf) > MU_FRAME) {
             tbl_t *tbl = gettbl(frame[0]);
             frame[0] = tbl_lookup(tbl, muint(0));
-            for (uint_t i = 1; i < mu_rets(c); i++) {
+
+            for (uint_t i = 1; i < (c & 0xf); i++)
                 *va_arg(args, mu_t *) = tbl_lookup(tbl, muint(i));
-            }
+
             tbl_dec(tbl);
         } else {
-            for (uint_t i = 1; i < mu_rets(c); i++) {
+            for (uint_t i = 1; i < (c & 0xf); i++) {
                 *va_arg(args, mu_t *) = frame[i];
             }
         }
@@ -131,7 +170,7 @@ mu_t fn_call(fn_t *fn, c_t c, ...) {
 
     va_end(args);
 
-    return mu_rets(c) ? frame[0] : mnil;
+    return (c & 0xf) ? frame[0] : mnil;
 }
 
 
