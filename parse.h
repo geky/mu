@@ -35,11 +35,18 @@ struct parse {
     struct fn_flags flags;
 
     struct f_parse {
-        len_t lcount;
-        len_t rcount;
-        uintq_t tabled  : 1;
-        uintq_t call    : 1;
+        len_t target;
+        len_t count;
+        len_t index;
+        uintq_t paren;
+
+        uintq_t single  : 1;
         uintq_t unpack  : 1;
+        uintq_t insert  : 1;
+        uintq_t tabled  : 1;
+        uintq_t key     : 1;
+        uintq_t call    : 1;
+        uintq_t expand  : 1;
     } f;
 
     enum {
@@ -51,10 +58,6 @@ struct parse {
 
     uintq_t sp;
     uintq_t args;
-
-    uintq_t insert  : 1;
-    uintq_t stmt    : 1;
-    uintq_t single  : 1;
 };
 
 

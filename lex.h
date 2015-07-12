@@ -36,11 +36,9 @@ typedef enum tok {
     T_OR       = 18,
 
     T_NIL      = 19,
-    T_ARGS     = 20,
-    T_SCOPE    = 21,
 
     T_DOT      = '.',
-    T_REST     = '*',
+    T_EXPAND   = '*',
     T_TERM     = ';',
     T_COMMA    = ',',
     T_ASSIGN   = '=',
@@ -78,10 +76,12 @@ struct lex {
 
     uintq_t lprec;
     uintq_t rprec;
-    uintq_t indent;
+    intq_t nparen;
     uintq_t paren;
+    intq_t nbrace;
+    uintq_t brace;
+    uintq_t indent;
 };
-
 
 // Creates internal tables for keywords or uses prexisting.
 mu_const tbl_t *mu_keys(void);
@@ -94,6 +94,25 @@ void mu_lex(lex_t *);
 // Updates position, stores token type in tok, but does not create 
 // values on the heap
 void mu_scan(lex_t *);
+
+
+// Classifications of tokens
+mu_inline bool tok_isexpr(tok_t tok) {
+    return tok == T_SYM ||
+           tok == T_IMM ||
+           tok == '(' ||
+           tok == '[' ||
+           tok == T_FN ||
+           tok == T_IF ||
+           tok == T_OP ||
+           tok == T_EXPAND;
+}
+
+mu_inline bool tok_isstmt(tok_t tok) {
+    return tok_isexpr(tok) ||
+           tok == T_RETURN ||
+           tok == T_LET;
+}
 
 
 #endif

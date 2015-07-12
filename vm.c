@@ -164,7 +164,7 @@ void mu_dis(code_t *c) {
 
 // Execute bytecode
 void mu_exec(fn_t *fn, c_t c, mu_t *frame) {
-    // Allocate termporary variables
+    // Allocate temporary variables
     register const uint16_t *pc;
     mu_t *imms;
     struct code **fns;

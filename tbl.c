@@ -615,3 +615,89 @@ str_t *tbl_repr(tbl_t *t) {
 
     return str_intern(m, m->len);
 }
+
+tbl_t *tbl_concat(tbl_t *a, tbl_t *b, mu_t offset) {
+    uint_t max = 0;
+    if (isnum(offset)) {
+        max = getuint(offset);
+    } else {
+        tbl_for_begin(k, v, a) {
+            if (isnum(k) && getuint(k)+1 > max)
+                max = getuint(k)+1;
+        } tbl_for_end
+    }
+
+    tbl_t *res;
+    if (a->ref == 1) {
+        res = a;
+    } else {
+        res = tbl_create(a->len + b->len);
+
+        tbl_for_begin(k, v, a) {
+            tbl_insert(res, k, v);
+        } tbl_for_end
+
+        tbl_dec(a);
+    }
+
+    tbl_for_begin(k, v, b) {
+        if (isnum(k))
+            tbl_insert(res, muint(getuint(k) + max), v);
+        else
+            tbl_insert(res, k, v);
+    } tbl_for_end
+
+    tbl_dec(b);
+
+    return res;
+}
+
+// TODO optimize for arrays
+// TODO can the heap allocation be removed in the general case?
+mu_t tbl_pop(tbl_t *tbl, mu_t key) {
+    tbl = tbl_write(tbl);
+
+    mu_t ret = tbl_lookup(tbl, key);
+    tbl_insert(tbl, key, mnil);
+
+    if (isnum(key)) {
+        tbl_t *temp = tbl_create(tbl_getlen(tbl));
+
+        tbl_for_begin(k, v, tbl) {
+            if (isnum(k) && getuint(k) > getuint(key)) {
+                tbl_insert(temp, k, v);
+                tbl_insert(tbl, k, mnil);
+            }
+        } tbl_for_end
+
+        tbl_for_begin(k, v, temp) {
+            tbl_insert(tbl, muint(getuint(k)-1), v);
+        } tbl_for_end
+    }
+
+    return ret;
+}
+
+// TODO optimize for arrays
+// TODO can the heap allocation be removed in the general case?
+void tbl_push(tbl_t *tbl, mu_t val, mu_t key) {
+    tbl = tbl_write(tbl);
+
+    if (isnum(key)) {
+        tbl_t *temp = tbl_create(tbl_getlen(tbl));
+
+        tbl_for_begin(k, v, tbl) {
+            if (isnum(k) && getuint(k) >= getuint(key)) {
+                tbl_insert(temp, k, v);
+                tbl_insert(tbl, k, mnil);
+            }
+        } tbl_for_end
+
+        tbl_for_begin(k, v, temp) {
+            tbl_insert(tbl, muint(getuint(k)+1), v);
+        } tbl_for_end
+    }
+
+    tbl_insert(tbl, key, val);
+}
+

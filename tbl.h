@@ -104,6 +104,11 @@ fn_t *tbl_iter(tbl_t *t);
 // Table representation
 str_t *tbl_repr(tbl_t *t);
 
+// Table concatenation
+tbl_t *tbl_concat(tbl_t *a, tbl_t *b, mu_t offset);
+mu_t tbl_pop(tbl_t *a, mu_t key);
+void tbl_push(tbl_t *a, mu_t val, mu_t key);
+
 
 // Macro for iterating through a table in c
 // Assign names for k and v, and pass in the 

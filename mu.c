@@ -122,6 +122,30 @@ static c_t b_sub(mu_t *frame) {
     }
 }
 
+static c_t b_concat(mu_t *frame) {
+    assert(istbl(frame[0]) && istbl(frame[1]));
+    frame[0] = mtbl(tbl_concat(gettbl(frame[0]), gettbl(frame[1]), frame[2]));
+    return 1;
+}
+
+static c_t b_pop(mu_t *frame) {
+    assert(istbl(frame[0]));
+    if (isnil(frame[1])) {
+        frame[1] = muint(getlen(frame[0])-1);
+    }
+    frame[0] = tbl_pop(gettbl(frame[0]), frame[1]);
+    return 1;
+}
+
+static c_t b_push(mu_t *frame) {
+    assert(istbl(frame[0]));
+    if (isnil(frame[2])) {
+        frame[2] = muint(getlen(frame[0]));
+    }
+    tbl_push(gettbl(frame[0]), frame[1], frame[2]);
+    return 0;
+}
+
 static c_t b_equals(mu_t *frame) {
     bool r = mu_equals(frame[0], frame[1]);
     mu_dec(frame[0]); mu_dec(frame[1]);
@@ -171,6 +195,15 @@ static void genscope() {
     tbl_assign(scope, mcstr("repr"), mbfn(0x1, b_repr));
     tbl_assign(scope, mcstr("print"), mbfn(0xf, b_print));
     tbl_assign(scope, mcstr("test"), mbfn(0x0, b_test));
+    tbl_t *tbltbl = tbl_create(0);
+    tbl_assign(tbltbl, mcstr("concat"), mbfn(0x3, b_concat));
+    tbl_assign(tbltbl, mcstr("pop"), mbfn(0x2, b_pop));
+    tbl_assign(tbltbl, mcstr("push"), mbfn(0x3, b_push));
+    tbl_assign(scope, mcstr("tbl"), mtbl(tbltbl));
+    tbl_assign(scope, mcstr("concat"), tbl_lookup(tbltbl, mcstr("concat")));
+    tbl_assign(scope, mcstr("pop"), tbl_lookup(tbltbl, mcstr("pop")));
+    tbl_assign(scope, mcstr("push"), tbl_lookup(tbltbl, mcstr("push")));
+    
 }
 
 static int genargs(int i, int argc, const char **argv) {

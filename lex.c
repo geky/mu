@@ -25,9 +25,8 @@ mu_const tbl_t *mu_keys(void) {
     tbl_insert(keyt, mcstr("continue"), muint(T_CONT));
     tbl_insert(keyt, mcstr("break"), muint(T_BREAK));
     tbl_insert(keyt, mcstr("else"), muint(T_ELSE));
-    tbl_insert(keyt, mcstr("nil"), muint(T_NIL));
-    tbl_insert(keyt, mcstr("args"), muint(T_ARGS));
-    tbl_insert(keyt, mcstr("scope"), muint(T_SCOPE));
+    tbl_insert(keyt, mcstr("and"), muint(T_AND));
+    tbl_insert(keyt, mcstr("or"), muint(T_OR));
     
     return keyt;
 }
@@ -41,9 +40,7 @@ mu_const tbl_t *mu_syms(void) {
 
     symt = tbl_create(0);
     tbl_insert(symt, mcstr("->"), muint(T_ARROW));
-    tbl_insert(symt, mcstr("&&"), muint(T_AND));
-    tbl_insert(symt, mcstr("||"), muint(T_OR));
-    tbl_insert(symt, mcstr("*"), muint(T_REST));
+    tbl_insert(symt, mcstr(".."), muint(T_EXPAND));
     tbl_insert(symt, mcstr("."), muint(T_DOT));
     tbl_insert(symt, mcstr("="), muint(T_ASSIGN));
     tbl_insert(symt, mcstr(":"), muint(T_COLON));
@@ -108,12 +105,12 @@ static void l_nl(lex_t *l) {
                 mu_err_parse(); // TODO better message
             } else if (nindent > l->indent) {
                 l->tok = '{'; // TODO does this only happen after \n?
-                l->val = muint(nindent - l->indent);
+                l->nbrace = nindent - l->indent;
                 l->indent = nindent;
                 return;
             } else if (nindent < l->indent) {
                 l->tok = '}';
-                l->val = muint(l->indent - nindent);
+                l->nbrace = nindent - l->indent;
                 l->indent = nindent;
                 return;
             }
@@ -181,9 +178,12 @@ static void l_kw(lex_t *l) {
 
 static void l_tok(lex_t *l) {
     l->tok = *l->pos++;
-
-    // Note: this is really just for brackets
-    l->val = muint(1);
+    if (l->tok == '{') l->nbrace = +1;
+    if (l->tok == '}') l->nbrace = -1;
+    if (l->tok == '(') l->nparen = +1;
+    if (l->tok == ')') l->nparen = -1;
+    if (l->tok == '[') l->nparen = +1;
+    if (l->tok == ']') l->nparen = -1;
 }
 
 static void l_num(lex_t *l) {
@@ -269,6 +269,11 @@ void (* const lexs[256])(lex_t *) = {
 
 // Performs lexical analysis on the passed string
 void mu_lex(lex_t *l) {
+    l->brace += l->nbrace;
+    l->nbrace = 0;
+    l->paren += l->nparen;
+    l->nparen = 0;
+
     if (l->pos >= l->end)
         l->tok = 0;
     else
