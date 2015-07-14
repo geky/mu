@@ -2,36 +2,22 @@
  *  Parser for Mu
  */
 
-#ifdef MU_DEF
-#ifndef MU_PARSE_DEF
-#define MU_PARSE_DEF
-#include "mu.h"
-
-
-typedef struct parse parse_t;
-
-
-#endif
-#else
 #ifndef MU_PARSE_H
 #define MU_PARSE_H
-#define MU_DEF
-#include "parse.h"
-#include "mem.h"
+#include "mu.h"
 #include "types.h"
-#undef MU_DEF
-#include "fn.h"
 #include "lex.h"
+#include "fn.h"
 
 
-// Specific state structures
+// State of parsing
 struct parse {
     mstr_t *bcode;
     len_t bcount;
     tbl_t *imms;
     tbl_t *fns;
 
-    lex_t l;
+    struct lex l;
     struct fn_flags flags;
 
     struct f_parse {
@@ -49,7 +35,7 @@ struct parse {
         uintq_t expand  : 1;
     } f;
 
-    enum {
+    mu_packed enum {
         P_DIRECT,
         P_INDIRECT,
         P_SCOPED,
@@ -69,5 +55,5 @@ code_t *mu_parse_expr(str_t *code);
 code_t *mu_parse_fn(str_t *code);
 code_t *mu_parse_module(str_t *code);
 
-#endif
+
 #endif

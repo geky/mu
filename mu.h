@@ -42,6 +42,9 @@ typedef uinth_t len_t;
 // Definition of alignment for Mu types
 #define mu_aligned __attribute__((aligned(8)))
 
+// Definition for packing enums into minimum size
+#define mu_packed __attribute__((packed))
+
 // Definition of thread local variables
 #define mu_thread __thread
 
