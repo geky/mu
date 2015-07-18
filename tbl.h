@@ -2,33 +2,20 @@
  * Table variable type
  */
 
-#ifdef MU_DEF
-#ifndef MU_TBL_DEF
-#define MU_TBL_DEF
-#include "mu.h"
-
-
-// Hash type definition
-typedef uint_t hash_t;
-
-// Definition of Mu's table type
-typedef mu_aligned struct tbl tbl_t;
-
-
-#endif
-#else
 #ifndef MU_TBL_H
 #define MU_TBL_H
+#include "mu.h"
 #include "types.h"
-#include "err.h"
 
 
+// Definition of Mu's table type
+//
 // Each table is composed of an array of values 
 // with a stride for keys/values. If keys/values 
 // is not stored in the array it is implicitely 
 // stored as a range/offset based on the specified 
 // offset and length.
-struct tbl {
+mu_aligned struct tbl {
     ref_t ref; // reference count
 
     len_t len;  // count of non-nil entries
@@ -36,7 +23,7 @@ struct tbl {
     uintq_t npw2;   // log2 of capacity
     uintq_t stride; // type of table
 
-    tbl_t *tail; // tail chain of tables
+    mu_t tail; // tail chain of tables
 
     union {
         uint_t offset; // offset for implicit ranges
@@ -45,78 +32,61 @@ struct tbl {
 };
 
 
-// Table pointer manipulation with the ro flag
-mu_inline tbl_t *tbl_ro(tbl_t *t) {
-    return (tbl_t *)(MU_RO | (uint_t)t);
+// Table access functions
+mu_inline len_t tbl_len(mu_t m) {
+    return ((struct tbl *)(~7 & (uint_t)m))->len;
 }
 
-mu_inline bool tbl_isro(tbl_t *t) {
-    return MU_RO & (uint_t)t;
+// Conversion to readonly table
+mu_inline mu_t tbl_ro(mu_t m) {
+    return (mu_t)((MU_RTBL^MU_TBL) | (uint_t)m);
 }
 
-mu_inline tbl_t *tbl_read(tbl_t *t) {
-    return (tbl_t *)(~MU_RO & (uint_t)t);
-}
-
-mu_inline tbl_t *tbl_write(tbl_t *t) {
-    if (tbl_isro(t))
-        mu_err_readonly();
-    else
-        return t;
+mu_inline bool tbl_isro(mu_t m) {
+    return (MU_RTBL^MU_TBL) & (uint_t)m;
 }
 
 
 // Table creating functions and macros
-tbl_t *tbl_create(len_t size);
-tbl_t *tbl_extend(len_t size, tbl_t *parent);
-void tbl_destroy(tbl_t *t);
-
-
-mu_inline mu_t mntbl(len_t l) { return mtbl(tbl_create(l)); }
-
-mu_inline len_t tbl_getlen(tbl_t *t) { return tbl_read(t)->len; }
-
-// Table reference counting
-mu_inline void tbl_inc(tbl_t *t) { ref_inc((void *)tbl_read(t)); }
-mu_inline void tbl_dec(tbl_t *t) { ref_dec((void *)tbl_read(t), 
-                                           (void (*)(void *))tbl_destroy); }
-
+mu_t tbl_create(len_t size);
+mu_t tbl_extend(len_t size, mu_t parent);
+void tbl_destroy(mu_t t);
 
 // Recursively looks up a key in the table
 // returns either that value or nil
-mu_t tbl_lookup(tbl_t *t, mu_t key);
-
-// Recursively looks up either a key or index
-// if key is not found
-mu_t tbl_lookdn(tbl_t *t, mu_t key, hash_t i);
-
-// Recursively assigns a value in the table with the given key
-// decends down the tail chain until its found
-void tbl_assign(tbl_t *t, mu_t key, mu_t val);
+mu_t tbl_lookup(mu_t t, mu_t k);
 
 // Inserts a value in the table with the given key
 // without decending down the tail chain
-void tbl_insert(tbl_t *t, mu_t key, mu_t val);
+void tbl_insert(mu_t t, mu_t k, mu_t v);
+
+// Recursively assigns a value in the table with the given key
+// decends down the tail chain until its found
+void tbl_assign(mu_t t, mu_t k, mu_t v);
 
 // Performs iteration on a table
-fn_t *tbl_iter(tbl_t *t);
+mu_t tbl_iter(mu_t t);
 
 // Table representation
-str_t *tbl_repr(tbl_t *t);
+mu_t tbl_repr(mu_t t);
 
 // Table concatenation
-tbl_t *tbl_concat(tbl_t *a, tbl_t *b, mu_t offset);
-mu_t tbl_pop(tbl_t *a, mu_t key);
-void tbl_push(tbl_t *a, mu_t val, mu_t key);
+mu_t tbl_concat(mu_t a, mu_t b, mu_t offset);
+mu_t tbl_pop(mu_t a, mu_t i);
+void tbl_push(mu_t a, mu_t v, mu_t i);
+
+// Table reference counting
+mu_inline mu_t tbl_inc(mu_t m) { ref_inc(m); return m; }
+mu_inline void tbl_dec(mu_t m) { if (ref_dec(m)) tbl_destroy(m); }
 
 
 // Macro for iterating through a table in c
 // Assign names for k and v, and pass in the 
 // block to execute for each pair in tbl
-#define tbl_for_begin(k, v, tbl) {                  \
+#define tbl_for_begin(k, v, t) {                    \
     mu_t k;                                         \
     mu_t v;                                         \
-    tbl_t *_t = tbl_read(tbl);                      \
+    struct tbl *_t = (struct tbl *)(~7 & (uint_t)t); \
     uint_t _i, _c = _t->len;                        \
                                                     \
     for (_i=0; _c; _i++) {                          \
@@ -132,9 +102,10 @@ void tbl_push(tbl_t *a, mu_t val, mu_t key);
             case 2:                                 \
                 k = _t->array[2*_i  ];              \
                 v = _t->array[2*_i+1];              \
-                if (isnil(k) || isnil(v))           \
+                if (!k || !v)                       \
                     continue;                       \
                 break;                              \
+            default: mu_unreachable;                \
         }                                           \
 {
 #define tbl_for_end                                 \
@@ -144,5 +115,4 @@ void tbl_push(tbl_t *a, mu_t val, mu_t key);
 }
 
 
-#endif
 #endif

@@ -6,11 +6,12 @@
 #include "str.h"
 #include "tbl.h"
 #include "fn.h"
+#include "err.h"
 #include <stdio.h>
 #include <string.h>
 
 
-static void emit(struct parse *p, data_t byte) {
+static void emit(struct parse *p, byte_t byte) {
     mstr_insert(&p->bcode, p->bcount, byte);
     p->bcount += 1;
 }
@@ -23,43 +24,49 @@ static void encode(struct parse *p, op_t op,
     if (p->sp+1 > p->flags.regs)
         p->flags.regs = p->sp+1;
 
-    mu_encode((void (*)(void *, data_t))emit, p, op, d, a, b);
+    mu_encode((void (*)(void *, byte_t))emit, p, op, d, a, b);
 }
 
 static void patch(struct parse *p, len_t offset, op_t op,
                   uint_t d, uint_t a) {
     len_t count = p->bcount;
     p->bcount = offset;
-    mu_encode((void (*)(void *, data_t))emit, p, op, d, a, 0);
+    mu_encode((void (*)(void *, byte_t))emit, p, op, d, a, 0);
     p->bcount = count;
 }
 
-static uint_t imm(struct parse *p, mu_t m) {
-    static const ref_t imm_nil = 0;
+static mu_const mu_t imm_nil(void) {
+    static mu_t nil = 0;
+    if (nil) return nil;
 
-    if (isnil(m))
-        m = mtbl((tbl_t *)&imm_nil);
+    nil = mbfn(0, 0);
+    return nil;
+}
+
+static uint_t imm(struct parse *p, mu_t m) {
+    if (!m)
+        m = imm_nil();
 
     mu_t mindex = tbl_lookup(p->imms, m);
 
-    if (!isnil(mindex))
-        return getuint(mindex);
+    if (mindex)
+        return num_uint(mindex);
 
-    uint_t index = tbl_getlen(p->imms);
+    uint_t index = tbl_len(p->imms);
     tbl_insert(p->imms, m, muint(index));
     return index;
 }
 
-static uint_t fn(struct parse *p, code_t *code) {
-    uint_t index = tbl_getlen(p->fns);
-    tbl_insert(p->fns, muint(index), mfn(fn_create(code, 0)));
+static uint_t fn(struct parse *p, struct code *code) {
+    uint_t index = tbl_len(p->fns);
+    tbl_insert(p->fns, muint(index), fn_create(code, 0));
     return index;
 }
 
 
 // TODO make all these expects better messages
 // Parsing error handling
-static mu_noreturn void unexpected(struct parse *p) {
+static mu_noreturn unexpected(struct parse *p) {
     mu_err_parse();
 }
 
@@ -99,7 +106,7 @@ static void expect_second(struct parse *p) {
 }
 
 
-static struct parse *parse_create(str_t *source) {
+static struct parse *parse_create(mu_t source) {
     struct parse *p = mu_alloc(sizeof(struct parse));
 
     memset(p, 0, sizeof(struct parse));
@@ -114,8 +121,8 @@ static struct parse *parse_create(str_t *source) {
     p->flags.args = 0;
     p->flags.type = 0;
 
-    p->l.pos = str_getdata(source);
-    p->l.end = str_getdata(source) + str_getlen(source);
+    p->l.pos = str_bytes(source);
+    p->l.end = str_bytes(source) + str_len(source);
     mu_lex_init(&p->l);
 
     return p;
@@ -142,31 +149,31 @@ static struct parse *parse_nested(struct parse *p) {
     return q;
 }
 
-static code_t *parse_realize(struct parse *p) {
+static struct code *parse_realize(struct parse *p) {
     struct code *code = ref_alloc(
         sizeof(struct code) +
-        sizeof(mu_t)*tbl_getlen(p->imms) +
-        sizeof(struct code *)*tbl_getlen(p->fns) +
+        sizeof(mu_t)*tbl_len(p->imms) +
+        sizeof(struct code *)*tbl_len(p->fns) +
         p->bcount);
 
     code->bcount = p->bcount;
-    code->icount = tbl_getlen(p->imms);
-    code->fcount = tbl_getlen(p->fns);
+    code->icount = tbl_len(p->imms);
+    code->fcount = tbl_len(p->fns);
     code->flags = p->flags;
 
     mu_t *imms = code_imms(code);
     struct code **fns = code_fns(code);
-    data_t *bcode = (data_t *)code_bcode(code);
+    byte_t *bcode = (byte_t *)code_bcode(code);
 
     tbl_for_begin (k, v, p->imms) {
-        if (istbl(k))
-            imms[getuint(v)] = mnil;
+        if (k == imm_nil())
+            imms[num_uint(v)] = mnil;
         else
-            imms[getuint(v)] = mu_inc(k);
+            imms[num_uint(v)] = mu_inc(k);
     } tbl_for_end;
 
     tbl_for_begin (k, v, p->fns) {
-        fns[getuint(k)] = getfn(mu_inc(v))->code;
+        fns[num_uint(k)] = fn_code_(v);
     } tbl_for_end;
 
     tbl_dec(p->imms);
@@ -174,7 +181,7 @@ static code_t *parse_realize(struct parse *p) {
 
     memcpy(bcode, p->bcode->data, p->bcount);
 
-    str_dec(p->bcode);
+    mstr_dec(p->bcode);
     mu_dealloc(p, sizeof(struct parse));
 
     return code;
@@ -868,20 +875,20 @@ static void p_block(struct parse *p) {
 }
 
 
-code_t *mu_parse_expr(str_t *code) {
+struct code *mu_parse_expr(mu_t code) {
     struct parse *p = parse_create(code);
     // TODO find best entry point for expressions
     return parse_realize(p);
 }
 
-code_t *mu_parse_fn(str_t *code) {
+struct code *mu_parse_fn(mu_t code) {
     struct parse *p = parse_create(code);
     p_block(p);
     encode(p, OP_RET, 0, 0, 0, 0);
     return parse_realize(p);
 }
 
-code_t *mu_parse_module(str_t *code) {
+struct code *mu_parse_module(mu_t code) {
     struct parse *p = parse_create(code);
     p_block(p);
     encode(p, OP_RET, 0, 0, 1, 0);

@@ -5,96 +5,103 @@
 #include <string.h>
 
 
+// Internally used conversion between mu_t and struct str
+mu_inline mu_t mstr(struct str *s) {
+    return (mu_t)((uint_t)s + MU_STR);
+}
+
+mu_inline struct str *str_str(mu_t m) {
+    return (struct str *)((uint_t)m - MU_STR);
+}
+
+
 // Functions for creating mutable temporary strings
-mstr_t *mstr_create(len_t len) {
-    mstr_t *m = ref_alloc(mu_offset(str_t, data) + len*sizeof(data_t));
+struct str *mstr_create(len_t len) {
+    struct str *m = ref_alloc(mu_offset(struct str, data) + len);
     m->len = len;
     return m;
 }
 
-void mstr_destroy(mstr_t *m) {
-    ref_dealloc(m, mu_offset(str_t, data) + m->len*sizeof(data_t));
+void mstr_destroy(struct str *m) {
+    ref_dealloc(m, mu_offset(struct str, data) + m->len);
 }
 
 // Functions for interning strings
-str_t *str_intern(str_t *m, len_t len) {
+mu_t str_intern(struct str *s, len_t len) {
     // TODO interning
-    if (m->len == len)
-        return m;
+    // TODO maybe not make new alloc for odd len strings?
+    if (s->len != len) {
+        struct str *ns = mstr_create(len);
+        memcpy(ns->data, s->data, len);
+        mstr_dec(s);
+        s = ns;
+    }
 
-    mstr_t *s = mstr_create(len);
-    memcpy(s->data, m->data, len);
-    return s;
+    return mstr(s);
 }
 
-void str_destroy(str_t *s) {
+void str_destroy(mu_t m) {
     // TODO interning
-    mstr_destroy((mstr_t *)s);
+    mstr_destroy(str_str(m));
 }
 
 // String creating functions
-str_t *str_nstr(const data_t *s, uint_t len) {
+mu_t mcstr(const char *s) {
+    return mnstr((const byte_t *)s, strlen(s));
+}
+
+mu_t mnstr(const byte_t *s, uint_t len) {
     if (len > MU_MAXLEN)
         mu_err_len();
 
-    mstr_t *m = mstr_create(len);
-    memcpy(m->data, s, len);
-    return str_intern(m, len);
+    struct str *ns = mstr_create(len);
+    memcpy(ns->data, s, len);
+    return str_intern(ns, len);
 }
 
-str_t *str_cstr(const char *s) {
-    return str_nstr((const data_t *)s, strlen(s));
-}
 
 // Functions to help modify mutable strings
-void mstr_insert(mstr_t **m, uint_t i, data_t c) {
-    mstr_nconcat(m, i, &c, 1);
+void mstr_insert(struct str **s, uint_t i, byte_t c) {
+    mstr_concat(s, i, &c, 1);
 }
 
-void mstr_concat(mstr_t **m, uint_t i, str_t *s) {
-    mstr_nconcat(m, i, s->data, s->len);
-}
-
-void mstr_cconcat(mstr_t **m, uint_t i, const char *s) {
-    mstr_nconcat(m, i, (const data_t *)s, strlen(s));
-}
-
-void mstr_nconcat(mstr_t **m, uint_t i, const data_t *s, uint_t len) {
-    uint_t size = (*m)->len;
+void mstr_concat(struct str **s, uint_t i, const byte_t *c, uint_t len) {
+    uint_t size = (*s)->len;
 
     if (size < i+len) {
-        size += mu_offset(mstr_t, data);
+        size += mu_offset(struct str, data);
 
         if (size < MU_MINALLOC)
             size = MU_MINALLOC;
 
-        while (size < i+len + mu_offset(mstr_t, data))
+        while (size < i+len + mu_offset(struct str, data))
             size <<= 1;
 
-        size -= mu_offset(mstr_t, data);
+        size -= mu_offset(struct str, data);
 
         if (size > MU_MAXLEN)
             mu_err_len();
 
-        mstr_t *n = mstr_create(size);
-        memcpy(n->data, (*m)->data, (*m)->len);
-        str_dec(*m);
-        *m = n;
+        struct str *ns = mstr_create(size);
+        memcpy(ns->data, (*s)->data, (*s)->len);
+        mstr_dec(*s);
+        *s = ns;
     }
 
-    memcpy(&(*m)->data[i], s, len);
+    memcpy(&(*s)->data[i], c, len);
 }
 
 // Equality for non-interned strings
-bool mstr_equals(str_t *a, str_t *b) {
-    return a->len == b->len && !memcmp(a->data, b->data, a->len);
+bool str_equals(mu_t a, mu_t b) {
+    return str_len(a) == str_len(b) && 
+           !memcmp(str_bytes(a), str_bytes(b), str_len(a));
 }
 
 // Hashing for non-interned strings
 // based off the djb2 algorithm
-hash_t mstr_hash(str_t *m) {
-    const data_t *pos = m->data;
-    const data_t *end = m->data + m->len;
+hash_t str_hash(mu_t m) {
+    const byte_t *pos = str_bytes(m);
+    const byte_t *end = str_bytes(m) + str_len(m);
     hash_t hash = 0;
 
     while (pos < end) {
@@ -106,15 +113,15 @@ hash_t mstr_hash(str_t *m) {
 
 
 // Parses a string and returns a string
-str_t *str_parse(const data_t **ppos, const data_t *end) {
-    const data_t *pos = *ppos + 1;
-    data_t quote = **ppos;
-    mstr_t *m = mstr_create(0);
+mu_t str_parse(const byte_t **ppos, const byte_t *end) {
+    const byte_t *pos = *ppos + 1;
+    byte_t quote = **ppos;
+    struct str *m = mstr_create(0);
     uint_t len = 0;
 
     while (*pos != quote) {
         if (pos == end) {
-            str_dec(m);
+            mstr_dec(m);
             mu_err_parse(); // Unterminated string
         }
 
@@ -178,10 +185,10 @@ str_t *str_parse(const data_t **ppos, const data_t *end) {
 
 
 // Returns a string representation of a string
-str_t *str_repr(str_t *s) {
-    const data_t *pos = s->data;
-    const data_t *end = s->data + s->len;
-    mstr_t *m = mstr_create(2);
+mu_t str_repr(mu_t s) {
+    const byte_t *pos = str_bytes(s);
+    const byte_t *end = str_bytes(s) + str_len(s);
+    struct str *m = mstr_create(2);
     uint_t len = 0;
 
     mstr_insert(&m, len++, '\'');
@@ -190,19 +197,19 @@ str_t *str_repr(str_t *s) {
         if (*pos < ' ' || *pos > '~' || 
             *pos == '\\' || *pos == '\'') {
             switch (*pos) {
-                case '\\': mstr_cconcat(&m, len, "\\\\"); len += 2; break;
-                case '\'': mstr_cconcat(&m, len, "\\'"); len += 2; break;
-                case '\a': mstr_cconcat(&m, len, "\\a"); len += 2; break;
-                case '\b': mstr_cconcat(&m, len, "\\b"); len += 2; break;
-                case '\f': mstr_cconcat(&m, len, "\\f"); len += 2; break;
-                case '\n': mstr_cconcat(&m, len, "\\n"); len += 2; break;
-                case '\r': mstr_cconcat(&m, len, "\\r"); len += 2; break;
-                case '\t': mstr_cconcat(&m, len, "\\t"); len += 2; break;
-                case '\v': mstr_cconcat(&m, len, "\\v"); len += 2; break;
-                case '\0': mstr_cconcat(&m, len, "\\0"); len += 2; break;
+                case '\\': mstr_concat(&m, len, (byte_t*)"\\\\", 2); len += 2; break;
+                case '\'': mstr_concat(&m, len, (byte_t*)"\\'", 2); len += 2; break;
+                case '\a': mstr_concat(&m, len, (byte_t*)"\\a", 2); len += 2; break;
+                case '\b': mstr_concat(&m, len, (byte_t*)"\\b", 2); len += 2; break;
+                case '\f': mstr_concat(&m, len, (byte_t*)"\\f", 2); len += 2; break;
+                case '\n': mstr_concat(&m, len, (byte_t*)"\\n", 2); len += 2; break;
+                case '\r': mstr_concat(&m, len, (byte_t*)"\\r", 2); len += 2; break;
+                case '\t': mstr_concat(&m, len, (byte_t*)"\\t", 2); len += 2; break;
+                case '\v': mstr_concat(&m, len, (byte_t*)"\\v", 2); len += 2; break;
+                case '\0': mstr_concat(&m, len, (byte_t*)"\\0", 2); len += 2; break;
                 default:
-                    mstr_nconcat(&m, len, 
-                        (data_t[]){'\\', 'x', num_ascii(*pos / 16),
+                    mstr_concat(&m, len, 
+                        (byte_t[]){'\\', 'x', num_ascii(*pos / 16),
                                               num_ascii(*pos % 16)}, 4);
                     len += 4;
                     break;

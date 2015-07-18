@@ -6,7 +6,7 @@
 #include "str.h"
 #include "fn.h"
 #include "tbl.h"
-
+#include "err.h"
 #include <string.h>
 
 
@@ -14,11 +14,11 @@
 // Encode the specified opcode and return its size
 // Note: size of the jump opcodes currently can not change based on argument
 // TODO: change asserts to err throwing checks
-void mu_encode(void (*emit)(void *, data_t), void *p,
+void mu_encode(void (*emit)(void *, byte_t), void *p,
                op_t op, int_t d, int_t a, int_t b) {
     union {
         uint16_t i;
-        data_t d[2];
+        byte_t d[2];
     } ins = {0};
 
     mu_assert(op <= 0xf);
@@ -59,7 +59,7 @@ mu_inline uint_t fr(uint16_t ins) { return rb(ins) > MU_FRAME ? 1 : rb(ins); }
 // currently just outputs to stdout
 // Unsure if this should be kept as is, returned as string
 // or just dropped completely.
-void mu_dis(code_t *c) {
+void mu_dis(struct code *c) {
     mu_t *imms = code_imms(c);
     const uint16_t *pc = code_bcode(c);
     const uint16_t *end = pc + c->bcount/2;
@@ -72,8 +72,8 @@ void mu_dis(code_t *c) {
         switch (op(ins)) {
             case OP_IMM:
                 printf("imm r%d, %d", rd(ins), i(ins));
-                { str_t *repr = mu_repr(imms[i(ins)]);
-                  printf("(%.*s)\n", str_getlen(repr), str_getdata(repr));
+                { mu_t repr = mu_repr(imms[i(ins)]);
+                  printf("(%.*s)\n", str_len(repr), str_bytes(repr));
                   str_dec(repr);
                 }
                 break;
@@ -128,7 +128,7 @@ void mu_dis(code_t *c) {
 
 
 // Execute bytecode
-void mu_exec(fn_t *fn, frame_t c, mu_t *frame) {
+void mu_exec(struct fn *fn, frame_t c, mu_t *frame) {
     // Allocate temporary variables
     register const uint16_t *pc;
     mu_t *imms;
@@ -147,7 +147,7 @@ reenter:
     {   // Setup the registers and scope
         mu_t regs[fn->flags.regs];
         mu_fconvert(fn->flags.args, &regs[1], c >> 4, frame);
-        regs[0] = mtbl(tbl_extend(fn->flags.scope, fn->closure));
+        regs[0] = tbl_extend(fn->flags.scope, fn->closure);
 
         // Setup other state
         imms = code_imms(fn->code);
@@ -164,11 +164,11 @@ reenter:
                     break;
 
                 case OP_FN:
-                    regs[rd(ins)] = mfn(fn_create(fns[i(ins)], gettbl(regs[0])));
+                    regs[rd(ins)] = fn_create(fns[i(ins)], regs[0]);
                     break;
 
                 case OP_TBL:
-                    regs[rd(ins)] = mtbl(tbl_create(i(ins)));
+                    regs[rd(ins)] = tbl_create(i(ins));
                     break;
 
                 case OP_MOVE:
@@ -209,12 +209,12 @@ reenter:
                     break;
 
                 case OP_JTRUE:
-                    if (!isnil(regs[rd(ins)]))
+                    if (regs[rd(ins)])
                         pc += j(ins);
                     break;
 
                 case OP_JFALSE:
-                    if (isnil(regs[rd(ins)]))
+                    if (!regs[rd(ins)])
                         pc += j(ins);
                     break;
 
@@ -229,23 +229,23 @@ reenter:
                     c = (ra(ins) << 4) | (c & 0xf);
                     memcpy(frame, &regs[rd(ins)+1], sizeof(mu_t)*fa(ins));
                     mu_dec(regs[0]);
-                    fn_dec(fn);
+                    fn_dec(mfn_(fn)); // TODO????
                     goto tailcall;
 
                 case OP_RET:
                     mu_dec(regs[0]);
-                    fn_dec(fn);
+                    fn_dec(mfn_(fn)); // TODO??
                     mu_fconvert(c & 0xf, frame, rb(ins), &regs[rd(ins)]);
                     return;
 
                 default:
-                    mu_cerr(str_cstr("invalid opcode"),
-                            str_cstr("invalid opcode"));
+                    mu_cerr(mcstr("invalid opcode"),
+                            mcstr("invalid opcode"));
             }
         }
     }
 
-    mu_unreachable();
+    mu_unreachable;
 
 tailcall:
     // Use a direct goto to garuntee a tail call when the target is
@@ -253,8 +253,9 @@ tailcall:
     // a tail call emitted. This has been shown to be pretty unlikely
     // on gcc due to the dynamic array for registers which causes some
     // stack checking to get pushed all the way to the epilogue.
-    if (isfn(scratch) && getfn(scratch)->flags.type == 0) {
-        fn = getfn(scratch);
+    // TODO how to integrate this with structure hiding in fn.c?
+    if (mu_isfn(scratch) && fn_fn_(scratch)->flags.type == 0) {
+        fn = fn_fn_(scratch);
         goto reenter;
     } else {
         return mu_fcall(scratch, c, frame);

@@ -2,41 +2,12 @@
  * First class function variable type
  */
 
-#ifdef MU_DEF
-#ifndef MU_FN_DEF
-#define MU_FN_DEF
-#include "mu.h"
-
-
-// Definition of Mu function type
-typedef mu_aligned struct fn fn_t;
-
-// Number of elements that can be stored in a frame.
-// Passing more than 'MU_FRAME' elements simply stores
-// a full table in the first element.
-#define MU_FRAME 4
-
-// Type for specifying input and output frame counts 
-// during function calls. 
-// Highest nibble: argument count
-// Lowest nibble: return count
-// 0xf should be used to indicate more than 'MU_FRAME'.
-typedef unsigned char frame_t;
-
-    
-#endif
-#else
 #ifndef MU_FN_H
 #define MU_FN_H
+#include "mu.h"
 #include "types.h"
-#define MU_DEF
-#include "fn.h"
-#undef MU_DEF
+#include "frame.h"
 
-
-// Definition of C Function types
-typedef frame_t bfn_t(mu_t *frame);
-typedef frame_t sbfn_t(tbl_t *closure, mu_t *frame);
 
 // Flags used to define operation of functions
 struct fn_flags {
@@ -46,9 +17,13 @@ struct fn_flags {
     uintq_t type;   // function type
 };
 
+// Definition of C Function types
+typedef frame_t bfn_t(mu_t *frame);
+typedef frame_t sbfn_t(mu_t closure, mu_t *frame);
+
 // Definition of code structure used to represent
 // executable, but not instantiated functions
-typedef struct code {
+struct code {
     ref_t ref;  // reference count
 
     len_t bcount; // number of bytes in bytecode
@@ -60,18 +35,20 @@ typedef struct code {
     // immediates, code structures, and bytecode follow
     // the code header in order
     void *data[];
-} code_t;
+};
 
+// Definition of Mu function type
+//
 // Functions are stored as function pointers paired with
 // closure tables. Additionally several flags are defined
 // to specify how the function should be called and how
 // much storage to allocate
-struct fn {
+mu_aligned struct fn {
     ref_t ref; // reference count
 
     struct fn_flags flags;
 
-    tbl_t *closure; // function closure
+    mu_t closure; // function closure
 
     union {
         bfn_t *bfn;        // c function
@@ -82,71 +59,66 @@ struct fn {
 
 
 // C Function creating functions and macros
-fn_t *fn_bfn(frame_t args, bfn_t *bfn);
-fn_t *fn_sbfn(frame_t args, sbfn_t *sbfn, tbl_t *closure);
-
-mu_inline mu_t mbfn(frame_t args, bfn_t *bfn) {
-    return mfn(fn_bfn(args, bfn));
-}
-
-mu_inline mu_t msbfn(frame_t args, sbfn_t *sbfn, tbl_t *closure) { 
-    return mfn(fn_sbfn(args, sbfn, closure)); 
-}
-
-
-// Conversion between different frame types
-// Supports inplace conversion
-void mu_fconvert(frame_t dcount, mu_t *dframe,
-                 frame_t scount, mu_t *sframe);
-
+mu_t mbfn(frame_t args, bfn_t *bfn);
+mu_t msbfn(frame_t args, sbfn_t *sbfn, mu_t closure);
 
 // Mu Function creating functions
-fn_t *fn_create(code_t *code, tbl_t *closure);
-void fn_destroy(fn_t *f);
+mu_t fn_create(struct code *code, mu_t closure);
+void fn_destroy(mu_t f);
 
-fn_t *fn_parse_expr(str_t *code, tbl_t *closure);
-fn_t *fn_parse_fn(str_t *code, tbl_t *closure);
-fn_t *fn_parse_module(str_t *code, tbl_t *closure);
+mu_t fn_parse_expr(mu_t code, mu_t closure);
+mu_t fn_parse_fn(mu_t code, mu_t closure);
+mu_t fn_parse_module(mu_t code, mu_t closure);
 
 // Function reference counting
-mu_inline fn_t *fn_inc(fn_t *fn) { return ref_inc(fn); }
-mu_inline void fn_dec(fn_t *fn) {
-    ref_dec(fn, (void (*)(void *))fn_destroy); 
-}
+mu_inline mu_t fn_inc(mu_t m) { ref_inc(m); return m; }
+mu_inline void fn_dec(mu_t m) { if (ref_dec(m)) fn_destroy(m); }
+
 
 // Mu Code handling functions. Code can be created 
 // with the parsing functions in parse.c
-void code_destroy(code_t *code);
+void code_destroy(struct code *code);
 
-// Code reference counting
-mu_inline code_t *code_inc(code_t *c) { return ref_inc((void *)c); }
-mu_inline void code_dec(code_t *c) { 
-    ref_dec(c, (void (*)(void *))code_destroy);
+// This is a workaround for how the parser stores code
+// and how the vm accesses functions
+// TODO remove these?
+mu_inline mu_t mfn_(struct fn *f) {
+    return (mu_t)((uint_t)f + MU_FN);
 }
 
+mu_inline struct fn *fn_fn_(mu_t m) {
+    return ((struct fn *)((uint_t)m - MU_FN));
+}
+
+mu_inline struct code *fn_code_(mu_t m) {
+    return ((struct fn *)((uint_t)m - MU_FN))->code;
+}
+
+// Code reference counting
+mu_inline struct code *code_inc(struct code *c) { ref_inc(c); return c; }
+mu_inline void code_dec(struct code *c) { if (ref_dec(c)) code_destroy(c); }
+
 // Access to code properties
-mu_inline mu_t *code_imms(code_t *code) { 
+mu_inline mu_t *code_imms(struct code *code) { 
     return (mu_t *)code->data; 
 }
 
-mu_inline struct code **code_fns(code_t *code) { 
+mu_inline struct code **code_fns(struct code *code) { 
     return (struct code **)&code->data[code->icount];
 }
 
-mu_inline const void *code_bcode(code_t *code) {
+mu_inline const void *code_bcode(struct code *code) {
     return (const void *)&code->data[code->icount + code->fcount];
 }
 
 
 // C interface for calling functions
-void fn_fcall(fn_t *fn, frame_t c, mu_t *frame);
-
-mu_t fn_call(fn_t *fn, frame_t c, ...);
-
+void fn_fcall(mu_t f, frame_t c, mu_t *frame);
+mu_t fn_vcall(mu_t f, frame_t c, va_list args);
+mu_t fn_call(mu_t f, frame_t c, ...);
 
 // Function representation
-str_t *fn_repr(fn_t *f);
+mu_t fn_repr(mu_t f);
 
 
-#endif
 #endif

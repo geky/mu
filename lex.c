@@ -4,6 +4,7 @@
 #include "num.h"
 #include "str.h"
 #include "tbl.h"
+#include "err.h"
 
 
 // Classification of characters
@@ -88,8 +89,8 @@ static const enum class class[256] = {
 
 
 // Internal tables for keywords/symbols
-mu_const tbl_t *mu_keys(void) {
-    static tbl_t *keyt = 0;
+mu_const mu_t mu_keys(void) {
+    static mu_t keyt = 0;
 
     if (keyt) return keyt;
 
@@ -111,8 +112,8 @@ mu_const tbl_t *mu_keys(void) {
     return keyt;
 }
 
-mu_const tbl_t *mu_syms(void) {
-    static tbl_t *symt = 0;
+mu_const mu_t mu_syms(void) {
+    static mu_t symt = 0;
 
     if (symt) return symt;
 
@@ -145,7 +146,7 @@ static void wskip(struct lex *l) {
 
 // Lexer definitions for non-trivial tokens
 static void l_nl(struct lex *l) {
-    const data_t *npos = l->pos+1;
+    const byte_t *npos = l->pos+1;
 
     while (npos < l->end && class[*npos] == L_WS)
         npos++;
@@ -174,12 +175,12 @@ static void l_nl(struct lex *l) {
 }
 
 static void l_op(struct lex *l) {
-    const data_t *op_pos = l->pos++;
+    const byte_t *op_pos = l->pos++;
 
     while (l->pos < l->end && class[*l->pos] == L_OP)
         l->pos++;
 
-    const data_t *op_end = l->pos;
+    const byte_t *op_end = l->pos;
 
     l->val = mnstr(op_pos, op_end-op_pos);
     mu_t tok = tbl_lookup(mu_syms(), l->val);
@@ -188,8 +189,8 @@ static void l_op(struct lex *l) {
     l->rprec = l->pos - op_end;
 
     // TODO make these strings preinterned so this is actually reasonable
-    if (!isnil(tok)) {
-        l->tok = getuint(tok);
+    if (tok) {
+        l->tok = num_uint(tok);
     } else if (op_end[-1] == '=') {
         l->tok = T_OPASSIGN;
         l->val = mnstr(op_pos, op_end-op_pos-1);
@@ -199,13 +200,13 @@ static void l_op(struct lex *l) {
 }
 
 static void l_kw(struct lex *l) {
-    const data_t *kw_pos = l->pos++;
+    const byte_t *kw_pos = l->pos++;
 
     while (l->pos < l->end && (class[*l->pos] == L_KW ||
                                class[*l->pos] == L_NUM))
         l->pos++;
 
-    const data_t *kw_end = l->pos;
+    const byte_t *kw_end = l->pos;
 
     l->val = mnstr(kw_pos, kw_end-kw_pos);
     mu_t tok = tbl_lookup(mu_keys(), l->val);
@@ -216,8 +217,8 @@ static void l_kw(struct lex *l) {
     if (l->pos < l->end && *l->pos == ':' &&
         !(l->pos+1 < l->end && class[l->pos[1]] == L_OP)) {
         l->tok = T_KEY;
-    } else if (!isnil(tok)) {
-        l->tok = getuint(tok);
+    } else if (tok) {
+        l->tok = num_uint(tok);
     } else {
         l->tok = T_SYM;
     }
@@ -225,12 +226,12 @@ static void l_kw(struct lex *l) {
 
 static void l_num(struct lex *l) {
     l->tok = T_IMM;
-    l->val = mnum(num_parse(&l->pos, l->end));
+    l->val = num_parse(&l->pos, l->end);
 }
 
 static void l_str(struct lex *l) {
     l->tok = T_IMM;
-    l->val = mstr(str_parse(&l->pos, l->end));
+    l->val = str_parse(&l->pos, l->end);
 }
 
 

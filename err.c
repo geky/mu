@@ -5,13 +5,13 @@
 #include <stdlib.h>
 
 
-static mu_thread eh_t *global_eh = 0;
+static mu_thread struct eh *global_eh = 0;
 
-eh_t *eh_get(void) { return global_eh; }
-void eh_set(eh_t *eh) { global_eh = eh; }
+struct eh *eh_get(void) { return global_eh; }
+void eh_set(struct eh *eh) { global_eh = eh; }
 
 
-void eh_handle(eh_t *eh, tbl_t *err) {
+void eh_handle(struct eh *eh, mu_t err) {
     if (!eh->handles)
         return;
 
@@ -21,14 +21,14 @@ void eh_handle(eh_t *eh, tbl_t *err) {
         mu_t type = tbl_lookup(err, mcstr("type"));
         mu_t handle = tbl_lookup(eh->handles, type);
 
-        if (!isnil(handle))
-            mu_call(handle, 0x10, (mu_t []){ mtbl(err) }, 0);
+        if (handle)
+            mu_call(handle, 0x10, err);
     }
 }
 
 
-mu_noreturn void mu_err(tbl_t *err) {
-    eh_t *eh = eh_get();
+mu_noreturn mu_err(mu_t err) {
+    struct eh *eh = eh_get();
 
     // If no error handler has been registered, we 
     // just abort here
@@ -40,37 +40,37 @@ mu_noreturn void mu_err(tbl_t *err) {
     longjmp(eh->env, (int)err);
 }
 
-mu_noreturn void mu_cerr(str_t *type, str_t *reason) {
-    tbl_t *err = tbl_create(2);
-    tbl_insert(err, mcstr("type"), mstr(type));
-    tbl_insert(err, mcstr("reason"), mstr(reason));
+mu_noreturn mu_cerr(mu_t type, mu_t reason) {
+    mu_t err = tbl_create(2);
+    tbl_insert(err, mcstr("type"), type);
+    tbl_insert(err, mcstr("reason"), reason);
     mu_err(err);
 }
 
 
-mu_noreturn void mu_err_nomem() {
+mu_noreturn mu_err_nomem(void) {
     mu_assert(false); // Figure out how to recover later
 
-    mu_cerr(str_cstr("memory"), 
-            str_cstr("out of memory"));
+    mu_cerr(mcstr("memory"), 
+            mcstr("out of memory"));
 }
 
-mu_noreturn void mu_err_len() {
-    mu_cerr(str_cstr("length"),
-            str_cstr("exceeded max length"));
+mu_noreturn mu_err_len(void) {
+    mu_cerr(mcstr("length"),
+            mcstr("exceeded max length"));
 }
 
-mu_noreturn void mu_err_readonly() {
-    mu_cerr(str_cstr("readonly"),
-            str_cstr("assigning to readonly table"));
+mu_noreturn mu_err_readonly(void) {
+    mu_cerr(mcstr("readonly"),
+            mcstr("assigning to readonly table"));
 }
 
-mu_noreturn void mu_err_parse() {
-    mu_cerr(str_cstr("parse"),
-            str_cstr("expression could not be parsed"));
+mu_noreturn mu_err_parse(void) {
+    mu_cerr(mcstr("parse"),
+            mcstr("expression could not be parsed"));
 }
 
-mu_noreturn void mu_err_undefined() {
-    mu_cerr(str_cstr("undefined"),
-            str_cstr("operation is undefined for type"));
+mu_noreturn mu_err_undefined(void) {
+    mu_cerr(mcstr("undefined"),
+            mcstr("operation is undefined for type"));
 }

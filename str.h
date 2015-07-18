@@ -2,88 +2,72 @@
  *  String Definition
  */
 
-#ifdef MU_DEF
-#ifndef MU_STR_DEF
-#define MU_STR_DEF
-#include "mu.h"
-
-
-// Definition of single data entry in string type
-typedef unsigned char data_t;
-#define MU_MAXDATA UCHAR_MAX
-
-// Definition of Mu's string types
-// Mutable strings can not be used in Mu itself
-// but are useful in C for constructing Mu strings
-typedef mu_aligned struct str mstr_t;
-typedef const mu_aligned struct str str_t;
-
-
-#endif
-#else
 #ifndef MU_STR_H
 #define MU_STR_H
+#include "mu.h"
 #include "types.h"
 
 
-// Each string is simply stored as a length
-// and dynamically determined array of data.
-// Strings must be interned before use in tables
-// using one of the str_create functions, after which 
-// they cannot be modified without breaking things.
-struct str {
-    ref_t ref; // reference count
-    len_t len; // string length
-
-    data_t data[]; // string contents
+// Definition of Mu's string types
+// Each string is stored as a length and array of data.
+// Strings must be interned before use in tables, and once interned, 
+// strings cannot be mutated without breaking things.
+mu_aligned struct str {
+    ref_t ref;
+    len_t len;
+    byte_t data[];
 };
+
+// String creation functions
+mu_t mnstr(const byte_t *s, uint_t len);
+mu_t mcstr(const char *s);
+
+// String access functions
+mu_inline len_t str_len(mu_t m) {
+    return ((struct str *)((uint_t)m - MU_STR))->len;
+}
+
+mu_inline const byte_t *str_bytes(mu_t m) {
+    return ((struct str *)((uint_t)m - MU_STR))->data;
+}
+
+// Mutable string access functions
+mu_inline len_t mstr_len(struct str *s) {
+    return s->len;
+}
+
+mu_inline byte_t *mstr_bytes(struct str *s) {
+    return s->data;
+}
 
 
 // Functions for creating mutable strings
-mstr_t *mstr_create(len_t len);
-void mstr_destroy(mstr_t *s);
+struct str *mstr_create(len_t len);
+void mstr_destroy(struct str *s);
 
 // Functions to help modify mutable strings
-void mstr_insert(mstr_t **m, uint_t i, data_t c);
-void mstr_concat(mstr_t **m, uint_t i, str_t *s);
-void mstr_nconcat(mstr_t **m, uint_t i, const data_t *s, uint_t len);
-void mstr_cconcat(mstr_t **m, uint_t i, const char *s);
-
-// Hashing and equality for non-interned strings
-bool mstr_equals(str_t *a, str_t *b);
-hash_t mstr_hash(str_t *s);
+void mstr_insert(struct str **s, uint_t i, byte_t c);
+void mstr_concat(struct str **s, uint_t i, const byte_t *c, uint_t len);
 
 // Function for interning strings
-str_t *str_intern(str_t *s, len_t len);
-void str_destroy(str_t *s);
+mu_t str_intern(struct str *s, len_t len);
+void str_destroy(mu_t s);
 
-// String creating functions and macros
-str_t *str_nstr(const data_t *s, uint_t len);
-str_t *str_cstr(const char *s);
+// Hashing and equality for non-interned strings
+bool str_equals(mu_t a, mu_t b);
+hash_t str_hash(mu_t s);
 
-mu_inline mu_t mnstr(const data_t *s, uint_t len) {
-    return mstr(str_nstr(s, len));
-}
-
-mu_inline mu_t mcstr(const char *s) {
-    return mstr(str_cstr(s));
-}
-
-// String accessing macros
-mu_inline len_t str_getlen(str_t *s) { return s->len; }
-mu_inline const data_t *str_getdata(str_t *s) { return s->data; }
-
-mu_inline const data_t *getdata(mu_t m) { return str_getdata(getstr(m)); }
 
 // Reference counting
-mu_inline void str_inc(str_t *s) { ref_inc((void *)s); }
-mu_inline void str_dec(str_t *s) { ref_dec((void *)s, 
-                                           (void (*)(void *))str_destroy); }
+mu_inline mu_t str_inc(mu_t m) { ref_inc(m); return m; }
+mu_inline void str_dec(mu_t m) { if (ref_dec(m)) str_destroy(m); }
+
+mu_inline struct str *mstr_inc(struct str *s) { ref_inc(s); return s; }
+mu_inline void mstr_dec(struct str *s) { if (ref_dec(s)) mstr_destroy(s); }
 
 // String parsing and representation
-str_t *str_parse(const data_t **off, const data_t *end);
-str_t *str_repr(str_t *s);
+mu_t str_parse(const byte_t **off, const byte_t *end);
+mu_t str_repr(mu_t s);
 
 
-#endif
 #endif

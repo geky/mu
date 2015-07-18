@@ -12,10 +12,10 @@
 
 // State of parsing
 struct parse {
-    mstr_t *bcode;
+    struct str *bcode;
     len_t bcount;
-    tbl_t *imms;
-    tbl_t *fns;
+    mu_t imms;
+    mu_t fns;
 
     struct lex l;
     struct fn_flags flags;
@@ -51,9 +51,9 @@ struct parse {
 // The only difference between parsing functions and
 // modules is that modules return their scope for use 
 // in type and module definitions
-code_t *mu_parse_expr(str_t *code);
-code_t *mu_parse_fn(str_t *code);
-code_t *mu_parse_module(str_t *code);
+struct code *mu_parse_expr(mu_t code);
+struct code *mu_parse_fn(mu_t code);
+struct code *mu_parse_module(mu_t code);
 
 
 #endif

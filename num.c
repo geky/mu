@@ -1,7 +1,6 @@
 #include "num.h"
 
 #include "str.h"
-#include <math.h>
 
 
 // Max length of a string representation of a number
@@ -9,32 +8,32 @@
 
 
 // Returns true if both variables are equal
-bool num_equals(num_t a, num_t b) {
-    return a == b;
+bool num_equals(mu_t a, mu_t b) {
+    return num_num(a) == num_num(b);
 }
 
 // Returns a hash for each number
 // For positive integers this is equivalent to the number
-hash_t num_hash(num_t n) {
-    mu_t ipart, fpart;
+hash_t num_hash(mu_t m) {
+    union { num_t n; uint_t u; } ipart, fpart;
 
     // This magic number is the value to puts a number's mantissa
     // directly in the integer range. After these operations,
     // ipart and fpart will contain the integer and fractional
     // components of the original number.
-    ipart.num = n + 12582912.0f;
-    fpart.num = n - (ipart.num - 12582912.0f);
+    ipart.n = num_num(m) + 12582912.0f;
+    fpart.n = num_num(m) - (ipart.n - 12582912.0f);
 
     // The int component forms the core of the hash so integers
     // remain linear for table lookups. The fractional component 
     // is also used keep the hash sane for non-integer values.
     // TODO use the bits where the exponent was for something
-    return 0x807fffff & (ipart.bits ^ fpart.bits);
+    return 0x807fffff & (ipart.u ^ fpart.u);
 }
 
 // Parses a string and returns a number
-num_t num_parse(const data_t **off, const data_t *end) {
-    const data_t *str = *off;
+mu_t num_parse(const byte_t **off, const byte_t *end) {
+    const byte_t *str = *off;
     num_t res = 0;
 
     num_t scale, sign;
@@ -42,8 +41,8 @@ num_t num_parse(const data_t **off, const data_t *end) {
     struct base {
         num_t radix;
         num_t exp;
-        data_t expc;
-        data_t expC;
+        byte_t expc;
+        byte_t expC;
     } base = { 10.0, 10.0, 'e', 'E' };
 
 
@@ -136,21 +135,23 @@ exp:        // determine exponent component
 done:       // return the result
     *off = str;
 
-    return res;
+    return mnum(res);
 }
 
 
 // Obtains a string representation of a number
-str_t *num_repr(num_t n) {
+mu_t num_repr(mu_t m) {
+    num_t n = num_num(m);
+
     if (n == 0) {
-        return getstr(mcstr("0"));
+        return mcstr("0");
     } else if (isnan(n)) {
-        return getstr(mcstr("nan"));
+        return mcstr("nan");
     } else if (isinf(n)) {
-        return getstr(n > 0.0 ? mcstr("inf") : mcstr("-inf"));
+        return n > 0.0 ? mcstr("inf") : mcstr("-inf");
     } else {
-        mstr_t *m = mstr_create(MU_NUMLEN);
-        data_t *out = m->data;
+        struct str *m = mstr_create(MU_NUMLEN);
+        byte_t *out = mstr_bytes(m);
 
         if (n < 0.0) {
             n = -n;
@@ -202,7 +203,6 @@ str_t *num_repr(num_t n) {
             *out++ = num_ascii(((int_t)exp / 1) % 10);
         }
 
-        return str_intern(m, out - m->data);
+        return str_intern(m, out - mstr_bytes(m));
     }
 }
-

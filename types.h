@@ -1,179 +1,130 @@
-/* 
+/*
  * Variable types and definitions
  */
 
-#ifdef MU_DEF
-#ifndef MU_TYPES_DEF
-#define MU_TYPES_DEF
+#ifndef MU_TYPES_H
+#define MU_TYPES_H
 #include "mu.h"
-#include "num.h"
-#include "str.h"
-#include "tbl.h"
-#include "fn.h"
+#include "mem.h"
+#include <stdarg.h>
 
 
-// readonly bit in lowest bit of tables
-#define MU_RO 1
+// Smallest addressable unit
+typedef unsigned char byte_t;
+#define MU_MAXBYTE UCHAR_MAX
+
+// Length type for strings/tables
+typedef uinth_t len_t;
+#define MU_MAXLEN MU_MAXUINTH
+
+// Type of hash results
+typedef uint_t hash_t;
+#define MU_MAXHASH MU_MAXUINT
+
+// Type for specifying frame counts
+typedef uint8_t frame_t;
+
 
 // Three bit type specifier located in lowest bits of each variable
 // 3b00x indicates type is not reference counted
+// 3b100 is the only mutable variable
+// 3b11x are currently reserved
 enum mu_type {
-    MU_NIL = 0, // nil
-    MU_NUM = 1, // number
-    MU_STR = 2, // string
-    MU_FN  = 3, // function
-    MU_TBL = 4, // table
-    MU_OBJ = 6, // object
-
-    MU_ROTBL = MU_RO | MU_TBL, // readonly table
-    MU_ROOBJ = MU_RO | MU_OBJ, // readonly object
+    MU_NIL  = 0, // nil
+    MU_NUM  = 1, // number
+    MU_STR  = 2, // string
+    MU_FN   = 3, // function
+    MU_TBL  = 4, // table
+    MU_RTBL = 5, // readonly table
 };
 
 // Declaration of mu type
-typedef union mu {
-    // bitwise representations
-    uint_t bits;
-
-    // number representation
-    num_t num;
-
-    // string representation
-    str_t *str;
-
-    // table representation
-    tbl_t *tbl;
-
-    // function representation
-    fn_t *fn;
-} mu_t;
-
-
-#endif
-#else
-#ifndef MU_TYPES_H
-#define MU_TYPES_H
-#define MU_DEF
-#include "types.h"
-#undef MU_DEF
-#include "mem.h"
-#include <string.h> // TODO rm?
-#include <math.h>
+// It doesn't necessarily point to anything, but using a
+// void * would risk unwanted implicit conversions.
+typedef struct mu *mu_t;
 
 
 // Definitions of literal variables
-#define mnil  ((mu_t){0})
-#define minf  mnum(INFINITY)
-#define mninf mnum(-INFINITY)
+#define mnil  ((mu_t)0)
 
-// Variable constructors
-mu_inline mu_t mnum(num_t num) {
-    union { num_t n; uint_t u; } u = { num };
-    return (mu_t){(~7 & u.u) | MU_NUM};
-}
+// Access to type and general components
+mu_inline enum mu_type mu_type(mu_t m) { return 7 & (uint_t)m; }
+mu_inline ref_t mu_ref(mu_t m) { return *(ref_t *)(~7 & (uint_t)m); }
 
-mu_inline mu_t mstr(str_t *str) {
-    return (mu_t){(~7 & (uint_t)str) | MU_STR};
-}
-
-mu_inline mu_t mfn(fn_t *fn) {
-    return (mu_t){(~7 & (uint_t)fn) | MU_FN};
-}
-
-mu_inline mu_t mtbl(tbl_t *tbl) {
-    return (mu_t){(~6 & (uint_t)tbl) | MU_TBL};
-}
-
-mu_inline mu_t mobj(tbl_t *tbl) {
-    return (mu_t){(~6 & (uint_t)tbl) | MU_OBJ};
-}
-
-
-// type access
-mu_inline enum mu_type gettype(mu_t m) { return 7 & m.bits; }
-
-// properties of variables
-mu_inline bool isnil(mu_t m) { return !m.bits; }
-mu_inline bool isnum(mu_t m) { return gettype(m) == MU_NUM; }
-mu_inline bool isstr(mu_t m) { return gettype(m) == MU_STR; }
-mu_inline bool isfn(mu_t m)  { return gettype(m) == MU_FN;  }
-mu_inline bool istbl(mu_t m) { return (6 & m.bits) == MU_TBL; }
-mu_inline bool isobj(mu_t m) { return 6 & ~m.bits; }
-mu_inline bool isref(mu_t m) { return 6 & m.bits; }
-mu_inline bool isro(mu_t m)  { return 1 & m.bits; }
-
-// definitions for accessing components
-mu_inline void  *getptr(mu_t m) { return (void *)(~7 & m.bits); }
-mu_inline ref_t *getref(mu_t m) { return (ref_t *)getptr(m); }
-mu_inline len_t  getlen(mu_t m) { return *(len_t *)(getref(m) + 1); }
-
-mu_inline num_t  getnum(mu_t m) { 
-    mu_assert(isnum(m)); 
-    return ((mu_t){~7 & m.bits}).num;
-}
-
-mu_inline str_t *getstr(mu_t m) {
-    mu_assert(isstr(m));
-    return ((mu_t){~7 & m.bits}).str; 
-}
-
-mu_inline fn_t  *getfn(mu_t m)  { 
-    mu_assert(isfn(m));
-    return ((mu_t){~7 & m.bits}).fn; 
-}
-
-mu_inline tbl_t *gettbl(mu_t m) { 
-    mu_assert(istbl(m));
-    return ((mu_t){~6 & m.bits}).tbl;
-}
-
+// Properties of variables
+mu_inline bool mu_isnil(mu_t m) { return !m; }
+mu_inline bool mu_isnum(mu_t m) { return mu_type(m) == MU_NUM; }
+mu_inline bool mu_isstr(mu_t m) { return mu_type(m) == MU_STR; }
+mu_inline bool mu_isfn(mu_t m)  { return mu_type(m) == MU_FN;  }
+mu_inline bool mu_istbl(mu_t m) { return (6 & mu_type(m)) == MU_TBL; }
+mu_inline bool mu_isref(mu_t m) { return 6 & (uint_t)m; }
+mu_inline bool mu_isro(mu_t m)  { return 1 & (uint_t)m; }
 
 // Reference counting
-extern void str_destroy(str_t *);
-extern void fn_destroy(fn_t *);
-extern void tbl_destroy(tbl_t *);
-
 mu_inline mu_t mu_inc(mu_t m) {
-    if (isref(m))
-        ref_inc(getref(m));
+    if (mu_isref(m))
+        ref_inc(m);
 
     return m;
 }
 
 mu_inline void mu_dec(mu_t m) {
-    static void (* const dtors[6])(void *) = {
-        (void (*)(void *))str_destroy, (void (*)(void *))fn_destroy,
-        (void (*)(void *))tbl_destroy, (void (*)(void *))tbl_destroy, 
-        0, 0
-    };
+    extern void (*const mu_destroy_table[4])(mu_t);
 
-    if (isref(m))
-        ref_dec(getref(m), dtors[gettype(m)-2]);
+    if (mu_isref(m) && ref_dec(m))
+        mu_destroy_table[mu_type(m)-2](m);
 }
 
 
 // Returns true if both variables are the
 // same type and equivalent.
-bool mu_equals(mu_t a, mu_t b);
+mu_inline bool mu_equals(mu_t a, mu_t b) {
+    extern bool (*const mu_equals_table[6])(mu_t, mu_t);
+    return mu_type(a) == mu_type(b) && mu_equals_table[mu_type(a)](a, b);
+}
 
-// Returns a hash value of the given variable. 
-hash_t mu_hash(mu_t m);
+// Returns a hash value of the given variable.
+mu_inline hash_t mu_hash(mu_t m) {
+    extern hash_t (*const mu_hash_table[6])(mu_t);
+    return mu_hash_table[mu_type(m)](m);
+}
 
 // Performs iteration on variables
-fn_t *mu_iter(mu_t m);
+mu_inline mu_t mu_iter(mu_t m) {
+    extern mu_t (*const mu_iter_table[6])(mu_t);
+    return mu_iter_table[mu_type(m)](m);
+}
 
 // Returns a string representation of the variable
-str_t *mu_repr(mu_t m);
+mu_inline mu_t mu_repr(mu_t m) {
+    extern mu_t (*const mu_repr_table[6])(mu_t);
+    return mu_repr_table[mu_type(m)](m);
+}
 
 // Table related functions performed on variables
-mu_t mu_lookup(mu_t m, mu_t key);
-mu_t mu_lookdn(mu_t m, mu_t key, hash_t i);
-void mu_assign(mu_t m, mu_t key, mu_t val);
-void mu_insert(mu_t m, mu_t key, mu_t val);
+mu_inline mu_t mu_lookup(mu_t m, mu_t key) {
+    extern mu_t (*const mu_lookup_table[6])(mu_t, mu_t);
+    return mu_lookup_table[mu_type(m)](m, key);
+}
+
+mu_inline void mu_insert(mu_t m, mu_t key, mu_t val) {
+    extern void (*const mu_insert_table[6])(mu_t, mu_t, mu_t);
+    return mu_insert_table[mu_type(m)](m, key, val);
+}
+
+mu_inline void mu_assign(mu_t m, mu_t key, mu_t val) {
+    extern void (*const mu_assign_table[6])(mu_t, mu_t, mu_t);
+    return mu_assign_table[mu_type(m)](m, key, val);
+}
 
 // Function calls performed on variables
-void mu_fcall(mu_t m, frame_t c, mu_t *frame);
+mu_inline void mu_fcall(mu_t m, frame_t c, mu_t *frame) {
+    extern void (*const mu_fcall_table[6])(mu_t, frame_t, mu_t *);
+    return mu_fcall_table[mu_type(m)](m, c, frame);
+}
+
+mu_t mu_vcall(mu_t m, frame_t c, va_list args);
 mu_t mu_call(mu_t m, frame_t c, ...);
 
 
-#endif
 #endif

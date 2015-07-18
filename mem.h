@@ -2,23 +2,16 @@
  *  Memory management
  */
 
-#ifdef MU_DEF
-#ifndef MU_MEM_DEF
-#define MU_MEM_DEF
+#ifndef MU_MEM_H
+#define MU_MEM_H
 #include "mu.h"
 
 
 // Reference type as word type aligned to 8 bytes
 typedef mu_aligned uinth_t ref_t;
 
-
-#endif
-#else
-#ifndef MU_MEM_H
-#define MU_MEM_H
-#define MU_DEF
-#include "mem.h"
-#undef MU_DEF
+// Smallest allocatable size
+#define MU_MINALLOC (4*sizeof(void*))
 
 
 // Manual memory management
@@ -44,29 +37,28 @@ mu_inline void *ref_alloc(size_t size) {
 }
 
 mu_inline void ref_dealloc(void *m, size_t size) {
-    mu_dealloc(m, size);
+    mu_dealloc((ref_t *)(~7 & (uint_t)m), size);
 }
 
-mu_inline void *ref_inc(void *m) {
-    ref_t *ref = m;
+mu_inline void ref_inc(void *m) {
+    ref_t *ref = (ref_t *)(~7 & (uint_t)m);
 
     if (*ref != 0)
         (*ref)++;
-
-    return m;
 }
 
-mu_inline void ref_dec(void *m, void (*dtor)(void *)) {
-    ref_t *ref = m;
+mu_inline bool ref_dec(void *m) {
+    ref_t *ref = (ref_t *)(~7 & (uint_t)m);
 
     if (*ref != 0) {
         (*ref)--;
 
         if (*ref == 0)
-            dtor(ref);
+            return true;
     }
+
+    return false;
 }
 
 
-#endif
 #endif

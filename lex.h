@@ -40,8 +40,8 @@ mu_inline bool mu_isexpr(enum tok tok) {
 
 // State of lexical analysis
 struct lex {
-    const data_t *pos;
-    const data_t *end;
+    const byte_t *pos;
+    const byte_t *end;
 
     mu_t val;
     enum tok tok;
@@ -59,8 +59,8 @@ struct lex {
 
 
 // Keywords and symbols
-mu_const tbl_t *mu_keys(void);
-mu_const tbl_t *mu_syms(void);
+mu_const mu_t mu_keys(void);
+mu_const mu_t mu_syms(void);
 
 // Initialize lexing based on pos/end in lex struct
 void mu_lex_init(struct lex *);

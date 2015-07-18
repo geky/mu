@@ -4,174 +4,104 @@
 #include "str.h"
 #include "tbl.h"
 #include "fn.h"
-#include <string.h>
-#include <stdlib.h>
-#include <stdarg.h>
+#include "err.h"
 
 
-// Returns true if both variables are the
-// same type and equivalent.
+// Destructor table
+void (*const mu_destroy_table[4])(mu_t) = {
+    str_destroy, fn_destroy, tbl_destroy, tbl_destroy
+};
 
-// all nils are equal
-static bool nil_equals(void *a, void *b) { return true; }
-// compare raw bits by default
-static bool bit_equals(void *a, void *b) { return (uint_t)a == (uint_t)b; }
+// Returns if both variables are true
+// defaults to bitwise comparison
+bool nil_equals(mu_t a, mu_t b) { return true; }
+bool def_equals(mu_t a, mu_t b) { return a == b; }
 
-bool mu_equals(mu_t a, mu_t b) {
-    static bool (* const mu_equalss[8])(void *, void *) = {
-        nil_equals, (void *)num_equals, (void *)mstr_equals, bit_equals,
-        bit_equals, bit_equals, 0, 0
-    };
-
-    if (gettype(a) != gettype(b))
-        return false;
-
-    return mu_equalss[gettype(a)](getptr(a), getptr(b));
-}
-
+bool (*const mu_equals_table[6])(mu_t, mu_t) = {
+    nil_equals, num_equals, str_equals, 
+    def_equals, def_equals, def_equals,
+};
 
 // Returns a hash value of the given variable. 
-// nils should never be hashed
 // use raw bits by default
-static hash_t bit_hash(void *v) { return (hash_t)v; }
+hash_t def_hash(mu_t m) { return (hash_t)m; }
 
-hash_t mu_hash(mu_t v) {
-    static hash_t (* const mu_hashs[8])(void *) = {
-        bit_hash, (void *)num_hash, (void *)mstr_hash, bit_hash,
-        bit_hash, bit_hash, 0, 0
-    };
-
-    return mu_hashs[gettype(v)](getptr(v));
-}
-
-
-// Performs iteration on variables
-static fn_t *nil_iter(void *v) { mu_err_undefined(); }
-
-fn_t *mu_iter(mu_t v) {
-    static fn_t *(* const mu_iters[8])(void *) = {
-        nil_iter, nil_iter, nil_iter, nil_iter,
-        (void *)tbl_iter, (void *)tbl_iter, 0, 0
-    };
-
-    return mu_iters[gettype(v)](getptr(v));
-}
+hash_t (*const mu_hash_table[6])(mu_t) = {
+    def_hash, num_hash, str_hash,
+    def_hash, def_hash, def_hash,
+};
     
+// Performs iteration on variables
+mu_t no_iter(mu_t m) { mu_err_undefined(); }
+mu_t fn_iter(mu_t m) { return m; } // TODO move this?
+
+mu_t (*const mu_iter_table[6])(mu_t) = {
+    no_iter, no_iter, no_iter, // TODO str iter
+    fn_iter, tbl_iter, tbl_iter,
+};
 
 // Returns a string representation of the variable
-static str_t *nil_repr(void *v) { return str_cstr("nil"); }
+mu_t nil_repr(mu_t m) { return mcstr("nil"); }
 
-str_t *mu_repr(mu_t v) {
-    static str_t *(* const mu_reprs[8])(void *) = {
-        nil_repr, (void *)num_repr, (void *)str_repr, (void *)fn_repr,
-        (void *)tbl_repr, (void *)tbl_repr, 0, 0
-    };
-
-    return mu_reprs[gettype(v)](getptr(v));
-}
-
+mu_t (*const mu_repr_table[6])(mu_t) = {
+    nil_repr, num_repr, str_repr,
+    fn_repr, tbl_repr, tbl_repr,
+};
 
 // Table related functions performed on variables
-static mu_t nil_lookup(void *t, mu_t k)  { mu_err_undefined(); }
+mu_t no_lookup(mu_t m, mu_t k) { mu_err_undefined(); }
 
-mu_t mu_lookup(mu_t v, mu_t key) {
-    static mu_t (* const mu_lookups[8])(void *, mu_t) = {
-        nil_lookup, nil_lookup, nil_lookup, nil_lookup,
-        (void *)tbl_lookup, (void *)tbl_lookup, 0, 0
-    };
+mu_t (*const mu_lookup_table[6])(mu_t, mu_t) = {
+    no_lookup, no_lookup, no_lookup,
+    no_lookup, tbl_lookup, tbl_lookup,
+};
 
-    return mu_lookups[gettype(v)](getptr(v), key);
-}
+void no_insert(mu_t m, mu_t k, mu_t v) { mu_err_undefined(); }
+void ro_insert(mu_t m, mu_t k, mu_t v) { mu_err_readonly(); }
 
-static mu_t nil_lookdn(void *t, mu_t k, hash_t i) { mu_err_undefined(); }
+void (*const mu_insert_table[6])(mu_t, mu_t, mu_t) = {
+    no_insert, no_insert, no_insert,
+    no_insert, tbl_insert, ro_insert,
+};
 
-mu_t mu_lookdn(mu_t v, mu_t key, hash_t i) {
-    static mu_t (* const mu_lookdns[8])(void *, mu_t, hash_t) = {
-        nil_lookdn, nil_lookdn, nil_lookdn, nil_lookdn,
-        (void *)tbl_lookdn, (void *)tbl_lookdn, 0, 0
-    };
+void no_assign(mu_t m, mu_t k, mu_t v) { mu_err_undefined(); }
+void ro_assign(mu_t m, mu_t k, mu_t v) { mu_err_readonly(); }
 
-    return mu_lookdns[gettype(v)](getptr(v), key, i);
-}
-
-
-static void nil_insert(void *t, mu_t k, mu_t v) { mu_err_undefined(); }
-
-void mu_insert(mu_t v, mu_t key, mu_t val) {
-    static void (* const mu_inserts[8])(void *, mu_t, mu_t) = {
-        nil_insert, nil_insert, nil_insert, nil_insert,
-        (void *)tbl_insert, (void *)tbl_insert, 0, 0
-    };
-
-    mu_inserts[gettype(v)](getptr(v), key, val);
-}
-
-
-static void nil_assign(void *t, mu_t k, mu_t v) { mu_err_undefined(); }
-
-void mu_assign(mu_t v, mu_t key, mu_t val) {
-    static void (* const mu_assigns[8])(void *, mu_t, mu_t) = {
-        nil_assign, nil_assign, nil_assign, nil_assign,
-        (void *)tbl_assign, (void *)tbl_assign, 0, 0
-    };
-
-    mu_assigns[gettype(v)](getptr(v), key, val);
-}
-
+void (*const mu_assign_table[6])(mu_t, mu_t, mu_t) = {
+    no_assign, no_assign, no_assign,
+    no_assign, tbl_assign, ro_assign,
+};
 
 // Function calls performed on variables
-static void nil_fcall(void *n, frame_t c, mu_t *frame) { 
-    mu_err_undefined();
+void no_fcall(mu_t m, frame_t c, mu_t *f) { mu_err_undefined(); }
+
+void tbl_fcall(mu_t m, frame_t c, mu_t *frame) {
+    mu_t call_hook = tbl_lookup(m, mcstr("call"));
+
+    if (call_hook)
+        mu_fcall(call_hook, c, frame);
+    else
+        no_fcall(m, c, frame);
 }
 
-void mu_fcall(mu_t m, frame_t c, mu_t *frame) {
-    static void (*const mu_fcalls[8])(void *, frame_t, mu_t *) = {
-        nil_fcall, nil_fcall, nil_fcall, (void *)fn_fcall,
-        nil_fcall, nil_fcall, nil_fcall, nil_fcall
-    };
+void (*const mu_fcall_table[6])(mu_t, frame_t, mu_t *) = {
+    no_fcall, no_fcall, no_fcall,
+    fn_fcall, tbl_fcall, tbl_fcall,
+};
 
-    return mu_fcalls[gettype(m)](getptr(m), c, frame);
+// Function calls with varargs handling
+mu_t mu_vcall(mu_t m, frame_t c, va_list args) {
+    mu_t frame[MU_FRAME];
+
+    mu_toframe(c >> 4, frame, args);
+    mu_fcall(m, c, frame);
+    return mu_fromframe(0xf & c, frame, args);
 }
 
 mu_t mu_call(mu_t m, frame_t c, ...) {
     va_list args;
-    mu_t frame[MU_FRAME];
-
     va_start(args, c);
-
-    if ((c >> 4) == 0xf) {
-        frame[0] = va_arg(args, mu_t);
-    } else if ((c >> 4) > MU_FRAME) {
-        tbl_t *tbl = tbl_create(c >> 4);
-
-        for (uint_t i = 0; i < (c >> 4); i++)
-            tbl_insert(tbl, muint(i), va_arg(args, mu_t));
-
-        frame[0] = mtbl(tbl);
-    } else {
-        for (uint_t i = 0; i < (c >> 4); i++)
-            frame[i] = va_arg(args, mu_t);
-    }
-
-    mu_fcall(m, c, frame);
-
-    if ((c & 0xf) != 0xf) {
-        if ((c & 0xf) > MU_FRAME) {
-            tbl_t *tbl = gettbl(frame[0]);
-            frame[0] = tbl_lookup(tbl, muint(0));
-
-            for (uint_t i = 1; i < (c & 0xf); i++)
-                *va_arg(args, mu_t *) = tbl_lookup(tbl, muint(i));
-
-            tbl_dec(tbl);
-        } else {
-            for (uint_t i = 1; i < (c & 0xf); i++) {
-                *va_arg(args, mu_t *) = frame[i];
-            }
-        }
-    }
-
+    mu_t ret = mu_vcall(m, c, args);
     va_end(args);
-
-    return (c & 0xf) ? frame[0] : mnil;
+    return ret;
 }

@@ -3,7 +3,25 @@
 #include "num.h"
 #include "str.h"
 #include "fn.h"
+#include "err.h"
 #include <string.h>
+
+
+// Internally used conversion between mu_t and struct tbl
+mu_inline mu_t mtbl(struct tbl *t) {
+    return (mu_t)((uint_t)t + MU_TBL);
+}
+
+mu_inline struct tbl *tbl_rtbl(mu_t m) {
+    return (struct tbl *)(~7 & (uint_t)m);
+}
+
+mu_inline struct tbl *tbl_wtbl(mu_t m) {
+    if (mu_unlikely(tbl_isro(m)))
+        mu_err_readonly();
+    else
+        return tbl_rtbl(m);
+}
 
 
 // Finds capacity based on load factor of 2/3
@@ -29,8 +47,8 @@ mu_inline uintq_t tbl_npw2(hash_t i) {
 
 
 // Functions for managing tables
-tbl_t *tbl_create(len_t size) {
-    tbl_t *t = ref_alloc(sizeof(tbl_t));
+mu_t tbl_create(len_t size) {
+    struct tbl *t = ref_alloc(sizeof(struct tbl));
 
     t->npw2 = tbl_npw2(tbl_ncap(size));
 
@@ -40,18 +58,19 @@ tbl_t *tbl_create(len_t size) {
     t->tail = 0;
     t->offset = 0;
 
+    return mtbl(t);
+}
+
+mu_t tbl_extend(len_t size, mu_t parent) {
+    mu_t t = tbl_create(size);
+    tbl_rtbl(t)->tail = parent;
+
     return t;
 }
 
-tbl_t *tbl_extend(len_t size, tbl_t *parent) {
-    tbl_t *t = tbl_create(size);
+void tbl_destroy(mu_t m) {
+    struct tbl *t = tbl_rtbl(m);
 
-    t->tail = parent;
-
-    return t;
-}
-
-void tbl_destroy(tbl_t *t) {
     if (t->stride > 0) {
         uint_t i, cap, len;
 
@@ -73,21 +92,21 @@ void tbl_destroy(tbl_t *t) {
     if (t->tail)
         tbl_dec(t->tail);
 
-    ref_dealloc(t, sizeof(tbl_t));
+    ref_dealloc(t, sizeof(struct tbl));
 }
 
 
 // Recursively looks up a key in the table
 // returns either that value or nil
-mu_t tbl_lookup(tbl_t *t, mu_t key) {
-    if (isnil(key))
+mu_t tbl_lookup(mu_t m, mu_t k) {
+    if (!k)
         return mnil;
 
-    hash_t i, hash = mu_hash(key);
+    hash_t i, hash = mu_hash(k);
 
-    for (t = tbl_read(t); t; t = tbl_read(t->tail)) {
+    for (struct tbl *t = tbl_rtbl(m); t; t = tbl_rtbl(t->tail)) {
         if (t->stride < 2) {
-            if (ishash(key) && hash < t->len) {
+            if (mu_ishash(k) && hash < t->len) {
                 if (t->stride == 0)
                     return muint(hash + t->offset);
                 else
@@ -98,10 +117,10 @@ mu_t tbl_lookup(tbl_t *t, mu_t key) {
                 hash_t mi = i & ((1 << t->npw2) - 1);
                 mu_t *v = &t->array[2*mi];
 
-                if (isnil(v[0]))
+                if (!v[0])
                     break;
 
-                if (mu_equals(key, v[0]) && !isnil(v[1]))
+                if (mu_equals(k, v[0]) && v[1])
                     return v[1];
             }
         }
@@ -110,34 +129,8 @@ mu_t tbl_lookup(tbl_t *t, mu_t key) {
     return mnil;
 }
 
-
-// Recursively looks up either a key or index
-// if key is not found
-mu_t tbl_lookdn(tbl_t *tbl, mu_t key, hash_t i) {
-    tbl = tbl_read(tbl);
-
-    if (!tbl->tail && tbl->stride < 2) {
-        if (i < tbl->len) {
-            if (tbl->stride == 0)
-                return muint(i + tbl->offset);
-            else
-                return tbl->array[i];
-        }
-
-        return mnil;
-    } else {
-        mu_t val = tbl_lookup(tbl, key);
-
-        if (!isnil(val))
-            return val;
-
-        return tbl_lookup(tbl, muint(i));
-    }
-}
-
-
 // converts implicit range to actual array of nums on heap
-static void tbl_realizevals(tbl_t *t) {
+static void tbl_realizevals(struct tbl *t) {
     hash_t cap = 1 << t->npw2;
     mu_t *array = mu_alloc(cap * sizeof(mu_t));
     uint_t i;
@@ -151,7 +144,7 @@ static void tbl_realizevals(tbl_t *t) {
 }
 
 // converts either a range or list to a full hash table
-static void tbl_realizekeys(tbl_t *t) {
+static void tbl_realizekeys(struct tbl *t) {
     hash_t cap = 1 << t->npw2;
     mu_t *array = mu_alloc(2*cap * sizeof(mu_t));
     uint_t i;
@@ -177,8 +170,8 @@ static void tbl_realizekeys(tbl_t *t) {
 
 
 // reallocates and rehashes a table
-mu_inline void tbl_resize(tbl_t *t, len_t len) {
-    data_t npw2 = tbl_npw2(tbl_ncap(len));
+mu_inline void tbl_resize(struct tbl *t, len_t len) {
+    byte_t npw2 = tbl_npw2(tbl_ncap(len));
     hash_t cap = 1 << npw2;
     hash_t mask = cap - 1;
 
@@ -202,14 +195,14 @@ mu_inline void tbl_resize(tbl_t *t, len_t len) {
         for (j = 0; j < (1 << t->npw2); j++) {
             mu_t *u = &t->array[2*j];
 
-            if (isnil(u[0]) || isnil(u[1]))
+            if (!u[0] || !u[1])
                 continue;
 
             for (i = mu_hash(u[0]);; i = tbl_next(i)) {
                 hash_t mi = i & mask;
                 mu_t *v = &array[2*mi];
 
-                if (isnil(v[0])) {
+                if (!v[0]) {
                     v[0] = u[0];
                     v[1] = u[1];
                     break;
@@ -227,11 +220,11 @@ mu_inline void tbl_resize(tbl_t *t, len_t len) {
 
 // Inserts a value in the table with the given key
 // without decending down the tail chain
-static void tbl_insertnil(tbl_t *t, mu_t key, mu_t val) {
-    hash_t i, hash = mu_hash(key);
+static void tbl_insertnil(struct tbl *t, mu_t k, mu_t v) {
+    hash_t i, hash = mu_hash(k);
 
     if (t->stride < 2) {
-        if (!ishash(key) || hash >= t->len)
+        if (!mu_ishash(k) || hash >= t->len)
             return;
 
         if (hash == t->len - 1) {
@@ -247,15 +240,15 @@ static void tbl_insertnil(tbl_t *t, mu_t key, mu_t val) {
 
     for (i = hash;; i = tbl_next(i)) {
         hash_t mi = i & ((1 << t->npw2) - 1);
-        mu_t *v = &t->array[2*mi];
+        mu_t *p = &t->array[2*mi];
 
-        if (isnil(v[0]))
+        if (!p[0])
             return;
 
-        if (mu_equals(key, v[0])) {
-            if (!isnil(v[1])) {
-                mu_dec(v[1]);
-                v[1] = mnil;
+        if (mu_equals(k, p[0])) {
+            if (p[1]) {
+                mu_dec(p[1]);
+                p[1] = mnil;
                 t->nils++;
                 t->len--;
             }
@@ -266,21 +259,21 @@ static void tbl_insertnil(tbl_t *t, mu_t key, mu_t val) {
 }
 
 
-static void tbl_insertval(tbl_t *t, mu_t key, mu_t val) {
-    hash_t i, hash = mu_hash(key);
+static void tbl_insertval(struct tbl *t, mu_t k, mu_t v) {
+    hash_t i, hash = mu_hash(k);
 
     if (tbl_ncap(t->nils+t->len + 1) > (1 << t->npw2))
         tbl_resize(t, t->len+1); // TODO check len
 
     if (t->stride < 2) {
-        if (ishash(key)) {
+        if (mu_ishash(k)) {
             if (hash == t->len) {
                 if (t->stride == 0) {
-                    if (ishash(val)) {
+                    if (mu_ishash(v)) {
                         if (t->len == 0)
-                            t->offset = getuint(val);
+                            t->offset = num_uint(v);
 
-                        if (getuint(val) == hash + t->offset) {
+                        if (num_uint(v) == hash + t->offset) {
                             t->len++;
                             return;
                         }
@@ -289,19 +282,19 @@ static void tbl_insertval(tbl_t *t, mu_t key, mu_t val) {
                     tbl_realizevals(t);
                 }
 
-                t->array[hash] = val;
+                t->array[hash] = v;
                 t->len++;
                 return;
             } else if (hash < t->len) {
                 if (t->stride == 0) {
-                    if (ishash(val) && getuint(val) == hash + t->offset)
+                    if (mu_ishash(v) && num_uint(v) == hash + t->offset)
                         return;
 
                     tbl_realizevals(t);
                 }
 
                 mu_dec(t->array[hash]);
-                t->array[hash] = val;
+                t->array[hash] = v;
                 return;
             }
         }
@@ -311,58 +304,54 @@ static void tbl_insertval(tbl_t *t, mu_t key, mu_t val) {
 
     for (i = hash;; i = tbl_next(i)) {
         hash_t mi = i & ((1 << t->npw2) - 1);
-        mu_t *v = &t->array[2*mi];
+        mu_t *p = &t->array[2*mi];
 
-        if (isnil(v[0])) {
-            v[0] = key;
-            v[1] = val;
+        if (!p[0]) {
+            p[0] = k;
+            p[1] = v;
             t->len++;
             return;
         }
 
-        if (mu_equals(key, v[0])) {
-            if (isnil(v[1])) {
-                v[1] = val;
+        if (mu_equals(k, p[0])) {
+            if (!p[1]) {
+                p[1] = v;
                 t->nils--;
                 t->len++;
             } else {
-                mu_dec(v[1]);
-                v[1] = val;
+                mu_dec(p[1]);
+                p[1] = v;
             }
 
             return;
         }
     }
 }
-    
 
-void tbl_insert(tbl_t *t, mu_t key, mu_t val) {
-    t = tbl_write(t);
 
-    if (isnil(key))
+void tbl_insert(mu_t m, mu_t k, mu_t v) {
+    struct tbl *t = tbl_wtbl(m);
+
+    if (!k)
         return;
 
-    if (isnil(val))
-        tbl_insertnil(t, key, val);
+    if (!v)
+        return tbl_insertnil(t, k, v);
     else
-        tbl_insertval(t, key, val);
-}
-
-
-// Sets the next index in the table with the value
-void tbl_append(tbl_t *t, mu_t val) {
-    tbl_insert(t, muint(t->len), val);
+        return tbl_insertval(t, k, v);
 }
 
 
 // Recursively assigns a value in the table with the given key
 // decends down the tail chain until its found
-static void tbl_assignnil(tbl_t *t, mu_t key, mu_t val) {
-    hash_t i, hash = mu_hash(key);
+static void tbl_assignnil(mu_t m, mu_t k, mu_t v) {
+    hash_t i, hash = mu_hash(k);
 
-    for (; t && !tbl_isro(t); t = t->tail) {
+    for (; m && !tbl_isro(m); m = tbl_rtbl(m)->tail) {
+        struct tbl *t = tbl_rtbl(m);
+
         if (t->stride < 2) {
-            if (!ishash(key) || hash >= t->len)
+            if (!mu_ishash(k) || hash >= t->len)
                 continue;
 
             if (hash == t->len - 1) {
@@ -378,17 +367,17 @@ static void tbl_assignnil(tbl_t *t, mu_t key, mu_t val) {
 
         for (i = hash;; i = tbl_next(i)) {
             hash_t mi = i & ((1 << t->npw2) - 1);
-            mu_t *v = &t->array[2*mi];
+            mu_t *p = &t->array[2*mi];
 
-            if (isnil(v[0])) 
+            if (!p[0]) 
                 break;
 
-            if (mu_equals(key, v[0])) {
-                if (isnil(v[1]))
+            if (mu_equals(k, p[0])) {
+                if (!p[1])
                     break;
 
-                mu_dec(v[1]);
-                v[1] = mnil;
+                mu_dec(p[1]);
+                p[1] = mnil;
                 t->nils++;
                 t->len--;
                 return;
@@ -398,59 +387,61 @@ static void tbl_assignnil(tbl_t *t, mu_t key, mu_t val) {
 }
 
 
-static void tbl_assignval(tbl_t *t, mu_t key, mu_t val) {
-    tbl_t *head = t;
-    hash_t i, hash = mu_hash(key);
+static void tbl_assignval(mu_t m, mu_t k, mu_t v) {
+    mu_t head = m;
+    hash_t i, hash = mu_hash(k);
 
-    for (; t && tbl_isro(t); t = t->tail) {
+    for (; m && tbl_isro(m); m = tbl_rtbl(m)->tail) {
+        struct tbl *t = tbl_rtbl(m);
+
         if (t->stride < 2) {
-            if (!ishash(key) || hash >= t->len)
+            if (!mu_ishash(k) || hash >= t->len)
                 continue;
 
             if (t->stride == 0) {
-                if (ishash(val) && getuint(val) == hash + t->offset)
+                if (mu_ishash(v) && num_uint(v) == hash + t->offset)
                     return;
 
                 tbl_realizevals(t);
             }
 
             mu_dec(t->array[hash]);
-            t->array[hash] = val;
+            t->array[hash] = v;
             return;
         }
 
         for (i = hash;; i = tbl_next(i)) {
             hash_t mi = i & ((1 << t->npw2) - 1);
-            mu_t *v = &t->array[2*mi];
+            mu_t *p = &t->array[2*mi];
 
-            if (isnil(v[0]))
+            if (!p[0])
                 break;
 
-            if (mu_equals(key, v[0])) {
-                if (isnil(v[1]))
+            if (mu_equals(k, p[0])) {
+                if (!p[1])
                     break;
 
-                mu_dec(v[1]);
-                v[1] = val;
+                mu_dec(p[1]);
+                p[1] = v;
                 return;
             }
         }
     }
 
 
-    t = tbl_write(head);
+    struct tbl *t = tbl_wtbl(head);
 
     if (tbl_ncap(t->len+t->nils + 1) > (1 << t->npw2))
         tbl_resize(t, t->len+1); // TODO check size
 
     if (t->stride < 2) {
-        if (ishash(key) && hash == t->len) {
+        if (mu_ishash(k) && hash == t->len) {
             if (t->stride == 0) {
-                if (ishash(val)) {
+                if (mu_ishash(v)) {
                     if (t->len == 0)
-                        t->offset = getuint(val);
+                        t->offset = num_uint(v);
 
-                    if (getuint(val) == hash + t->offset) {
+                    if (num_uint(v) == hash + t->offset) {
                         t->len++;
                         return;
                     }
@@ -459,7 +450,7 @@ static void tbl_assignval(tbl_t *t, mu_t key, mu_t val) {
                 tbl_realizevals(t);
             }
 
-            t->array[hash] = val;
+            t->array[hash] = v;
             t->len++;
             return;
         }
@@ -469,17 +460,17 @@ static void tbl_assignval(tbl_t *t, mu_t key, mu_t val) {
 
     for (i = hash;; i = tbl_next(i)) {
         hash_t mi = i & ((1 << t->npw2) - 1);
-        mu_t *v = &t->array[2*mi];
+        mu_t *p = &t->array[2*mi];
 
-        if (isnil(v[0])) {
-            v[0] = key;
-            v[1] = val;
+        if (!p[0]) {
+            p[0] = k;
+            p[1] = v;
             t->len++;
             return;
         }
 
-        if (mu_equals(key, v[0]) && isnil(v[1])) {
-            v[1] = val;
+        if (mu_equals(k, p[0]) && !p[1]) {
+            p[1] = v;
             t->nils--;
             t->len++;
             return;
@@ -488,60 +479,60 @@ static void tbl_assignval(tbl_t *t, mu_t key, mu_t val) {
 }
 
 
-void tbl_assign(tbl_t *t, mu_t key, mu_t val) {
-    if (isnil(key))
+void tbl_assign(mu_t m, mu_t k, mu_t v) {
+    if (!k)
         return;
 
-    if (isnil(val))
-        tbl_assignnil(t, key, val);
+    if (!v)
+        return tbl_assignnil(m, k, v);
     else
-        tbl_assignval(t, key, val);
+        return tbl_assignval(m, k, v);
 }
 
 
 
 // Performs iteration on a table
-frame_t tbl_0_iteration(tbl_t *scope, mu_t *frame) {
-    tbl_t *tbl = gettbl(tbl_lookup(scope, muint(0)));
-    uint_t i = getuint(tbl_lookup(scope, muint(1)));
+frame_t tbl_0_iteration(mu_t scope, mu_t *frame) {
+    struct tbl *t = tbl_rtbl(tbl_lookup(scope, muint(0)));
+    uint_t i = num_uint(tbl_lookup(scope, muint(1)));
 
-    if (i >= tbl->len)
+    if (i >= t->len)
         return 0;
 
     tbl_insert(scope, muint(1), muint(i+1));
 
     frame[0] = muint(i);
-    frame[1] = muint(tbl->offset + i);
+    frame[1] = muint(t->offset + i);
     return 2;
 }
 
-frame_t tbl_1_iteration(tbl_t *scope, mu_t *frame) {
-    tbl_t *tbl = gettbl(tbl_lookup(scope, muint(0)));
-    uint_t i = getuint(tbl_lookup(scope, muint(1)));
+frame_t tbl_1_iteration(mu_t scope, mu_t *frame) {
+    struct tbl *t = tbl_rtbl(tbl_lookup(scope, muint(0)));
+    uint_t i = num_uint(tbl_lookup(scope, muint(1)));
 
-    if (i >= tbl->len)
+    if (i >= t->len)
         return 0;
 
     tbl_insert(scope, muint(1), muint(i+1));
 
     frame[0] = muint(i);
-    frame[1] = mu_inc(tbl->array[i]);
+    frame[1] = mu_inc(t->array[i]);
     return 2;
 }
 
-frame_t tbl_2_iteration(tbl_t *scope, mu_t *frame) {
-    tbl_t *tbl = gettbl(tbl_lookup(scope, muint(0)));
-    uint_t i = getuint(tbl_lookup(scope, muint(1)));
+frame_t tbl_2_iteration(mu_t scope, mu_t *frame) {
+    struct tbl *t = tbl_rtbl(tbl_lookup(scope, muint(0)));
+    uint_t i = num_uint(tbl_lookup(scope, muint(1)));
     mu_t k, v;
 
-    if (i >= tbl->len)
+    if (i >= t->len)
         return 0;
 
     do {
-        k = tbl->array[2*i  ];
-        v = tbl->array[2*i+1];
+        k = t->array[2*i  ];
+        v = t->array[2*i+1];
         i += 1;
-    } while (isnil(k) || isnil(v));
+    } while (!k || !v);
 
     tbl_insert(scope, muint(1), muint(i));
 
@@ -550,35 +541,33 @@ frame_t tbl_2_iteration(tbl_t *scope, mu_t *frame) {
     return 2;
 }
 
-fn_t *tbl_iter(tbl_t *tbl) {
+mu_t tbl_iter(mu_t tbl) {
     static sbfn_t *const tbl_iters[3] = {
         tbl_0_iteration,
         tbl_1_iteration,
         tbl_2_iteration
     };
 
-    tbl = tbl_read(tbl);
-    tbl_t *scope = tbl_create(2);
-    tbl_insert(scope, muint(0), mtbl(tbl));
+    mu_t scope = tbl_create(2);
+    tbl_insert(scope, muint(0), tbl);
     tbl_insert(scope, muint(1), muint(0));
 
-    return fn_sbfn(0, tbl_iters[tbl->stride], scope);
+    return msbfn(0x00, tbl_iters[tbl_rtbl(tbl)->stride], scope);
 }
 
 
 // Returns a string representation of the table
-str_t *tbl_repr(tbl_t *t) {
-    str_t **reprs = mu_alloc(2*tbl_getlen(t) * sizeof(str_t *));
-
+mu_t tbl_repr(mu_t t) {
+    mu_t *reprs = mu_alloc(2*tbl_len(t) * sizeof(mu_t));
     uint_t size = 2;
     uint_t i = 0;
 
     tbl_for_begin (k, v, t) {
         reprs[2*i  ] = mu_repr(k);
         reprs[2*i+1] = mu_repr(v);
-        size += str_getlen(reprs[2*i  ]);
-        size += str_getlen(reprs[2*i+1]);
-        size += (i == tbl_getlen(t)-1) ? 2 : 4;
+        size += str_len(reprs[2*i  ]);
+        size += str_len(reprs[2*i+1]);
+        size += (i == tbl_len(t)-1) ? 2 : 4;
 
         i++;
     } tbl_for_end;
@@ -586,24 +575,24 @@ str_t *tbl_repr(tbl_t *t) {
     if (size > MU_MAXLEN)
         mu_err_len();
 
-    mstr_t *m = mstr_create(size);
-    data_t *out = m->data;
+    struct str *m = mstr_create(size);
+    byte_t *out = mstr_bytes(m);
 
     *out++ = '[';
 
-    for (i=0; i < tbl_getlen(t); i++) {
-        memcpy(out, str_getdata(reprs[2*i]), str_getlen(reprs[2*i]));
-        out += str_getlen(reprs[2*i]);
+    for (i=0; i < tbl_len(t); i++) {
+        memcpy(out, str_bytes(reprs[2*i]), str_len(reprs[2*i]));
+        out += str_len(reprs[2*i]);
         str_dec(reprs[2*i]);
 
         *out++ = ':';
         *out++ = ' ';
 
-        memcpy(out, str_getdata(reprs[2*i+1]), str_getlen(reprs[2*i+1]));
-        out += str_getlen(reprs[2*i+1]);
+        memcpy(out, str_bytes(reprs[2*i+1]), str_len(reprs[2*i+1]));
+        out += str_len(reprs[2*i+1]);
         str_dec(reprs[2*i+1]);
 
-        if (i != tbl_getlen(t)-1) {
+        if (i != tbl_len(t)-1) {
             *out++ = ',';
             *out++ = ' ';
         }
@@ -611,27 +600,27 @@ str_t *tbl_repr(tbl_t *t) {
 
     *out++ = ']';
 
-    mu_dealloc(reprs, 2*tbl_getlen(t) * sizeof(mu_t));
+    mu_dealloc(reprs, 2*tbl_len(t) * sizeof(mu_t));
 
-    return str_intern(m, m->len);
+    return str_intern(m, mstr_len(m));
 }
 
-tbl_t *tbl_concat(tbl_t *a, tbl_t *b, mu_t offset) {
+mu_t tbl_concat(mu_t a, mu_t b, mu_t offset) {
     uint_t max = 0;
-    if (isnum(offset)) {
-        max = getuint(offset);
+    if (mu_isnum(offset)) {
+        max = num_uint(offset);
     } else {
         tbl_for_begin(k, v, a) {
-            if (isnum(k) && getuint(k)+1 > max)
-                max = getuint(k)+1;
+            if (mu_isnum(k) && num_uint(k)+1 > max)
+                max = num_uint(k)+1;
         } tbl_for_end
     }
 
-    tbl_t *res;
-    if (a->ref == 1) {
+    mu_t res;
+    if (mu_ref(a) == 1) {
         res = a;
     } else {
-        res = tbl_create(a->len + b->len);
+        res = tbl_create(tbl_len(a) + tbl_len(b));
 
         tbl_for_begin(k, v, a) {
             tbl_insert(res, k, v);
@@ -641,8 +630,8 @@ tbl_t *tbl_concat(tbl_t *a, tbl_t *b, mu_t offset) {
     }
 
     tbl_for_begin(k, v, b) {
-        if (isnum(k))
-            tbl_insert(res, muint(getuint(k) + max), v);
+        if (mu_isnum(k))
+            tbl_insert(res, muint(num_uint(k) + max), v);
         else
             tbl_insert(res, k, v);
     } tbl_for_end
@@ -654,24 +643,22 @@ tbl_t *tbl_concat(tbl_t *a, tbl_t *b, mu_t offset) {
 
 // TODO optimize for arrays
 // TODO can the heap allocation be removed in the general case?
-mu_t tbl_pop(tbl_t *tbl, mu_t key) {
-    tbl = tbl_write(tbl);
+mu_t tbl_pop(mu_t t, mu_t i) {
+    mu_t ret = tbl_lookup(t, i);
+    tbl_insert(t, i, mnil);
 
-    mu_t ret = tbl_lookup(tbl, key);
-    tbl_insert(tbl, key, mnil);
+    if (mu_isnum(i)) {
+        mu_t temp = tbl_create(tbl_len(t));
 
-    if (isnum(key)) {
-        tbl_t *temp = tbl_create(tbl_getlen(tbl));
-
-        tbl_for_begin(k, v, tbl) {
-            if (isnum(k) && getuint(k) > getuint(key)) {
+        tbl_for_begin(k, v, t) {
+            if (mu_isnum(k) && num_uint(k) > num_uint(i)) {
                 tbl_insert(temp, k, v);
-                tbl_insert(tbl, k, mnil);
+                tbl_insert(t, k, mnil);
             }
         } tbl_for_end
 
         tbl_for_begin(k, v, temp) {
-            tbl_insert(tbl, muint(getuint(k)-1), v);
+            tbl_insert(t, muint(num_uint(k)-1), v);
         } tbl_for_end
     }
 
@@ -680,24 +667,22 @@ mu_t tbl_pop(tbl_t *tbl, mu_t key) {
 
 // TODO optimize for arrays
 // TODO can the heap allocation be removed in the general case?
-void tbl_push(tbl_t *tbl, mu_t val, mu_t key) {
-    tbl = tbl_write(tbl);
+void tbl_push(mu_t t, mu_t v, mu_t i) {
+    if (mu_isnum(i)) {
+        mu_t temp = tbl_create(tbl_len(t));
 
-    if (isnum(key)) {
-        tbl_t *temp = tbl_create(tbl_getlen(tbl));
-
-        tbl_for_begin(k, v, tbl) {
-            if (isnum(k) && getuint(k) >= getuint(key)) {
+        tbl_for_begin(k, v, t) {
+            if (mu_isnum(k) && num_uint(k) >= num_uint(i)) {
                 tbl_insert(temp, k, v);
-                tbl_insert(tbl, k, mnil);
+                tbl_insert(t, k, mnil);
             }
         } tbl_for_end
 
         tbl_for_begin(k, v, temp) {
-            tbl_insert(tbl, muint(getuint(k)+1), v);
+            tbl_insert(t, muint(num_uint(k)+1), v);
         } tbl_for_end
     }
 
-    tbl_insert(tbl, key, val);
+    tbl_insert(t, i, v);
 }
 
