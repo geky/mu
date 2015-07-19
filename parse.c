@@ -179,7 +179,7 @@ static struct code *parse_realize(struct parse *p) {
     tbl_dec(p->imms);
     tbl_dec(p->fns);
 
-    memcpy(bcode, p->bcode->data, p->bcount);
+    memcpy(bcode, p->bcode, p->bcount);
 
     mstr_dec(p->bcode);
     mu_dealloc(p, sizeof(struct parse));

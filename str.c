@@ -14,35 +14,112 @@ mu_inline struct str *str_str(mu_t m) {
     return (struct str *)((uint_t)m - MU_STR);
 }
 
-
-// Functions for creating mutable temporary strings
-struct str *mstr_create(len_t len) {
-    struct str *m = ref_alloc(mu_offset(struct str, data) + len);
-    m->len = len;
-    return m;
+// Conversion from mstr's exposed pointer that gets passed around
+mu_inline struct str *str_mstr(byte_t *s) {
+    return (struct str *)(s - mu_offset(struct str, data));
 }
 
-void mstr_destroy(struct str *m) {
-    ref_dealloc(m, mu_offset(struct str, data) + m->len);
-}
 
-// Functions for interning strings
-mu_t str_intern(struct str *s, len_t len) {
-    // TODO interning
-    // TODO maybe not make new alloc for odd len strings?
-    if (s->len != len) {
-        struct str *ns = mstr_create(len);
-        memcpy(ns->data, s->data, len);
-        mstr_dec(s);
-        s = ns;
+// String interning
+//
+// Currently interning is implemented using a sorted array with a
+// binary search for insertion. This was chosen for a few reasons:
+// - We can't reuse the table's implementation since it relies
+//   on interned strings.
+// - Lower memory overhead/more cache friendly than tree
+//   or trie implementation.
+// - Strings don't need to be hashed, its possible strings won't
+//   even need to be completely scanned during comparisons on
+//   lookup/insertion.
+static struct str **str_table = 0;
+static unsigned int str_table_size = 0;
+static unsigned int str_table_len = 0;
+
+static int str_table_find(const byte_t *s, len_t len) {
+    int min = 0;
+    int max = str_table_len-1;
+
+    // binary search for existing strings
+    // strings are sorted first by length to avoid comparisons
+    while (min <= max) {
+        int mid = (max + min) / 2;
+        int cmp = len > str_table[mid]->len ? +1 :
+                  len < str_table[mid]->len ? -1 :
+                  memcmp(s, str_table[mid]->data, len);
+
+        if (cmp == 0) {
+            return mid;
+        } else if (cmp < 0) {
+            max = mid-1;
+        } else {
+            min = mid+1;
+        }
     }
 
-    return mstr(s);
+    // Use inverted values to indicate not found but where to 
+    // insert since 0 is valid in both cases
+    return ~min;
+}
+
+static void str_table_insert(int i, struct str *s) {
+    // expand the table if necessary
+    if (str_table_len == str_table_size) {
+        unsigned int nsize;
+        struct str **ntable;
+
+        if (str_table_size == 0)
+            nsize = MU_MINALLOC / sizeof(struct str *);
+        else
+            nsize = str_table_size << 1;
+
+        ntable = mu_alloc(nsize * sizeof(struct str *));
+        memcpy(ntable, str_table,
+               i * sizeof(struct str *));
+        memcpy(&ntable[i+1], &str_table[i],
+               (str_table_len-i) * sizeof(struct str *));
+        mu_dealloc(str_table, str_table_size);
+
+        str_table = ntable;
+        str_table_size = nsize;
+    } else {
+        memmove(&str_table[i+1], &str_table[i],
+                (str_table_len-i) * sizeof(struct str *));
+    }
+
+    str_table[i] = s;
+    str_table_len += 1;
+}
+
+static void str_table_remove(int i) {
+    str_table_len -= 1;
+    memmove(&str_table[i], &str_table[i+1],
+            (str_table_len-i) * sizeof(struct str *));
+}
+
+
+// String management
+mu_t str_intern(const byte_t *s, len_t len) {
+    int i = str_table_find(s, len);
+
+    if (i >= 0)
+        return str_inc(mstr(str_table[i]));
+
+    // create new string and insert
+    struct str *ns = ref_alloc(mu_offset(struct str, data) + len);
+    memcpy(ns->data, s, len);
+    ns->len = len;
+
+    str_table_insert(~i, ns);
+    return str_inc(mstr(ns));
 }
 
 void str_destroy(mu_t m) {
-    // TODO interning
-    mstr_destroy(str_str(m));
+    int i = str_table_find(str_bytes(m), str_len(m));
+
+    if (i >= 0)
+        str_table_remove(i);
+
+    ref_dealloc(m, mu_offset(struct str, data) + str_len(m));
 }
 
 // String creating functions
@@ -53,20 +130,54 @@ mu_t mcstr(const char *s) {
 mu_t mnstr(const byte_t *s, uint_t len) {
     if (len > MU_MAXLEN)
         mu_err_len();
-
-    struct str *ns = mstr_create(len);
-    memcpy(ns->data, s, len);
-    return str_intern(ns, len);
+    
+    return str_intern(s, len);
 }
 
 
-// Functions to help modify mutable strings
-void mstr_insert(struct str **s, uint_t i, byte_t c) {
-    mstr_concat(s, i, &c, 1);
+// Functions for creating mutable temporary strings
+// these can avoid unnecessary allocations when interning
+// since mstr_intern can reuse their internal structure
+byte_t *mstr_create(len_t len) {
+    struct str *s = ref_alloc(mu_offset(struct str, data) + len);
+    s->len = len;
+    return s->data;
 }
 
-void mstr_concat(struct str **s, uint_t i, const byte_t *c, uint_t len) {
-    uint_t size = (*s)->len;
+void mstr_destroy(byte_t *b) {
+    struct str *s = str_mstr(b);
+    ref_dealloc(s, mu_offset(struct str, data) + s->len);
+}
+
+mu_t mstr_intern(byte_t *b, len_t len) {
+    // unfortunately, reusing the mstr struct only
+    // works with exact length currently
+    if (str_mstr(b)->len != len) {
+        mu_t m = str_intern(b, len);
+        mstr_dec(b);
+        return m;
+    }
+
+    int i = str_table_find(b, len);
+
+    if (i >= 0) {
+        mstr_dec(b);
+        return str_inc(mstr(str_table[i]));
+    }
+
+    struct str *s = str_mstr(b);
+    str_table_insert(~i, s);
+    return str_inc(mstr(s));
+}
+
+// Functions to modify mutable strings
+void mstr_insert(byte_t **b, uint_t i, byte_t c) {
+    mstr_concat(b, i, &c, 1);
+}
+
+void mstr_concat(byte_t **b, uint_t i, const byte_t *c, uint_t len) {
+    struct str *s = str_mstr(*b);
+    uint_t size = s->len;
 
     if (size < i+len) {
         size += mu_offset(struct str, data);
@@ -82,22 +193,22 @@ void mstr_concat(struct str **s, uint_t i, const byte_t *c, uint_t len) {
         if (size > MU_MAXLEN)
             mu_err_len();
 
-        struct str *ns = mstr_create(size);
-        memcpy(ns->data, (*s)->data, (*s)->len);
-        mstr_dec(*s);
-        *s = ns;
+        byte_t *nb = mstr_create(size);
+        memcpy(nb, s->data, s->len);
+        mstr_dec(*b);
+        *b = nb;
     }
 
-    memcpy(&(*s)->data[i], c, len);
+    memcpy(&(*b)[i], c, len);
 }
 
-// Equality for non-interned strings
+
+// Equality for interned strings
 bool str_equals(mu_t a, mu_t b) {
-    return str_len(a) == str_len(b) && 
-           !memcmp(str_bytes(a), str_bytes(b), str_len(a));
+    return a == b;
 }
 
-// Hashing for non-interned strings
+// Hashing for strings
 // based off the djb2 algorithm
 hash_t str_hash(mu_t m) {
     const byte_t *pos = str_bytes(m);
@@ -116,33 +227,33 @@ hash_t str_hash(mu_t m) {
 mu_t str_parse(const byte_t **ppos, const byte_t *end) {
     const byte_t *pos = *ppos + 1;
     byte_t quote = **ppos;
-    struct str *m = mstr_create(0);
+    byte_t *s = mstr_create(0);
     uint_t len = 0;
 
     while (*pos != quote) {
         if (pos == end) {
-            mstr_dec(m);
+            mstr_dec(s);
             mu_err_parse(); // Unterminated string
         }
 
         if (*pos == '\\' && end-pos >= 2) {
             switch (pos[1]) {
-                case 'o': 
+                case 'o':
                     if (end-pos >= 5 && num_val(pos[2]) < 8 &&
                                         num_val(pos[3]) < 8 &&
                                         num_val(pos[4]) < 8) {
-                        mstr_insert(&m, len++, num_val(pos[2])*7*7 +
+                        mstr_insert(&s, len++, num_val(pos[2])*7*7 +
                                                num_val(pos[3])*7 +
                                                num_val(pos[4]));
                         pos += 5;
                     }
                     break;
-                
+
                 case 'd':
                     if (end-pos >= 5 && num_val(pos[2]) < 10 &&
                                         num_val(pos[3]) < 10 &&
                                         num_val(pos[4]) < 10) {
-                        mstr_insert(&m, len++, num_val(pos[2])*10*10 +
+                        mstr_insert(&s, len++, num_val(pos[2])*10*10 +
                                                num_val(pos[3])*10 +
                                                num_val(pos[4]));
                         pos += 5;
@@ -152,7 +263,7 @@ mu_t str_parse(const byte_t **ppos, const byte_t *end) {
                 case 'x':
                     if (end-pos >= 4 && num_val(pos[2]) < 16 &&
                                         num_val(pos[3]) < 16) {
-                        mstr_insert(&m, len++, num_val(pos[2])*16 +
+                        mstr_insert(&s, len++, num_val(pos[2])*16 +
                                                num_val(pos[3]));
                         pos += 4;
                     }
@@ -160,70 +271,69 @@ mu_t str_parse(const byte_t **ppos, const byte_t *end) {
 
                 case '\n': pos += 2; break;
 
-                case '\\': mstr_insert(&m, len++, '\\'); pos += 2; break;
-                case '\'': mstr_insert(&m, len++, '\''); pos += 2; break;
-                case '"':  mstr_insert(&m, len++,  '"'); pos += 2; break;
-                case 'a':  mstr_insert(&m, len++, '\a'); pos += 2; break;
-                case 'b':  mstr_insert(&m, len++, '\b'); pos += 2; break;
-                case 'f':  mstr_insert(&m, len++, '\f'); pos += 2; break;
-                case 'n':  mstr_insert(&m, len++, '\n'); pos += 2; break;
-                case 'r':  mstr_insert(&m, len++, '\r'); pos += 2; break;
-                case 't':  mstr_insert(&m, len++, '\t'); pos += 2; break;
-                case 'v':  mstr_insert(&m, len++, '\v'); pos += 2; break;
-                case '0':  mstr_insert(&m, len++, '\0'); pos += 2; break;
-                default:   mstr_insert(&m, len++, '\\'); pos += 1; break;
+                case '\\': mstr_insert(&s, len++, '\\'); pos += 2; break;
+                case '\'': mstr_insert(&s, len++, '\''); pos += 2; break;
+                case '"':  mstr_insert(&s, len++,  '"'); pos += 2; break;
+                case 'a':  mstr_insert(&s, len++, '\a'); pos += 2; break;
+                case 'b':  mstr_insert(&s, len++, '\b'); pos += 2; break;
+                case 'f':  mstr_insert(&s, len++, '\f'); pos += 2; break;
+                case 'n':  mstr_insert(&s, len++, '\n'); pos += 2; break;
+                case 'r':  mstr_insert(&s, len++, '\r'); pos += 2; break;
+                case 't':  mstr_insert(&s, len++, '\t'); pos += 2; break;
+                case 'v':  mstr_insert(&s, len++, '\v'); pos += 2; break;
+                case '0':  mstr_insert(&s, len++, '\0'); pos += 2; break;
+                default:   mstr_insert(&s, len++, '\\'); pos += 1; break;
             }
         } else {
-            mstr_insert(&m, len++, *pos++);
+            mstr_insert(&s, len++, *pos++);
         }
     }
 
     *ppos = pos + 1;
 
-    return str_intern(m, len);
+    return mstr_intern(s, len);
 }
 
 
 // Returns a string representation of a string
-mu_t str_repr(mu_t s) {
-    const byte_t *pos = str_bytes(s);
-    const byte_t *end = str_bytes(s) + str_len(s);
-    struct str *m = mstr_create(2);
+mu_t str_repr(mu_t m) {
+    const byte_t *pos = str_bytes(m);
+    const byte_t *end = str_bytes(m) + str_len(m);
+    byte_t *s = mstr_create(2);
     uint_t len = 0;
 
-    mstr_insert(&m, len++, '\'');
+    mstr_insert(&s, len++, '\'');
 
     while (pos < end) {
-        if (*pos < ' ' || *pos > '~' || 
+        if (*pos < ' ' || *pos > '~' ||
             *pos == '\\' || *pos == '\'') {
             switch (*pos) {
-                case '\\': mstr_concat(&m, len, (byte_t*)"\\\\", 2); len += 2; break;
-                case '\'': mstr_concat(&m, len, (byte_t*)"\\'", 2); len += 2; break;
-                case '\a': mstr_concat(&m, len, (byte_t*)"\\a", 2); len += 2; break;
-                case '\b': mstr_concat(&m, len, (byte_t*)"\\b", 2); len += 2; break;
-                case '\f': mstr_concat(&m, len, (byte_t*)"\\f", 2); len += 2; break;
-                case '\n': mstr_concat(&m, len, (byte_t*)"\\n", 2); len += 2; break;
-                case '\r': mstr_concat(&m, len, (byte_t*)"\\r", 2); len += 2; break;
-                case '\t': mstr_concat(&m, len, (byte_t*)"\\t", 2); len += 2; break;
-                case '\v': mstr_concat(&m, len, (byte_t*)"\\v", 2); len += 2; break;
-                case '\0': mstr_concat(&m, len, (byte_t*)"\\0", 2); len += 2; break;
+                case '\\': mstr_concat(&s, len, (byte_t*)"\\\\", 2); len += 2; break;
+                case '\'': mstr_concat(&s, len, (byte_t*)"\\'", 2); len += 2; break;
+                case '\a': mstr_concat(&s, len, (byte_t*)"\\a", 2); len += 2; break;
+                case '\b': mstr_concat(&s, len, (byte_t*)"\\b", 2); len += 2; break;
+                case '\f': mstr_concat(&s, len, (byte_t*)"\\f", 2); len += 2; break;
+                case '\n': mstr_concat(&s, len, (byte_t*)"\\n", 2); len += 2; break;
+                case '\r': mstr_concat(&s, len, (byte_t*)"\\r", 2); len += 2; break;
+                case '\t': mstr_concat(&s, len, (byte_t*)"\\t", 2); len += 2; break;
+                case '\v': mstr_concat(&s, len, (byte_t*)"\\v", 2); len += 2; break;
+                case '\0': mstr_concat(&s, len, (byte_t*)"\\0", 2); len += 2; break;
                 default:
-                    mstr_concat(&m, len, 
+                    mstr_concat(&s, len,
                         (byte_t[]){'\\', 'x', num_ascii(*pos / 16),
                                               num_ascii(*pos % 16)}, 4);
                     len += 4;
                     break;
             }
         } else {
-            mstr_insert(&m, len++, *pos);
+            mstr_insert(&s, len++, *pos);
         }
 
         pos++;
     }
 
-    mstr_insert(&m, len++, '\'');
-
-    return str_intern(m, len);
+    mstr_insert(&s, len++, '\'');
+    return mstr_intern(s, len);
 }
 
 

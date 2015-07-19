@@ -150,8 +150,8 @@ mu_t num_repr(mu_t m) {
     } else if (isinf(n)) {
         return n > 0.0 ? mcstr("inf") : mcstr("-inf");
     } else {
-        struct str *m = mstr_create(MU_NUMLEN);
-        byte_t *out = mstr_bytes(m);
+        byte_t *s = mstr_create(MU_NUMLEN);
+        byte_t *out = s;
 
         if (n < 0.0) {
             n = -n;
@@ -203,6 +203,6 @@ mu_t num_repr(mu_t m) {
             *out++ = num_ascii(((int_t)exp / 1) % 10);
         }
 
-        return str_intern(m, out - mstr_bytes(m));
+        return mstr_intern(s, out - s);
     }
 }

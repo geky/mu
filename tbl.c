@@ -575,8 +575,8 @@ mu_t tbl_repr(mu_t t) {
     if (size > MU_MAXLEN)
         mu_err_len();
 
-    struct str *m = mstr_create(size);
-    byte_t *out = mstr_bytes(m);
+    byte_t *s = mstr_create(size);
+    byte_t *out = s;
 
     *out++ = '[';
 
@@ -601,8 +601,7 @@ mu_t tbl_repr(mu_t t) {
     *out++ = ']';
 
     mu_dealloc(reprs, 2*tbl_len(t) * sizeof(mu_t));
-
-    return str_intern(m, mstr_len(m));
+    return mstr_intern(s, size);
 }
 
 mu_t tbl_concat(mu_t a, mu_t b, mu_t offset) {

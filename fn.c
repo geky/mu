@@ -127,15 +127,12 @@ mu_t fn_call(mu_t m, frame_t c, ...) {
 mu_t fn_repr(mu_t f) {
     uint_t bits = (uint_t)fn_fn(f);
 
-    struct str *m = mstr_create(5 + 2*sizeof(uint_t));
-    byte_t *out = mstr_bytes(m);
-
-    memcpy(out, "fn 0x", 5);
-    out += 5;
+    byte_t *s = mstr_create(5 + 2*sizeof(uint_t));
+    memcpy(s, "fn 0x", 5);
 
     for (uint_t i = 0; i < 2*sizeof(uint_t); i++) {
-        *out++ = num_ascii(0xf & (bits >> (4*(sizeof(uint_t)-i))));
+        s[i+5] = num_ascii(0xf & (bits >> (4*(sizeof(uint_t)-i))));
     }
 
-    return str_intern(m, mstr_len(m));
+    return mstr_intern(s, 5 + 2*sizeof(uint_t));
 }

@@ -12,7 +12,7 @@
 
 // State of parsing
 struct parse {
-    struct str *bcode;
+    byte_t *bcode;
     len_t bcount;
     mu_t imms;
     mu_t fns;
