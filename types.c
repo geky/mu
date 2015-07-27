@@ -11,41 +11,22 @@
 void (*const mu_destroy_table[4])(mu_t) = {
     str_destroy, fn_destroy, tbl_destroy, tbl_destroy
 };
-
-// Returns if both variables are true
-// defaults to bitwise comparison
-bool nil_equals(mu_t a, mu_t b) { return true; }
-bool def_equals(mu_t a, mu_t b) { return a == b; }
-
-bool (*const mu_equals_table[6])(mu_t, mu_t) = {
-    nil_equals, num_equals, str_equals, 
-    def_equals, def_equals, def_equals,
-};
-
-// Returns a hash value of the given variable. 
-// use raw bits by default
-hash_t def_hash(mu_t m) { return (hash_t)m; }
-
-hash_t (*const mu_hash_table[6])(mu_t) = {
-    def_hash, num_hash, str_hash,
-    def_hash, def_hash, def_hash,
-};
     
-// Performs iteration on variables
-mu_t no_iter(mu_t m) { mu_err_undefined(); }
-mu_t fn_iter(mu_t m) { return m; } // TODO move this?
-
-mu_t (*const mu_iter_table[6])(mu_t) = {
-    no_iter, no_iter, no_iter, // TODO str iter
-    fn_iter, tbl_iter, tbl_iter,
-};
-
 // Returns a string representation of the variable
 mu_t nil_repr(mu_t m) { return mcstr("nil"); }
 
 mu_t (*const mu_repr_table[6])(mu_t) = {
     nil_repr, num_repr, str_repr,
     fn_repr, tbl_repr, tbl_repr,
+};
+
+// Performs iteration on variables
+mu_t no_iter(mu_t m) { mu_err_undefined(); }
+mu_t fn_iter(mu_t m) { return m; }
+
+mu_t (*const mu_iter_table[6])(mu_t) = {
+    no_iter, no_iter, str_iter,
+    fn_iter, tbl_iter, tbl_iter,
 };
 
 // Table related functions performed on variables

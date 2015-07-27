@@ -63,7 +63,21 @@ static void printoutput(mu_t f) {
         return;
 
     printf("%s", OUTPUT_A);
-    tbl_for_begin (k, v, f) {
+//    tbl_for_begin (k, v, f) {
+//        if (!mu_isnum(k)) {
+//            printrepr(k);
+//            printf(": ");
+//        }
+//
+//        printrepr(v);
+//
+//        if (--i != 0) {
+//            printf(", ");
+//        }
+//    } tbl_for_end
+
+    mu_t k, v;
+    for (uint_t j = 0; tbl_next(f, &j, &k, &v);) {
         if (!mu_isnum(k)) {
             printrepr(k);
             printf(": ");
@@ -74,7 +88,7 @@ static void printoutput(mu_t f) {
         if (--i != 0) {
             printf(", ");
         }
-    } tbl_for_end
+    }
     printf("\n");
 }
 
@@ -124,9 +138,9 @@ static frame_t b_concat(mu_t *frame) {
 
 static frame_t b_pop(mu_t *frame) {
     assert(mu_istbl(frame[0]));
-    if (!frame[1]) {
-        frame[1] = muint(tbl_len(frame[0])-1);
-    }
+//    if (!frame[1]) {
+//        frame[1] = muint(tbl_len(frame[0])-1);
+//    }
     frame[0] = tbl_pop(frame[0], frame[1]);
     return 1;
 }
@@ -141,7 +155,7 @@ static frame_t b_push(mu_t *frame) {
 }
 
 static frame_t b_equals(mu_t *frame) {
-    bool r = mu_equals(frame[0], frame[1]);
+    bool r = frame[0] == frame[1];
     mu_dec(frame[0]); mu_dec(frame[1]);
     frame[0] = r ? muint(1) : mnil;
     return 1;
@@ -155,9 +169,10 @@ static frame_t b_repr(mu_t *frame) {
 }
 
 static frame_t b_print(mu_t *frame) {
-    tbl_for_begin (k, v, frame[0]) {
+    mu_t k, v;
+    for (uint_t i = 0; tbl_next(frame[0], &i, &k, &v);) {
         printvar(v);
-    } tbl_for_end;
+    }
 
     mu_dec(frame[0]);
     printf("\n");
@@ -180,10 +195,12 @@ static void genscope() {
     tbl_assign(ops, mcstr("+"), mbfn(0x2, b_add));
     tbl_assign(ops, mcstr("*"), mbfn(0x2, b_mul));
     tbl_assign(ops, mcstr("-"), mbfn(0x2, b_sub));
+    tbl_assign(ops, mcstr("~"), mbfn(0x2, b_equals));
     tbl_assign(ops, mcstr("=="), mbfn(0x2, b_equals));
     tbl_assign(scope, mcstr("+"), mbfn(0x2, b_add));
     tbl_assign(scope, mcstr("-"), mbfn(0x2, b_sub));
     tbl_assign(scope, mcstr("*"), mbfn(0x2, b_mul));
+    tbl_assign(scope, mcstr("~"), mbfn(0x2, b_equals));
     tbl_assign(scope, mcstr("=="), mbfn(0x2, b_equals));
     tbl_assign(scope, mcstr("ops"), ops);
     tbl_assign(scope, mcstr("repr"), mbfn(0x1, b_repr));

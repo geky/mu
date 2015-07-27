@@ -21,14 +21,10 @@ mu_aligned struct tbl {
     len_t len;  // count of non-nil entries
     len_t nils; // count of nil entries
     uintq_t npw2;   // log2 of capacity
-    uintq_t stride; // type of table
+    uintq_t linear; // type of table
 
     mu_t tail; // tail chain of tables
-
-    union {
-        uint_t offset; // offset for implicit ranges
-        mu_t *array;  // pointer to stored data
-    };
+    mu_t *array;  // pointer to stored data
 };
 
 
@@ -48,8 +44,8 @@ mu_inline bool tbl_isro(mu_t m) {
 
 
 // Table creating functions and macros
-mu_t tbl_create(len_t size);
-mu_t tbl_extend(len_t size, mu_t parent);
+mu_t tbl_create(uint_t size);
+mu_t tbl_extend(uint_t size, mu_t parent);
 void tbl_destroy(mu_t t);
 
 // Recursively looks up a key in the table
@@ -66,11 +62,12 @@ void tbl_assign(mu_t t, mu_t k, mu_t v);
 
 // Performs iteration on a table
 mu_t tbl_iter(mu_t t);
+bool tbl_next(mu_t t, uint_t *i, mu_t *k, mu_t *v);
 
 // Table representation
 mu_t tbl_repr(mu_t t);
 
-// Table concatenation
+// Array-like manipulations
 mu_t tbl_concat(mu_t a, mu_t b, mu_t offset);
 mu_t tbl_pop(mu_t a, mu_t i);
 void tbl_push(mu_t a, mu_t v, mu_t i);
@@ -78,41 +75,6 @@ void tbl_push(mu_t a, mu_t v, mu_t i);
 // Table reference counting
 mu_inline mu_t tbl_inc(mu_t m) { ref_inc(m); return m; }
 mu_inline void tbl_dec(mu_t m) { if (ref_dec(m)) tbl_destroy(m); }
-
-
-// Macro for iterating through a table in c
-// Assign names for k and v, and pass in the 
-// block to execute for each pair in tbl
-#define tbl_for_begin(k, v, t) {                    \
-    mu_t k;                                         \
-    mu_t v;                                         \
-    struct tbl *_t = (struct tbl *)(~7 & (uint_t)t); \
-    uint_t _i, _c = _t->len;                        \
-                                                    \
-    for (_i=0; _c; _i++) {                          \
-        switch (_t->stride) {                       \
-            case 0:                                 \
-                k = muint(_i);                      \
-                v = muint(_t->offset + _i);         \
-                break;                              \
-            case 1:                                 \
-                k = muint(_i);                      \
-                v = _t->array[_i];                  \
-                break;                              \
-            case 2:                                 \
-                k = _t->array[2*_i  ];              \
-                v = _t->array[2*_i+1];              \
-                if (!k || !v)                       \
-                    continue;                       \
-                break;                              \
-            default: mu_unreachable;                \
-        }                                           \
-{
-#define tbl_for_end                                 \
-}                                                   \
-        _c--;                                       \
-    }                                               \
-}
 
 
 #endif

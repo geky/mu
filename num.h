@@ -40,19 +40,9 @@ mu_inline float  num_float(mu_t m)  { return (float) num_num(m); }
 mu_inline double num_double(mu_t m) { return (double)num_num(m); }
 
 
-// Hashing and equality for numbers
-bool num_equals(mu_t a, mu_t b);
-hash_t num_hash(mu_t n);
-
 // Number parsing and representation
 mu_t num_parse(const byte_t **off, const byte_t *end);
 mu_t num_repr(mu_t n);
-
-
-// Check to see if number is equivalent to its hash
-mu_inline bool mu_ishash(mu_t m) {
-    return mu_isnum(m) && num_uint(m) == num_hash(m); 
-}
 
 
 // TODO move to lexer?

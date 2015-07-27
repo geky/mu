@@ -7,30 +7,6 @@
 #define MU_NUMLEN 12
 
 
-// Returns true if both variables are equal
-bool num_equals(mu_t a, mu_t b) {
-    return num_num(a) == num_num(b);
-}
-
-// Returns a hash for each number
-// For positive integers this is equivalent to the number
-hash_t num_hash(mu_t m) {
-    union { num_t n; uint_t u; } ipart, fpart;
-
-    // This magic number is the value to puts a number's mantissa
-    // directly in the integer range. After these operations,
-    // ipart and fpart will contain the integer and fractional
-    // components of the original number.
-    ipart.n = num_num(m) + 12582912.0f;
-    fpart.n = num_num(m) - (ipart.n - 12582912.0f);
-
-    // The int component forms the core of the hash so integers
-    // remain linear for table lookups. The fractional component 
-    // is also used keep the hash sane for non-integer values.
-    // TODO use the bits where the exponent was for something
-    return 0x807fffff & (ipart.u ^ fpart.u);
-}
-
 // Parses a string and returns a number
 mu_t num_parse(const byte_t **off, const byte_t *end) {
     const byte_t *str = *off;
@@ -87,6 +63,7 @@ mu_t num_parse(const byte_t **off, const byte_t *end) {
     goto done;
 
 fraction:   // determine fraction component
+    str++; // consume dot
     scale = 1.0;
 
     while (str < end) {

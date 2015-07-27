@@ -76,29 +76,16 @@ mu_inline void mu_dec(mu_t m) {
 }
 
 
-// Returns true if both variables are the
-// same type and equivalent.
-mu_inline bool mu_equals(mu_t a, mu_t b) {
-    extern bool (*const mu_equals_table[6])(mu_t, mu_t);
-    return mu_type(a) == mu_type(b) && mu_equals_table[mu_type(a)](a, b);
-}
-
-// Returns a hash value of the given variable.
-mu_inline hash_t mu_hash(mu_t m) {
-    extern hash_t (*const mu_hash_table[6])(mu_t);
-    return mu_hash_table[mu_type(m)](m);
+// Returns a string representation of the variable
+mu_inline mu_t mu_repr(mu_t m) {
+    extern mu_t (*const mu_repr_table[6])(mu_t);
+    return mu_repr_table[mu_type(m)](m);
 }
 
 // Performs iteration on variables
 mu_inline mu_t mu_iter(mu_t m) {
     extern mu_t (*const mu_iter_table[6])(mu_t);
     return mu_iter_table[mu_type(m)](m);
-}
-
-// Returns a string representation of the variable
-mu_inline mu_t mu_repr(mu_t m) {
-    extern mu_t (*const mu_repr_table[6])(mu_t);
-    return mu_repr_table[mu_type(m)](m);
 }
 
 // Table related functions performed on variables

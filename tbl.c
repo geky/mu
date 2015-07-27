@@ -24,74 +24,64 @@ mu_inline struct tbl *tbl_wtbl(mu_t m) {
 }
 
 
+// General purpose hash for mu types
+mu_inline uint_t tbl_hash(mu_t m) {
+    // Mu garuntees bitwise equality for Mu types, which has the very
+    // nice property of being a free hash function.
+    //
+    // We remove the lower 3 bits, since they store the type, which 
+    // generally doesn't vary in tables. And we xor the upper and lower 
+    // halves so all bits can affect the range of the length type. 
+    // This is the boundary on the table size so it's really the only 
+    // part that matters.
+    return ((uint_t)m >> (8*sizeof(len_t))) ^ ((uint_t)m >> 3);
+}
+
+// Finds next power of 2 and check for minimum bound
+mu_inline uintq_t tbl_npw2(uint_t s) {
+    if (s < (MU_MINALLOC/sizeof(mu_t)))
+        s = (MU_MINALLOC/sizeof(mu_t));
+
+    return mu_npw2(s);
+}
+
 // Finds capacity based on load factor of 2/3
-mu_inline hash_t tbl_ncap(hash_t s) {
+mu_inline uint_t tbl_nsize(uint_t s) {
     return s + (s >> 1);
-}
-
-// Iterates through hash entries using i = i*5 + 1
-// This uses the recurrence equation used in Python's dictionary 
-// implementation, which allows open hashing with the benefit
-// of reducing collisions with very regular sets of data.
-mu_inline hash_t tbl_next(hash_t i) {
-    return (i << 2) + i + 1;
-}
-
-// Finds next power of 2 and checks for minimum bound
-mu_inline uintq_t tbl_npw2(hash_t i) {
-    if (i == 0)
-        return mu_npw2(MU_MINALLOC);
-    else
-        return mu_npw2(i);
 }
 
 
 // Functions for managing tables
-mu_t tbl_create(len_t size) {
+mu_t tbl_create(uint_t len) {
     struct tbl *t = ref_alloc(sizeof(struct tbl));
 
-    t->npw2 = tbl_npw2(tbl_ncap(size));
-
+    t->npw2 = tbl_npw2(len);
+    t->linear = true;
     t->len = 0;
     t->nils = 0;
-    t->stride = 0;
     t->tail = 0;
-    t->offset = 0;
+
+    int size = 1 << t->npw2;
+    t->array = mu_alloc(size * sizeof(mu_t));
+    memset(t->array, 0, size * sizeof(mu_t));
 
     return mtbl(t);
 }
 
-mu_t tbl_extend(len_t size, mu_t parent) {
-    mu_t t = tbl_create(size);
-    tbl_rtbl(t)->tail = parent;
-
+mu_t tbl_extend(uint_t len, mu_t tail) {
+    mu_t t = tbl_create(len);
+    tbl_rtbl(t)->tail = tail;
     return t;
 }
 
 void tbl_destroy(mu_t m) {
     struct tbl *t = tbl_rtbl(m);
+    int size = (t->linear ? 1 : 2) * (1 << t->npw2);
 
-    if (t->stride > 0) {
-        uint_t i, cap, len;
+    for (int i = 0; i < size; i++)
+        mu_dec(t->array[i]);
 
-        if (t->stride < 2) {
-            cap = 1 << t->npw2;
-            len = t->len;
-        } else {
-            cap = 2 * (1 << t->npw2);
-            len = cap;
-        }
-
-        for (i = 0; i < len; i++) {
-            mu_dec(t->array[i]);
-        }
-
-        mu_dealloc(t->array, cap * sizeof(mu_t));
-    }
-
-    if (t->tail)
-        tbl_dec(t->tail);
-
+    mu_dealloc(t->array, size * sizeof(mu_t));
     ref_dealloc(t, sizeof(struct tbl));
 }
 
@@ -102,26 +92,23 @@ mu_t tbl_lookup(mu_t m, mu_t k) {
     if (!k)
         return mnil;
 
-    hash_t i, hash = mu_hash(k);
-
     for (struct tbl *t = tbl_rtbl(m); t; t = tbl_rtbl(t->tail)) {
-        if (t->stride < 2) {
-            if (mu_ishash(k) && hash < t->len) {
-                if (t->stride == 0)
-                    return muint(hash + t->offset);
-                else
-                    return t->array[hash];
-            }
+        uint_t mask = (1 << t->npw2) - 1;
+
+        if (t->linear) {
+            uint_t i = num_uint(k) & mask;
+
+            if (k == muint(i))
+                return t->array[i];
+
         } else {
-            for (i = hash;; i = tbl_next(i)) {
-                hash_t mi = i & ((1 << t->npw2) - 1);
-                mu_t *v = &t->array[2*mi];
+            for (uint_t i = tbl_hash(k);; i++) {
+                mu_t *p = &t->array[2*(i & mask)];
 
-                if (!v[0])
+                if (!p[0] || (k == p[0] && !p[1]))
                     break;
-
-                if (mu_equals(k, v[0]) && v[1])
-                    return v[1];
+                else if (k == p[0])
+                    return p[1];
             }
         }
     }
@@ -129,490 +116,354 @@ mu_t tbl_lookup(mu_t m, mu_t k) {
     return mnil;
 }
 
-// converts implicit range to actual array of nums on heap
-static void tbl_realizevals(struct tbl *t) {
-    hash_t cap = 1 << t->npw2;
-    mu_t *array = mu_alloc(cap * sizeof(mu_t));
-    uint_t i;
 
-    for (i = 0; i < t->len; i++) {
-        array[i] = muint(i + t->offset);
-    }
+// Helper methods for modifying tables
+mu_inline void tbl_inc_len(struct tbl *t) {
+    if (mu_unlikely(t->len == MU_MAXLEN))
+        mu_err_len();
 
-    t->array = array;
-    t->stride = 1;
+    t->len++;
 }
 
-// converts either a range or list to a full hash table
-static void tbl_realizekeys(struct tbl *t) {
-    hash_t cap = 1 << t->npw2;
-    mu_t *array = mu_alloc(2*cap * sizeof(mu_t));
-    uint_t i;
+mu_inline void tbl_dec_len(struct tbl *t) {
+    t->len--;
+}
 
-    if (t->stride == 0) {
-        for (i = 0; i < t->len; i++) {
-            array[2*i  ] = muint(i);
-            array[2*i+1] = muint(i + t->offset);
-        }
-    } else {
-        for (i = 0; i < t->len; i++) {
-            array[2*i  ] = muint(i);
-            array[2*i+1] = t->array[i];
-        }
+mu_inline void tbl_inc_nils(struct tbl *t) {
+    tbl_dec_len(t);
+    t->nils++;
+}
 
-        mu_dealloc(t->array, cap * sizeof(mu_t));
-    }
-
-    memset(&array[2*t->len], 0, 2*(cap - t->len) * sizeof(mu_t));
-    t->array = array;
-    t->stride = 2;
+mu_inline void tbl_dec_nils(struct tbl *t) {
+    tbl_inc_len(t);
+    t->nils--;
 }
 
 
-// reallocates and rehashes a table
-mu_inline void tbl_resize(struct tbl *t, len_t len) {
-    byte_t npw2 = tbl_npw2(tbl_ncap(len));
-    hash_t cap = 1 << npw2;
-    hash_t mask = cap - 1;
+// Converts from array to full table
+static void tbl_realize(struct tbl *t) {
+    uint_t size = 1 << t->npw2;
+    uintq_t npw2 = tbl_npw2(tbl_nsize(t->len + 1));
+    uint_t nsize = 1 << npw2;
+    uint_t mask = nsize - 1;
+    mu_t *array = mu_alloc(2*nsize * sizeof(mu_t));
+    memset(array, 0, 2*nsize * sizeof(mu_t));
 
-    if (t->stride < 2) {
-        if (t->stride == 0) {
-            t->npw2 = npw2;
-            return;
-        }
+    for (uint_t j = 0; j < size; j++) {
+        mu_t k = muint(j);
+        mu_t v = t->array[j];
 
-        mu_t *array = mu_alloc(cap * sizeof(mu_t));
-        memcpy(array, t->array, t->len * sizeof(mu_t));
+        if (!v)
+            continue;
 
-        mu_dealloc(t->array, (1 << t->npw2) * sizeof(mu_t));
-        t->array = array;
-        t->npw2 = npw2;
-    } else {
-        mu_t *array = mu_alloc(2*cap * sizeof(mu_t));
-        memset(array, 0, 2*cap * sizeof(mu_t));
-        hash_t i, j;
+        for (uint_t i = tbl_hash(k);; i++) {
+            mu_t *p = &array[2*(i & mask)];
 
-        for (j = 0; j < (1 << t->npw2); j++) {
-            mu_t *u = &t->array[2*j];
-
-            if (!u[0] || !u[1])
-                continue;
-
-            for (i = mu_hash(u[0]);; i = tbl_next(i)) {
-                hash_t mi = i & mask;
-                mu_t *v = &array[2*mi];
-
-                if (!v[0]) {
-                    v[0] = u[0];
-                    v[1] = u[1];
-                    break;
-                }
+            if (!p[0]) {
+                p[0] = k;
+                p[1] = v;
+                break;
             }
         }
+    }
 
-        mu_dealloc(t->array, 2*(1 << t->npw2) * sizeof(mu_t));
-        t->array = array;
-        t->nils = 0;
-        t->npw2 = npw2;
+    mu_dealloc(t->array, size * sizeof(mu_t));
+    t->array = array;
+    t->npw2 = npw2;
+    t->nils = 0;
+    t->linear = false;
+}
+
+// Make room for an additional element
+static void tbl_expand(struct tbl *t) {
+    uint_t size = 1 << t->npw2;
+
+    if (t->linear) {
+        if (t->len + 1 > size) {
+            uintq_t npw2 = tbl_npw2(t->len + 1);
+            uint_t nsize = 1 << npw2;
+            mu_t *array = mu_alloc(nsize * sizeof(mu_t));
+            memcpy(array, t->array, size * sizeof(mu_t));
+            memset(array+size, 0, (nsize-size) * sizeof(mu_t));
+
+            mu_dealloc(t->array, size * sizeof(mu_t));
+            t->array = array;
+            t->npw2 = npw2;
+        }
+    } else {
+        if (tbl_nsize(t->len + t->nils + 1) > size) {
+            uintq_t npw2 = tbl_npw2(tbl_nsize(t->len + 1));
+            uint_t nsize = 1 << npw2;
+            uint_t mask = nsize - 1;
+            mu_t *array = mu_alloc(2*nsize * sizeof(mu_t));
+            memset(array, 0, 2*nsize * sizeof(mu_t));
+
+            for (uint_t j = 0; j < size; j++) {
+                mu_t k = t->array[2*j+0];
+                mu_t v = t->array[2*j+1];
+
+                if (!k || !v)
+                    continue;
+
+                for (uint_t i = tbl_hash(k);; i++) {
+                    mu_t *p = &array[2*(i & mask)];
+
+                    if (!p[0]) {
+                        p[0] = k;
+                        p[1] = v;
+                        break;
+                    }
+                }
+            }
+
+            mu_dealloc(t->array, 2*size * sizeof(mu_t));
+            t->array = array;
+            t->npw2 = npw2;
+            t->nils = 0;
+        }
     }
 }
 
 
 // Inserts a value in the table with the given key
 // without decending down the tail chain
-static void tbl_insertnil(struct tbl *t, mu_t k, mu_t v) {
-    hash_t i, hash = mu_hash(k);
+static void tbl_insert_nil(struct tbl *t, mu_t k) {
+    uint_t mask = (1 << t->npw2) - 1;
 
-    if (t->stride < 2) {
-        if (!mu_ishash(k) || hash >= t->len)
-            return;
+    if (t->linear) {
+        uint_t i = num_uint(k) & mask;
 
-        if (hash == t->len - 1) {
-            if (t->stride != 0)
-                mu_dec(t->array[hash]);
-
-            t->len--;
-            return;
+        if (k == muint(i) && t->array[i]) {
+            tbl_dec_len(t);
+            mu_dec(t->array[i]);
+            t->array[i] = mnil;
         }
+    } else {
+        for (uint_t i = tbl_hash(k);; i++) {
+            mu_t *p = &t->array[2*(i & mask)];
 
-        tbl_realizekeys(t);
-    }
-
-    for (i = hash;; i = tbl_next(i)) {
-        hash_t mi = i & ((1 << t->npw2) - 1);
-        mu_t *p = &t->array[2*mi];
-
-        if (!p[0])
-            return;
-
-        if (mu_equals(k, p[0])) {
-            if (p[1]) {
+            if (!p[0]) {
+                return;
+            } else if (k == p[0]) {
+                if (p[1]) tbl_inc_nils(t);
                 mu_dec(p[1]);
                 p[1] = mnil;
-                t->nils++;
-                t->len--;
             }
-
-            return;
         }
     }
 }
 
+static void tbl_insert_val(struct tbl *t, mu_t k, mu_t v) {
+    // We expand just so we always have space to insert
+    // Worst case we have some extra space a bit early, 
+    // but at least we won't need to rehash what we're adding.
+    tbl_expand(t);
+    uint_t mask = (1 << t->npw2) - 1;
 
-static void tbl_insertval(struct tbl *t, mu_t k, mu_t v) {
-    hash_t i, hash = mu_hash(k);
+    if (t->linear) {
+        uint_t i = num_uint(k) & mask;
 
-    if (tbl_ncap(t->nils+t->len + 1) > (1 << t->npw2))
-        tbl_resize(t, t->len+1); // TODO check len
-
-    if (t->stride < 2) {
-        if (mu_ishash(k)) {
-            if (hash == t->len) {
-                if (t->stride == 0) {
-                    if (mu_ishash(v)) {
-                        if (t->len == 0)
-                            t->offset = num_uint(v);
-
-                        if (num_uint(v) == hash + t->offset) {
-                            t->len++;
-                            return;
-                        }
-                    }
-
-                    tbl_realizevals(t);
-                }
-
-                t->array[hash] = v;
-                t->len++;
-                return;
-            } else if (hash < t->len) {
-                if (t->stride == 0) {
-                    if (mu_ishash(v) && num_uint(v) == hash + t->offset)
-                        return;
-
-                    tbl_realizevals(t);
-                }
-
-                mu_dec(t->array[hash]);
-                t->array[hash] = v;
-                return;
-            }
+        if (k == muint(i)) {
+            if (!t->array[i]) tbl_inc_len(t);
+            mu_dec(t->array[i]);
+            t->array[i] = v;
+            return;
         }
 
-        tbl_realizekeys(t);
+        // Index is out of range, convert to full table
+        tbl_realize(t);
     }
 
-    for (i = hash;; i = tbl_next(i)) {
-        hash_t mi = i & ((1 << t->npw2) - 1);
-        mu_t *p = &t->array[2*mi];
+    for (uint_t i = tbl_hash(k);; i++) {
+        mu_t *p = &t->array[2*(i & mask)];
 
         if (!p[0]) {
+            tbl_inc_len(t);
             p[0] = k;
             p[1] = v;
-            t->len++;
             return;
-        }
-
-        if (mu_equals(k, p[0])) {
-            if (!p[1]) {
-                p[1] = v;
-                t->nils--;
-                t->len++;
-            } else {
-                mu_dec(p[1]);
-                p[1] = v;
-            }
-
+        } else if (k == p[0]) {
+            if (!p[1]) tbl_dec_nils(t);
+            mu_dec(p[1]);
+            p[1] = v;
             return;
         }
     }
 }
 
-
 void tbl_insert(mu_t m, mu_t k, mu_t v) {
-    struct tbl *t = tbl_wtbl(m);
-
-    if (!k)
-        return;
-
-    if (!v)
-        return tbl_insertnil(t, k, v);
-    else
-        return tbl_insertval(t, k, v);
+    if (k && v)
+        return tbl_insert_val(tbl_wtbl(m), k, v);
+    else if (k)
+        return tbl_insert_nil(tbl_wtbl(m), k);
 }
 
 
 // Recursively assigns a value in the table with the given key
 // decends down the tail chain until its found
-static void tbl_assignnil(mu_t m, mu_t k, mu_t v) {
-    hash_t i, hash = mu_hash(k);
+static void tbl_assign_nil(struct tbl *t, mu_t k) {
+    while (t->tail && !tbl_isro(t->tail)) {
+        t = tbl_rtbl(t->tail);
+        uint_t mask = (1 << t->npw2) - 1;
 
-    for (; m && !tbl_isro(m); m = tbl_rtbl(m)->tail) {
-        struct tbl *t = tbl_rtbl(m);
+        if (t->linear) {
+            uint_t i = num_uint(k) & mask;
 
-        if (t->stride < 2) {
-            if (!mu_ishash(k) || hash >= t->len)
-                continue;
-
-            if (hash == t->len - 1) {
-                if (t->stride != 0)
-                    mu_dec(t->array[hash]);
-
-                t->len--;
+            if (k == muint(i) && t->array[i]) {
+                tbl_dec_len(t);
+                mu_dec(t->array[i]);
+                t->array[i] = mnil;
                 return;
             }
+        } else {
+            for (uint_t i = tbl_hash(k);; i++) {
+                mu_t *p = &t->array[2*(i & mask)];
 
-            tbl_realizekeys(t);
-        }
-
-        for (i = hash;; i = tbl_next(i)) {
-            hash_t mi = i & ((1 << t->npw2) - 1);
-            mu_t *p = &t->array[2*mi];
-
-            if (!p[0]) 
-                break;
-
-            if (mu_equals(k, p[0])) {
-                if (!p[1])
+                if (!p[0] && (k == p[0] && !p[1])) {
                     break;
-
-                mu_dec(p[1]);
-                p[1] = mnil;
-                t->nils++;
-                t->len--;
-                return;
-            }
-        }
-    }
-}
-
-
-static void tbl_assignval(mu_t m, mu_t k, mu_t v) {
-    mu_t head = m;
-    hash_t i, hash = mu_hash(k);
-
-    for (; m && tbl_isro(m); m = tbl_rtbl(m)->tail) {
-        struct tbl *t = tbl_rtbl(m);
-
-        if (t->stride < 2) {
-            if (!mu_ishash(k) || hash >= t->len)
-                continue;
-
-            if (t->stride == 0) {
-                if (mu_ishash(v) && num_uint(v) == hash + t->offset)
-                    return;
-
-                tbl_realizevals(t);
-            }
-
-            mu_dec(t->array[hash]);
-            t->array[hash] = v;
-            return;
-        }
-
-        for (i = hash;; i = tbl_next(i)) {
-            hash_t mi = i & ((1 << t->npw2) - 1);
-            mu_t *p = &t->array[2*mi];
-
-            if (!p[0])
-                break;
-
-            if (mu_equals(k, p[0])) {
-                if (!p[1])
-                    break;
-
-                mu_dec(p[1]);
-                p[1] = v;
-                return;
-            }
-        }
-    }
-
-
-    struct tbl *t = tbl_wtbl(head);
-
-    if (tbl_ncap(t->len+t->nils + 1) > (1 << t->npw2))
-        tbl_resize(t, t->len+1); // TODO check size
-
-    if (t->stride < 2) {
-        if (mu_ishash(k) && hash == t->len) {
-            if (t->stride == 0) {
-                if (mu_ishash(v)) {
-                    if (t->len == 0)
-                        t->offset = num_uint(v);
-
-                    if (num_uint(v) == hash + t->offset) {
-                        t->len++;
-                        return;
-                    }
+                } else if (k == p[0]) {
+                    tbl_inc_nils(t);
+                    mu_dec(p[1]);
+                    p[1] = mnil;
                 }
-
-                tbl_realizevals(t);
             }
-
-            t->array[hash] = v;
-            t->len++;
-            return;
-        }
-
-        tbl_realizekeys(t);
-    }
-
-    for (i = hash;; i = tbl_next(i)) {
-        hash_t mi = i & ((1 << t->npw2) - 1);
-        mu_t *p = &t->array[2*mi];
-
-        if (!p[0]) {
-            p[0] = k;
-            p[1] = v;
-            t->len++;
-            return;
-        }
-
-        if (mu_equals(k, p[0]) && !p[1]) {
-            p[1] = v;
-            t->nils--;
-            t->len++;
-            return;
         }
     }
 }
 
+static void tbl_assign_val(struct tbl *t, mu_t k, mu_t v) {
+    struct tbl *head = t;
+
+    while (t->tail && !tbl_isro(t->tail)) {
+        t = tbl_rtbl(t->tail);
+        uint_t mask = (1 << t->npw2) - 1;
+
+        if (t->linear) {
+            uint_t i = num_uint(k) & mask;
+
+            if (k == muint(i) && t->array[i]) {
+                mu_dec(t->array[i]);
+                t->array[i] = v;
+                return;
+            }
+        } else {
+            for (uint_t i = tbl_hash(k);; i++) {
+                mu_t *p = &t->array[2*(i & mask)];
+
+                if (!p[0] || (k == p[0] && !p[1])) {
+                    break;
+                } else if (k == p[0]) {
+                    mu_dec(p[1]);
+                    p[1] = v;
+                    return;
+                }
+            }
+        }
+    }
+
+    return tbl_insert_val(head, k, v);
+}
 
 void tbl_assign(mu_t m, mu_t k, mu_t v) {
-    if (!k)
-        return;
-
-    if (!v)
-        return tbl_assignnil(m, k, v);
-    else
-        return tbl_assignval(m, k, v);
+    if (k && v)
+        return tbl_assign_val(tbl_wtbl(m), k, v);
+    else if (k)
+        return tbl_assign_nil(tbl_wtbl(m), k);
 }
 
 
 
 // Performs iteration on a table
-frame_t tbl_0_iteration(mu_t scope, mu_t *frame) {
-    struct tbl *t = tbl_rtbl(tbl_lookup(scope, muint(0)));
-    uint_t i = num_uint(tbl_lookup(scope, muint(1)));
-
-    if (i >= t->len)
-        return 0;
-
-    tbl_insert(scope, muint(1), muint(i+1));
-
-    frame[0] = muint(i);
-    frame[1] = muint(t->offset + i);
-    return 2;
-}
-
-frame_t tbl_1_iteration(mu_t scope, mu_t *frame) {
-    struct tbl *t = tbl_rtbl(tbl_lookup(scope, muint(0)));
-    uint_t i = num_uint(tbl_lookup(scope, muint(1)));
-
-    if (i >= t->len)
-        return 0;
-
-    tbl_insert(scope, muint(1), muint(i+1));
-
-    frame[0] = muint(i);
-    frame[1] = mu_inc(t->array[i]);
-    return 2;
-}
-
-frame_t tbl_2_iteration(mu_t scope, mu_t *frame) {
-    struct tbl *t = tbl_rtbl(tbl_lookup(scope, muint(0)));
-    uint_t i = num_uint(tbl_lookup(scope, muint(1)));
+bool tbl_next(mu_t m, uint_t *ip, mu_t *kp, mu_t *vp) {
+    struct tbl *t = tbl_rtbl(m);
+    uint_t i = *ip;
     mu_t k, v;
 
-    if (i >= t->len)
-        return 0;
-
     do {
-        k = t->array[2*i  ];
-        v = t->array[2*i+1];
-        i += 1;
+        if (i >= (1 << t->npw2)) {
+            *kp = mnil;
+            *vp = mnil;
+            return false;
+        }
+
+        k = t->linear ? muint(i)    : t->array[2*i+0];
+        v = t->linear ? t->array[i] : t->array[2*i+1];
+        i++;
     } while (!k || !v);
 
-    tbl_insert(scope, muint(1), muint(i));
+    *ip = i;
+    *kp = k;
+    *vp = v;
+    return true;
+}           
 
-    frame[0] = mu_inc(k);
-    frame[1] = mu_inc(v);
+static frame_t tbl_step(mu_t scope, mu_t *frame) {
+    mu_t t = tbl_lookup(scope, muint(0));
+    uint_t i = num_uint(tbl_lookup(scope, muint(1)));
+
+    tbl_next(t, &i, &frame[0], &frame[1]);
+    tbl_insert(scope, muint(0), muint(i));
     return 2;
 }
 
-mu_t tbl_iter(mu_t tbl) {
-    static sbfn_t *const tbl_iters[3] = {
-        tbl_0_iteration,
-        tbl_1_iteration,
-        tbl_2_iteration
-    };
-
+mu_t tbl_iter(mu_t t) {
     mu_t scope = tbl_create(2);
-    tbl_insert(scope, muint(0), tbl);
+    tbl_insert(scope, muint(0), t);
     tbl_insert(scope, muint(1), muint(0));
 
-    return msbfn(0x00, tbl_iters[tbl_rtbl(tbl)->stride], scope);
+    return msbfn(0x00, tbl_step, scope);
 }
 
 
 // Returns a string representation of the table
 mu_t tbl_repr(mu_t t) {
-    mu_t *reprs = mu_alloc(2*tbl_len(t) * sizeof(mu_t));
-    uint_t size = 2;
-    uint_t i = 0;
+    byte_t *s = mstr_create(0);
+    uint_t si = 0;
+    uint_t ti = 0;
+    mu_t k, v, r;
 
-    tbl_for_begin (k, v, t) {
-        reprs[2*i  ] = mu_repr(k);
-        reprs[2*i+1] = mu_repr(v);
-        size += str_len(reprs[2*i  ]);
-        size += str_len(reprs[2*i+1]);
-        size += (i == tbl_len(t)-1) ? 2 : 4;
-
-        i++;
-    } tbl_for_end;
-
-    if (size > MU_MAXLEN)
-        mu_err_len();
-
-    byte_t *s = mstr_create(size);
-    byte_t *out = s;
-
-    *out++ = '[';
-
-    for (i=0; i < tbl_len(t); i++) {
-        memcpy(out, str_bytes(reprs[2*i]), str_len(reprs[2*i]));
-        out += str_len(reprs[2*i]);
-        str_dec(reprs[2*i]);
-
-        *out++ = ':';
-        *out++ = ' ';
-
-        memcpy(out, str_bytes(reprs[2*i+1]), str_len(reprs[2*i+1]));
-        out += str_len(reprs[2*i+1]);
-        str_dec(reprs[2*i+1]);
-
-        if (i != tbl_len(t)-1) {
-            *out++ = ',';
-            *out++ = ' ';
-        }
+    bool linear = tbl_rtbl(t)->linear;
+    for (int i = 0; linear && i < tbl_len(t); i++) {
+        if (!tbl_rtbl(t)->array[i])
+            linear = false;
     }
 
-    *out++ = ']';
+    mstr_insert(&s, &si, '[');
 
-    mu_dealloc(reprs, 2*tbl_len(t) * sizeof(mu_t));
-    return mstr_intern(s, size);
+    while (tbl_next(t, &ti, &k, &v)) {
+        if (!linear) {
+            r = mu_repr(k);
+            mstr_concat(&s, &si, r);
+            mstr_cconcat(&s, &si, ": ");
+            mu_dec(r);
+        }
+
+        r = mu_repr(v);
+        mstr_concat(&s, &si, r);
+        mstr_cconcat(&s, &si, ", ");
+        mu_dec(r);
+    }
+
+    if (tbl_len(t) > 0)
+        si -= 2;
+
+    mstr_insert(&s, &si, ']');
+    return mstr_intern(s, si);
 }
 
-mu_t tbl_concat(mu_t a, mu_t b, mu_t offset) {
-    uint_t max = 0;
-    if (mu_isnum(offset)) {
-        max = num_uint(offset);
-    } else {
-        tbl_for_begin(k, v, a) {
-            if (mu_isnum(k) && num_uint(k)+1 > max)
-                max = num_uint(k)+1;
-        } tbl_for_end
+
+// Array-like manipulation
+mu_t tbl_concat(mu_t a, mu_t b, mu_t moffset) {
+    uint_t offset = num_uint(moffset);
+    if (moffset != muint(offset)) {
+        offset = 0;
+
+        mu_t k, v;
+        for (uint_t i = 0; tbl_next(a, &i, &k, &v);) {
+            uint_t n = num_uint(k);
+            if (k == muint(n) && n+1 > offset)
+                offset = n+1;
+        }
     }
 
     mu_t res;
@@ -621,67 +472,94 @@ mu_t tbl_concat(mu_t a, mu_t b, mu_t offset) {
     } else {
         res = tbl_create(tbl_len(a) + tbl_len(b));
 
-        tbl_for_begin(k, v, a) {
+        mu_t k, v;
+        for (uint_t i = 0; tbl_next(a, &i, &k, &v);) {
             tbl_insert(res, k, v);
-        } tbl_for_end
+        }
 
         tbl_dec(a);
     }
 
-    tbl_for_begin(k, v, b) {
-        if (mu_isnum(k))
-            tbl_insert(res, muint(num_uint(k) + max), v);
+    mu_t k, v;
+    for (uint_t i = 0; tbl_next(b, &i, &k, &v);) {
+        uint_t n = num_uint(k);
+        if (k == muint(n))
+            tbl_insert(res, muint(n+offset), v);
         else
             tbl_insert(res, k, v);
-    } tbl_for_end
+    }
 
     tbl_dec(b);
 
     return res;
 }
 
-// TODO optimize for arrays
-// TODO can the heap allocation be removed in the general case?
-mu_t tbl_pop(mu_t t, mu_t i) {
-    mu_t ret = tbl_lookup(t, i);
-    tbl_insert(t, i, mnil);
+mu_t tbl_pop(mu_t t, mu_t k) {
+    if (!k)
+        k = muint(tbl_len(t)-1);
 
-    if (mu_isnum(i)) {
-        mu_t temp = tbl_create(tbl_len(t));
+    mu_t ret = tbl_lookup(t, k);
+    tbl_insert(t, k, mnil);
 
-        tbl_for_begin(k, v, t) {
-            if (mu_isnum(k) && num_uint(k) > num_uint(i)) {
-                tbl_insert(temp, k, v);
-                tbl_insert(t, k, mnil);
+    uint_t i = num_uint(k);
+    if (k == muint(i)) {
+        if (tbl_rtbl(t)->linear) {
+            uint_t size = 1 << tbl_rtbl(t)->npw2;
+            mu_t *array = tbl_rtbl(t)->array;
+
+            memmove(&array[i], &array[i+1], (size - (i+1)) * sizeof(mu_t));
+            array[size-1] = mnil;
+        } else {
+            mu_t temp = tbl_create(tbl_len(t));
+            mu_t k, v;
+
+            for (uint_t j = 0; tbl_next(t, &j, &k, &v);) {
+                uint_t n = num_uint(k);
+                if (k == muint(n) && n > i) {
+                    tbl_insert(temp, muint(n-1), v);
+                    tbl_insert(t, k, mnil);
+                }
             }
-        } tbl_for_end
 
-        tbl_for_begin(k, v, temp) {
-            tbl_insert(t, muint(num_uint(k)-1), v);
-        } tbl_for_end
+            for (uint_t j = 0; tbl_next(temp, &j, &k, &v);) {
+                tbl_insert(t, k, v);
+            }
+        }
     }
 
     return ret;
-}
+}            
 
-// TODO optimize for arrays
-// TODO can the heap allocation be removed in the general case?
-void tbl_push(mu_t t, mu_t v, mu_t i) {
-    if (mu_isnum(i)) {
-        mu_t temp = tbl_create(tbl_len(t));
+void tbl_push(mu_t t, mu_t v, mu_t k) {
+    if (!k)
+        k = muint(tbl_len(t));
 
-        tbl_for_begin(k, v, t) {
-            if (mu_isnum(k) && num_uint(k) >= num_uint(i)) {
-                tbl_insert(temp, k, v);
-                tbl_insert(t, k, mnil);
+    uint_t i = num_uint(k);
+    if (k == muint(i)) {
+        if (tbl_rtbl(t)->linear) {
+            tbl_expand(tbl_rtbl(t));
+            uint_t size = 1 << tbl_rtbl(t)->npw2;
+            mu_t *array = tbl_rtbl(t)->array;
+
+            memmove(&array[i+1], &array[i], (size - i) * sizeof(mu_t));
+        } else {
+            mu_t temp = tbl_create(tbl_len(t));
+            mu_t k, v;
+
+            for (uint_t j = 0; tbl_next(t, &j, &k, &v);) {
+                uint_t n = num_uint(k);
+                if (k == muint(n) && n >= i) {
+                    tbl_insert(temp, muint(n+1), v);
+                    tbl_insert(t, k, mnil);
+                }
             }
-        } tbl_for_end
 
-        tbl_for_begin(k, v, temp) {
-            tbl_insert(t, muint(num_uint(k)+1), v);
-        } tbl_for_end
+            for (uint_t j = 0; tbl_next(temp, &j, &k, &v);) {
+                tbl_insert(t, k, v);
+            }
+        }
     }
 
-    tbl_insert(t, i, v);
+    tbl_insert(t, k, v);
 }
 

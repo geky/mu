@@ -37,20 +37,18 @@ mu_inline const byte_t *str_bytes(mu_t m) {
 
 
 // Basic string handling
-mu_t str_intern(const byte_t *s, len_t len);
+mu_t str_intern(const byte_t *s, uint_t len);
 void str_destroy(mu_t s);
 
 // Functions for handling mutable strings
-byte_t *mstr_create(len_t len);
+byte_t *mstr_create(uint_t len);
 void mstr_destroy(byte_t *s);
-mu_t mstr_intern(byte_t *s, len_t len);
+mu_t mstr_intern(byte_t *s, uint_t len);
 
-void mstr_insert(byte_t **s, uint_t i, byte_t c);
-void mstr_concat(byte_t **s, uint_t i, const byte_t *c, uint_t len);
-
-// Hashing and equality for strings
-bool str_equals(mu_t a, mu_t b);
-hash_t str_hash(mu_t s);
+void mstr_insert(byte_t **s, uint_t *i, byte_t c);
+void mstr_concat(byte_t **s, uint_t *i, mu_t c);
+void mstr_nconcat(byte_t **s, uint_t *i, const byte_t *c, uint_t len);
+void mstr_cconcat(byte_t **s, uint_t *i, const char *c);
 
 
 // Reference counting
@@ -64,6 +62,10 @@ mu_inline void mstr_dec(byte_t *s) { if (ref_dec(s)) mstr_destroy(s); }
 // String parsing and representation
 mu_t str_parse(const byte_t **off, const byte_t *end);
 mu_t str_repr(mu_t s);
+
+// String iteration
+mu_t str_iter(mu_t s);
+bool str_next(mu_t s, uint_t *i, mu_t *c);
 
 
 #endif

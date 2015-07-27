@@ -12,8 +12,9 @@
 
 
 static void emit(struct parse *p, byte_t byte) {
-    mstr_insert(&p->bcode, p->bcount, byte);
-    p->bcount += 1;
+    uint_t bcount = p->bcount;
+    mstr_insert(&p->bcode, &bcount, byte);
+    p->bcount = bcount;
 }
 
 static void encode(struct parse *p, op_t op,
@@ -165,16 +166,17 @@ static struct code *parse_realize(struct parse *p) {
     struct code **fns = code_fns(code);
     byte_t *bcode = (byte_t *)code_bcode(code);
 
-    tbl_for_begin (k, v, p->imms) {
+    mu_t k, v;
+    for (uint_t i = 0; tbl_next(p->imms, &i, &k, &v);) {
         if (k == imm_nil())
             imms[num_uint(v)] = mnil;
         else
             imms[num_uint(v)] = mu_inc(k);
-    } tbl_for_end;
+    }
 
-    tbl_for_begin (k, v, p->fns) {
+    for (uint_t i = 0; tbl_next(p->fns, &i, &k, &v);) {
         fns[num_uint(k)] = fn_code_(v);
-    } tbl_for_end;
+    }
 
     tbl_dec(p->imms);
     tbl_dec(p->fns);
