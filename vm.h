@@ -9,13 +9,13 @@
 #include "ops.h"
 
 
-// Encode the specified opcode
+// Encode opcode
 // Note: size of the jump opcodes currently can not change based on argument
 void mu_encode(void (*emit)(void *, byte_t), void *p,
                op_t op, int_t d, int_t a, int_t b);
 
-// Execute the bytecode
-void mu_exec(struct fn *, frame_t c, mu_t *frame);
+// Execute bytecode
+void mu_exec(struct code *c, mu_t scope, frame_t fc, mu_t *frame);
 
 
 // Disassemble bytecode for debugging and introspection

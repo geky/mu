@@ -5,22 +5,22 @@
 
 
 // Varargs frame handling
-void mu_toframe(frame_t c, mu_t *frame, va_list args) {
-    if (c > MU_FRAME) {
+void mu_toframe(frame_t fc, mu_t *frame, va_list args) {
+    if (fc > MU_FRAME) {
         *frame = va_arg(args, mu_t);
     } else {
-        for (uint_t i = 0; i < c; i++)
+        for (uint_t i = 0; i < fc; i++)
             frame[i] = va_arg(args, mu_t);
     }
 }
 
-mu_t mu_fromframe(frame_t c, mu_t *frame, va_list args) {
-    if (c <= MU_FRAME) {
-        for (uint_t i = 1; i < c; i++)
+mu_t mu_fromframe(frame_t fc, mu_t *frame, va_list args) {
+    if (fc <= MU_FRAME) {
+        for (uint_t i = 1; i < fc; i++)
             *va_arg(args, mu_t *) = frame[i];
     }
 
-    return c ? *frame : mnil;
+    return fc ? *frame : mnil;
 }
 
 

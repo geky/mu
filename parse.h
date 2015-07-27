@@ -18,7 +18,6 @@ struct parse {
     mu_t fns;
 
     struct lex l;
-    struct fn_flags flags;
 
     struct f_parse {
         len_t target;
@@ -42,6 +41,9 @@ struct parse {
         P_CALLED
     } state;
 
+    uintq_t params;
+    uintq_t regs;
+    uintq_t scope;
     uintq_t sp;
     uintq_t args;
 };

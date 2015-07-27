@@ -21,8 +21,8 @@
 
 
 // Varargs frame handling
-void mu_toframe(frame_t c, mu_t *frame, va_list args);
-mu_t mu_fromframe(frame_t c, mu_t *frame, va_list args);
+void mu_toframe(frame_t fc, mu_t *frame, va_list args);
+mu_t mu_fromframe(frame_t fc, mu_t *frame, va_list args);
 
 // Conversion between different frame types
 void mu_fconvert(frame_t dc, mu_t *dframe, frame_t sc, mu_t *sframe);

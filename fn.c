@@ -10,116 +10,89 @@
 
 
 // Internally used conversion between mu_t and struct tbl
-mu_inline mu_t mfn(struct fn *fn) {
-    return (mu_t)((uint_t)fn + MU_FN);
-}
-
 mu_inline struct fn *fn_fn(mu_t m) {
-    return (struct fn *)((uint_t)m - MU_FN);
+    return (struct fn *)(~7 & (uint_t)m);
 }
 
 
 // C Function creating functions and macros
 mu_t mbfn(frame_t args, bfn_t *bfn) {
-    struct fn *fn = ref_alloc(sizeof(struct fn));
-    fn->flags.regs = 16;
-    fn->flags.scope = 0;
-    fn->flags.args = args;
-    fn->flags.type = 1;
-    fn->closure = 0;
-    fn->bfn = bfn;
-    return mfn(fn);
+    struct fn *f = ref_alloc(sizeof(struct fn));
+    f->args = args;
+    f->type = MU_BFN - MU_FN;
+    f->closure = 0;
+    f->bfn = bfn;
+    return (mu_t)((uint_t)f + MU_BFN);
 }
 
 mu_t msbfn(frame_t args, sbfn_t *sbfn, mu_t closure) {
-    struct fn *fn = ref_alloc(sizeof(struct fn));
-    fn->flags.regs = 16;
-    fn->flags.scope = 0;
-    fn->flags.args = args;
-    fn->flags.type = 2;
-    fn->closure = closure;
-    fn->sbfn = sbfn;
-    return mfn(fn);
+    struct fn *f = ref_alloc(sizeof(struct fn));
+    f->args = args;
+    f->type = MU_SBFN - MU_FN;
+    f->closure = closure;
+    f->sbfn = sbfn;
+    return (mu_t)((uint_t)f + MU_SBFN);
 }
 
-mu_t fn_create(struct code *code, mu_t closure) {
-    struct fn *fn = ref_alloc(sizeof(struct fn));
-    fn->flags = code->flags;
-    fn->closure = closure;
-    fn->code = code;
-    return mfn(fn);
-}
-
-mu_t fn_parse_fn(mu_t code, mu_t closure) {
-    return fn_create(mu_parse_fn(code), closure);
-}
-
-mu_t fn_parse_module(mu_t code, mu_t closure) {
-    return fn_create(mu_parse_module(code), closure);
+mu_t mfn(struct code *c, mu_t closure) {
+    struct fn *f = ref_alloc(sizeof(struct fn));
+    f->args = c->args;
+    f->type = c->type;
+    f->code = c;
+    f->closure = closure;
+    return (mu_t)((uint_t)f + MU_FN);
 }
 
 
 // Called by garbage collector to clean up
-void fn_destroy(mu_t m) {
-    struct fn *f = fn_fn(m);
-
-    if (f->closure)
-        tbl_dec(f->closure);
-
-    if (f->flags.type == 0)
-        code_dec(f->code);
-
+void bfn_destroy(mu_t f) {
     ref_dealloc(f, sizeof(struct fn));
 }
 
-void code_destroy(struct code *code) {
-    for (uint_t i = 0; i < code->icount; i++)
-        mu_dec(((mu_t*)code->data)[i]);
+void sbfn_destroy(mu_t f) {
+    mu_dec(fn_closure(f));
+    ref_dealloc(f, sizeof(struct fn));
+}
 
-    for (uint_t i = 0; i < code->fcount; i++)
-        code_dec((struct code *)code->data[code->icount + i]);
+void fn_destroy(mu_t f) {
+    mu_dec(fn_closure(f));
+    code_dec(fn_code(f));
+    ref_dealloc(f, sizeof(struct fn));
+}
 
-    ref_dealloc(code, sizeof(struct code) + code->bcount + 
-                      code->icount + code->fcount);
+void code_destroy(struct code *c) {
+    for (uint_t i = 0; i < c->icount; i++)
+        mu_dec(c->data[i].imms);
+
+    for (uint_t i = 0; i < c->fcount; i++)
+        code_dec(c->data[c->icount+i].fns);
+
+    ref_dealloc(c, mu_offset(struct code, data) + 
+                   c->icount*sizeof(mu_t) +
+                   c->fcount*sizeof(struct code *) +
+                   c->bcount);
 }
 
 
 // C interface for calling functions
-static void bfn_fcall(struct fn *fn, frame_t c, mu_t *frame) {
-    mu_fconvert(fn->flags.args, frame, c >> 4, frame);
-    frame_t rets = fn->bfn(frame);
-    mu_fconvert(c & 0xf, frame, rets, frame);
-}
-
-static void sbfn_fcall(struct fn *fn, frame_t c, mu_t *frame) {
-    mu_fconvert(fn->flags.args, frame, c >> 4, frame);
-    uint_t rets = fn->sbfn(fn->closure, frame);
-    mu_fconvert(c & 0xf, frame, rets, frame);
-}
-
-void fn_fcall(mu_t m, frame_t c, mu_t *frame) {
-    static void (*const fn_fcalls[3])(struct fn *, frame_t, mu_t *) = {
-        mu_exec, bfn_fcall, sbfn_fcall
-    };
-
+void bfn_fcall(mu_t m, frame_t fc, mu_t *frame) {
     struct fn *f = fn_fn(m);
-    return fn_fcalls[f->flags.type](f, c, frame);
+    mu_fconvert(f->args, frame, fc >> 4, frame);
+    frame_t rets = f->bfn(frame);
+    mu_fconvert(fc & 0xf, frame, rets, frame);
 }
 
-mu_t fn_vcall(mu_t m, frame_t c, va_list args) {
-    mu_t frame[MU_FRAME];
-
-    mu_toframe(c >> 4, frame, args);
-    fn_fcall(m, c, frame);
-    return mu_fromframe(0xf & c, frame, args);
+void sbfn_fcall(mu_t m, frame_t fc, mu_t *frame) {
+    struct fn *f = fn_fn(m);
+    mu_fconvert(f->args, frame, fc >> 4, frame);
+    frame_t rets = f->sbfn(f->closure, frame);
+    mu_fconvert(fc & 0xf, frame, rets, frame);
 }
 
-mu_t fn_call(mu_t m, frame_t c, ...) {
-    va_list args;
-    va_start(args, c);
-    mu_t ret = mu_vcall(m, c, args);
-    va_end(args);
-    return ret;
+void fn_fcall(mu_t m, frame_t fc, mu_t *frame) {
+    struct fn *f = fn_fn(m);
+    mu_t scope = tbl_extend(f->code->scope, f->closure);
+    mu_exec(f->code, scope, fc, frame);
 }
 
 

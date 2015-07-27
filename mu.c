@@ -9,6 +9,8 @@
 #include "tbl.h"
 #include "fn.h"
 #include "err.h"
+#include "parse.h"
+#include "vm.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -229,10 +231,9 @@ static int genargs(int i, int argc, const char **argv) {
 
 
 static void execute(const char *input) {
-    mu_t f = fn_parse_fn(mcstr(input), 0);
-
-    //fn_call_in(f, 0, scope);
-    fn_call(f, 0x00);
+    struct code *c = mu_parse_fn(mcstr(input));
+    mu_exec(c, tbl_create(c->scope), 0x00, 
+            (mu_t [MU_FRAME]){0});
 }
 
 static void load_file(FILE *file) {
@@ -253,10 +254,9 @@ static void load_file(FILE *file) {
         off++;
     }
 
-    mu_t f = fn_parse_fn(mnstr(buffer+off, len-off), scope);
-
-    //fn_call_in(f, 0, scope);
-    fn_call(f, 0x00);
+    struct code *c = mu_parse_fn(mnstr(buffer+off, len-off));
+    mu_exec(c, tbl_extend(c->scope, scope), 0x00, 
+            (mu_t [MU_FRAME]){0});
 }
 
 static void load(const char *name) {
@@ -280,7 +280,9 @@ static mu_noreturn interpret() {
         mu_t code = mnstr(buffer, len);
         
         mu_try_begin {
-            mu_t f = fn_parse_fn(code, scope);
+            mu_t frame[MU_FRAME];
+            struct code *c = mu_parse_fn(code);
+            mu_exec(c, scope, 0x0f, frame); 
 //    
 //            mu_try_begin {
 //                f = fn_create_expr(0, code);
@@ -293,10 +295,9 @@ static mu_noreturn interpret() {
             // TODO use strs?
 //            mu_dis(f->code);
 
-            mu_t output = fn_call(f, 0x0f);
-            printoutput(output);
-            mu_dec(output);
-            fn_dec(f);
+            printoutput(frame[0]);
+            mu_dec(frame[0]);
+            code_dec(c);
         } mu_on_err (err) {
             printerr(err);
         } mu_try_end;

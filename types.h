@@ -32,10 +32,12 @@ typedef uint8_t frame_t;
 enum mu_type {
     MU_NIL  = 0, // nil
     MU_NUM  = 1, // number
-    MU_STR  = 2, // string
-    MU_FN   = 3, // function
-    MU_TBL  = 4, // table
-    MU_RTBL = 5, // readonly table
+    MU_STR  = 4, // string
+    MU_TBL  = 2, // table
+    MU_RTBL = 3, // readonly table
+    MU_FN   = 5, // function
+    MU_BFN  = 6, // builtin function
+    MU_SBFN = 7, // scoped builtin function
 };
 
 // Declaration of mu type
@@ -55,7 +57,7 @@ mu_inline ref_t mu_ref(mu_t m) { return *(ref_t *)(~7 & (uint_t)m); }
 mu_inline bool mu_isnil(mu_t m) { return !m; }
 mu_inline bool mu_isnum(mu_t m) { return mu_type(m) == MU_NUM; }
 mu_inline bool mu_isstr(mu_t m) { return mu_type(m) == MU_STR; }
-mu_inline bool mu_isfn(mu_t m)  { return mu_type(m) == MU_FN;  }
+mu_inline bool mu_isfn(mu_t m)  { return mu_type(m) >= MU_FN;  }
 mu_inline bool mu_istbl(mu_t m) { return (6 & mu_type(m)) == MU_TBL; }
 mu_inline bool mu_isref(mu_t m) { return 6 & (uint_t)m; }
 mu_inline bool mu_isro(mu_t m)  { return 1 & (uint_t)m; }
@@ -69,7 +71,7 @@ mu_inline mu_t mu_inc(mu_t m) {
 }
 
 mu_inline void mu_dec(mu_t m) {
-    extern void (*const mu_destroy_table[4])(mu_t);
+    extern void (*const mu_destroy_table[6])(mu_t);
 
     if (mu_isref(m) && ref_dec(m))
         mu_destroy_table[mu_type(m)-2](m);
@@ -78,40 +80,40 @@ mu_inline void mu_dec(mu_t m) {
 
 // Returns a string representation of the variable
 mu_inline mu_t mu_repr(mu_t m) {
-    extern mu_t (*const mu_repr_table[6])(mu_t);
+    extern mu_t (*const mu_repr_table[8])(mu_t);
     return mu_repr_table[mu_type(m)](m);
 }
 
 // Performs iteration on variables
 mu_inline mu_t mu_iter(mu_t m) {
-    extern mu_t (*const mu_iter_table[6])(mu_t);
+    extern mu_t (*const mu_iter_table[8])(mu_t);
     return mu_iter_table[mu_type(m)](m);
 }
 
 // Table related functions performed on variables
 mu_inline mu_t mu_lookup(mu_t m, mu_t key) {
-    extern mu_t (*const mu_lookup_table[6])(mu_t, mu_t);
+    extern mu_t (*const mu_lookup_table[8])(mu_t, mu_t);
     return mu_lookup_table[mu_type(m)](m, key);
 }
 
 mu_inline void mu_insert(mu_t m, mu_t key, mu_t val) {
-    extern void (*const mu_insert_table[6])(mu_t, mu_t, mu_t);
+    extern void (*const mu_insert_table[8])(mu_t, mu_t, mu_t);
     return mu_insert_table[mu_type(m)](m, key, val);
 }
 
 mu_inline void mu_assign(mu_t m, mu_t key, mu_t val) {
-    extern void (*const mu_assign_table[6])(mu_t, mu_t, mu_t);
+    extern void (*const mu_assign_table[8])(mu_t, mu_t, mu_t);
     return mu_assign_table[mu_type(m)](m, key, val);
 }
 
 // Function calls performed on variables
-mu_inline void mu_fcall(mu_t m, frame_t c, mu_t *frame) {
-    extern void (*const mu_fcall_table[6])(mu_t, frame_t, mu_t *);
-    return mu_fcall_table[mu_type(m)](m, c, frame);
+mu_inline void mu_fcall(mu_t m, frame_t fc, mu_t *frame) {
+    extern void (*const mu_fcall_table[8])(mu_t, frame_t, mu_t *);
+    return mu_fcall_table[mu_type(m)](m, fc, frame);
 }
 
-mu_t mu_vcall(mu_t m, frame_t c, va_list args);
-mu_t mu_call(mu_t m, frame_t c, ...);
+mu_t mu_vcall(mu_t m, frame_t fc, va_list args);
+mu_t mu_call(mu_t m, frame_t fc, ...);
 
 
 #endif

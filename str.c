@@ -17,8 +17,8 @@ mu_inline struct str *str_str(mu_t m) {
 }
 
 // Conversion from mstr's exposed pointer that gets passed around
-mu_inline struct str *str_mstr(byte_t *s) {
-    return (struct str *)(s - mu_offset(struct str, data));
+mu_inline struct str *str_mstr(byte_t *b) {
+    return (struct str *)(b - mu_offset(struct str, data));
 }
 
 
@@ -100,12 +100,11 @@ static void str_table_remove(int i) {
 
 
 // String management
-mu_t str_intern(const byte_t *s, uint_t len) {
+static mu_t str_intern(const byte_t *s, uint_t len) {
     if (len > MU_MAXLEN)
         mu_err_len();
     
     int i = str_table_find(s, len);
-
     if (i >= 0)
         return str_inc(mstr(str_table[i]));
 
@@ -129,7 +128,7 @@ void str_destroy(mu_t m) {
 
 // String creating functions
 mu_t mcstr(const char *s) {
-    return mnstr((const byte_t *)s, strlen(s));
+    return str_intern((const byte_t *)s, strlen(s));
 }
 
 mu_t mnstr(const byte_t *s, uint_t len) {
@@ -167,7 +166,6 @@ mu_t mstr_intern(byte_t *b, uint_t len) {
     }
 
     int i = str_table_find(b, len);
-
     if (i >= 0) {
         mstr_dec(b);
         return str_inc(mstr(str_table[i]));
@@ -192,8 +190,7 @@ void mstr_cconcat(byte_t **b, uint_t *i, const char *c) {
 }
 
 void mstr_nconcat(byte_t **b, uint_t *i, const byte_t *c, uint_t len) {
-    struct str *s = str_mstr(*b);
-    uint_t size = s->len;
+    uint_t size = str_mstr(*b)->len;
     uint_t nsize = *i + len;
 
     if (size < nsize) {
@@ -211,7 +208,7 @@ void mstr_nconcat(byte_t **b, uint_t *i, const byte_t *c, uint_t len) {
             mu_err_len();
 
         byte_t *nb = mstr_create(size);
-        memcpy(nb, s->data, s->len);
+        memcpy(nb, *b, str_mstr(*b)->len);
         mstr_dec(*b);
         *b = nb;
     }

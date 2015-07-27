@@ -46,13 +46,13 @@ void mu_encode(void (*emit)(void *, byte_t), void *p,
 
 // Instruction access functions
 mu_inline enum op op(uint16_t ins) { return (enum op)(ins >> 12); }
-mu_inline uint_t rd(uint16_t ins) { return 0xf & (ins >> 8); }
-mu_inline uint_t ra(uint16_t ins) { return 0xf & (ins >> 4); }
-mu_inline uint_t rb(uint16_t ins) { return 0xf & (ins >> 0); }
-mu_inline uint_t i(uint16_t ins) { return (uint8_t)ins; }
-mu_inline int_t  j(uint16_t ins) { return (int8_t)ins; }
-mu_inline uint_t fa(uint16_t ins) { return ra(ins) > MU_FRAME ? 1 : ra(ins); }
-mu_inline uint_t fr(uint16_t ins) { return rb(ins) > MU_FRAME ? 1 : rb(ins); }
+mu_inline uint_t  rd(uint16_t ins) { return 0xf & (ins >> 8); }
+mu_inline uint_t  ra(uint16_t ins) { return 0xf & (ins >> 4); }
+mu_inline uint_t  rb(uint16_t ins) { return 0xf & (ins >> 0); }
+mu_inline uint_t  i(uint16_t ins)  { return (uint8_t)ins; }
+mu_inline int_t   j(uint16_t ins)  { return (int8_t)ins; }
+mu_inline uint_t  fa(uint16_t ins) { return ra(ins) > MU_FRAME ? 1 : ra(ins); }
+mu_inline uint_t  fr(uint16_t ins) { return rb(ins) > MU_FRAME ? 1 : rb(ins); }
 
 
 // Disassemble bytecode for debugging and introspection
@@ -128,35 +128,35 @@ void mu_dis(struct code *c) {
 
 
 // Execute bytecode
-void mu_exec(struct fn *fn, frame_t c, mu_t *frame) {
+void mu_exec(struct code *c, mu_t scope, frame_t fc, mu_t *frame) {
     // Allocate temporary variables
     register const uint16_t *pc;
     mu_t *imms;
     struct code **fns;
 
     register mu_t scratch;
-    register uint16_t ins;
 
 reenter:
     // TODO Just here for debugging
     printf("-- dis --\n");
-    printf("regs: %u, scope: %u, args: %u\n", 
-           fn->flags.regs, fn->flags.scope, fn->flags.args);
-    mu_dis(fn->code);
+    printf("regs: %u, scope: %u, args: %x\n", 
+           c->regs, c->scope, c->args);
+    mu_dis(c);
+    //
 
     {   // Setup the registers and scope
-        mu_t regs[fn->flags.regs];
-        mu_fconvert(fn->flags.args, &regs[1], c >> 4, frame);
-        regs[0] = tbl_extend(fn->flags.scope, fn->closure);
+        mu_t regs[c->regs];
+        regs[0] = scope;
+        mu_fconvert(c->args, &regs[1], fc >> 4, frame);
 
         // Setup other state
-        imms = code_imms(fn->code);
-        fns = code_fns(fn->code);
-        pc = code_bcode(fn->code);
+        imms = code_imms(c);
+        fns = code_fns(c);
+        pc = code_bcode(c);
 
         // Enter main execution loop
         while (1) {
-            ins = *pc++;
+            register uint16_t ins = *pc++;
 
             switch (op(ins)) {
                 case OP_IMM:
@@ -164,7 +164,7 @@ reenter:
                     break;
 
                 case OP_FN:
-                    regs[rd(ins)] = fn_create(fns[i(ins)], regs[0]);
+                    regs[rd(ins)] = mfn(fns[i(ins)], regs[0]);
                     break;
 
                 case OP_TBL:
@@ -224,19 +224,29 @@ reenter:
                     memcpy(&regs[rd(ins)], frame, sizeof(mu_t)*fr(ins));
                     break;
 
-                case OP_TCALL:
-                    scratch = regs[rd(ins)];
-                    c = (ra(ins) << 4) | (c & 0xf);
-                    memcpy(frame, &regs[rd(ins)+1], sizeof(mu_t)*fa(ins));
-                    mu_dec(regs[0]);
-                    fn_dec(mfn_(fn)); // TODO????
-                    goto tailcall;
-
                 case OP_RET:
                     mu_dec(regs[0]);
-                    fn_dec(mfn_(fn)); // TODO??
-                    mu_fconvert(c & 0xf, frame, rb(ins), &regs[rd(ins)]);
+                    code_dec(c);
+                    mu_fconvert(fc & 0xf, frame, rb(ins), &regs[rd(ins)]);
                     return;
+
+                case OP_TCALL:
+                    scratch = regs[rd(ins)];
+                    fc = (ra(ins) << 4) | (fc & 0xf);
+                    memcpy(frame, &regs[rd(ins)+1], sizeof(mu_t)*fa(ins));
+                    mu_dec(regs[0]);
+                    code_dec(c);
+
+                    // Use a direct goto to garuntee a tail call when the target 
+                    // is another mu function. Otherwise, we just try our hardest
+                    // to get a tail call emitted.
+                    if (mu_type(scratch) == MU_FN) {
+                        c = fn_code(scratch);
+                        scope = tbl_extend(c->scope, fn_closure(scratch));
+                        goto reenter;
+                    } else {
+                        return mu_fcall(scratch, fc, frame);
+                    }
 
                 default:
                     mu_cerr(mcstr("invalid opcode"),
@@ -246,19 +256,5 @@ reenter:
     }
 
     mu_unreachable;
-
-tailcall:
-    // Use a direct goto to garuntee a tail call when the target is
-    // another mu function. Otherwise, we just try our hardest to get
-    // a tail call emitted. This has been shown to be pretty unlikely
-    // on gcc due to the dynamic array for registers which causes some
-    // stack checking to get pushed all the way to the epilogue.
-    // TODO how to integrate this with structure hiding in fn.c?
-    if (mu_isfn(scratch) && fn_fn_(scratch)->flags.type == 0) {
-        fn = fn_fn_(scratch);
-        goto reenter;
-    } else {
-        return mu_fcall(scratch, c, frame);
-    }
 }
 

@@ -16,15 +16,14 @@
 // stored as a range/offset based on the specified 
 // offset and length.
 mu_aligned struct tbl {
-    ref_t ref; // reference count
-
-    len_t len;  // count of non-nil entries
-    len_t nils; // count of nil entries
+    ref_t ref;      // reference count
     uintq_t npw2;   // log2 of capacity
     uintq_t linear; // type of table
+    len_t len;      // count of non-nil entries
+    len_t nils;     // count of nil entries
 
-    mu_t tail; // tail chain of tables
-    mu_t *array;  // pointer to stored data
+    mu_t tail;      // tail chain of tables
+    mu_t *array;    // pointer to stored data
 };
 
 
@@ -46,7 +45,6 @@ mu_inline bool tbl_isro(mu_t m) {
 // Table creating functions and macros
 mu_t tbl_create(uint_t size);
 mu_t tbl_extend(uint_t size, mu_t parent);
-void tbl_destroy(mu_t t);
 
 // Recursively looks up a key in the table
 // returns either that value or nil
@@ -74,7 +72,10 @@ void tbl_push(mu_t a, mu_t v, mu_t i);
 
 // Table reference counting
 mu_inline mu_t tbl_inc(mu_t m) { ref_inc(m); return m; }
-mu_inline void tbl_dec(mu_t m) { if (ref_dec(m)) tbl_destroy(m); }
+mu_inline void tbl_dec(mu_t m) {
+    extern void tbl_destroy(mu_t);
+    if (ref_dec(m)) tbl_destroy(m);
+}
 
 
 #endif

@@ -22,8 +22,8 @@ static void encode(struct parse *p, op_t op,
                    len_t sdiff) {
     p->sp += sdiff;
 
-    if (p->sp+1 > p->flags.regs)
-        p->flags.regs = p->sp+1;
+    if (p->sp+1 > p->regs)
+        p->regs = p->sp+1;
 
     mu_encode((void (*)(void *, byte_t))emit, p, op, d, a, b);
 }
@@ -60,7 +60,7 @@ static uint_t imm(struct parse *p, mu_t m) {
 
 static uint_t fn(struct parse *p, struct code *code) {
     uint_t index = tbl_len(p->fns);
-    tbl_insert(p->fns, muint(index), fn_create(code, 0));
+    tbl_insert(p->fns, muint(index), mfn(code, 0));
     return index;
 }
 
@@ -89,9 +89,9 @@ static void expect_direct(struct parse *p) {
     } else if (p->state == P_SCOPED) {
         encode(p, OP_LOOKUP, p->sp, 0, p->sp, 0);
     } else if (p->state == P_CALLED) {
-        encode(p, OP_CALL, p->sp-(p->args == 0xf ? 1 : p->args), 
-               p->args, 1, 
-               -(p->args == 0xf ? 1 : p->args));
+        encode(p, OP_CALL, p->sp-(p->params == 0xf ? 1 : p->params), 
+               p->params, 1, 
+               -(p->params == 0xf ? 1 : p->params));
     }
 }
 
@@ -117,10 +117,9 @@ static struct parse *parse_create(mu_t source) {
 
     p->imms = tbl_create(0);
     p->fns = tbl_create(0);
-    p->flags.regs = 1;
-    p->flags.scope = 4; // TODO
-    p->flags.args = 0;
-    p->flags.type = 0;
+    p->regs = 1;
+    p->scope = 4; // TODO
+    p->args = 0;
 
     p->l.pos = str_bytes(source);
     p->l.end = str_bytes(source) + str_len(source);
@@ -139,10 +138,9 @@ static struct parse *parse_nested(struct parse *p) {
 
     q->imms = tbl_create(0);
     q->fns = tbl_create(0);
-    q->flags.regs = 1;
-    q->flags.scope = 4; // TODO
-    q->flags.args = 0;
-    q->flags.type = 0;
+    q->regs = 1;
+    q->scope = 4; // TODO
+    q->args = 0;
 
     q->f = p->f;
     q->l = p->l;
@@ -157,10 +155,12 @@ static struct code *parse_realize(struct parse *p) {
         sizeof(struct code *)*tbl_len(p->fns) +
         p->bcount);
 
-    code->bcount = p->bcount;
+    code->args = p->args;
+    code->regs = p->regs;
+    code->scope = p->scope;
     code->icount = tbl_len(p->imms);
     code->fcount = tbl_len(p->fns);
-    code->flags = p->flags;
+    code->bcount = p->bcount;
 
     mu_t *imms = code_imms(code);
     struct code **fns = code_fns(code);
@@ -175,7 +175,7 @@ static struct code *parse_realize(struct parse *p) {
     }
 
     for (uint_t i = 0; tbl_next(p->fns, &i, &k, &v);) {
-        fns[num_uint(k)] = fn_code_(v);
+        fns[num_uint(k)] = fn_code(v);
     }
 
     tbl_dec(p->imms);
@@ -342,7 +342,7 @@ static void p_fn(struct parse *p) {
         q->l = l;
 
         q->sp += q->f.tabled ? 1 : q->f.count;
-        q->flags.args = q->f.tabled ? 0xf : q->f.count;
+        q->args = q->f.tabled ? 0xf : q->f.count;
 
         q->f.unpack = true;
         q->f.insert = true;
@@ -413,9 +413,9 @@ static void p_subexpr(struct parse *p) {
 
                 if (p->f.call) {
                     p_expr(p);
-                    encode(p, OP_CALL, p->sp-(p->args == 0xf ? 1 : p->args),
-                           p->args, 0xf,
-                           -(p->args == 0xf ? 1 : p->args));
+                    encode(p, OP_CALL, p->sp-(p->params == 0xf ? 1 : p->params),
+                           p->params, 0xf,
+                           -(p->params == 0xf ? 1 : p->params));
                 } else {
                     p->f.tabled = true;
                     p->f.unpack = false;
@@ -436,7 +436,7 @@ static void p_subexpr(struct parse *p) {
             mu_lex(&p->l);
             p_subexpr(p);
             expect_direct(p);
-            p->args = 1;
+            p->params = 1;
             p->state = P_CALLED;
             return p_postexpr(p);
 
@@ -481,14 +481,14 @@ static void p_postexpr(struct parse *p) {
 
                 if (p->f.call) {
                     p_expr(p);
-                    encode(p, OP_CALL, p->sp-(p->args == 0xf ? 1 : p->args),
-                           p->args, 0xf,
-                           -(p->args == 0xf ? 1 : p->args));
-                    p->args = 0xf;
+                    encode(p, OP_CALL, p->sp-(p->params == 0xf ? 1 : p->params),
+                           p->params, 0xf,
+                           -(p->params == 0xf ? 1 : p->params));
+                    p->params = 0xf;
                 } else {
                     p->f.unpack = false;
                     p_frame(p);
-                    p->args = p->f.tabled ? 0xf : p->f.count;
+                    p->params = p->f.tabled ? 0xf : p->f.count;
                 }
                 p->f = f;
             }
@@ -516,7 +516,7 @@ static void p_postexpr(struct parse *p) {
                 expect_direct(p);
                 p->l.lprec = lprec;
             }
-            p->args = 2;
+            p->params = 2;
             p->state = P_CALLED;
             return p_postexpr(p);
 
@@ -756,10 +756,10 @@ static void p_assignment(struct parse *p) {
                 mu_err_parse(); // TODO better message
             } else if (p->f.call) {
                 p_expr(p);
-                encode(p, OP_CALL, p->sp-(p->args == 0xf ? 1 : p->args),
-                       p->args, f.tabled ? 0xf : f.count,
+                encode(p, OP_CALL, p->sp-(p->params == 0xf ? 1 : p->params),
+                       p->params, f.tabled ? 0xf : f.count,
                        +(f.tabled ? 1 : f.count)
-                       -(p->args == 0xf ? 1 : p->args)-1);
+                       -(p->params == 0xf ? 1 : p->params)-1);
             } else {
                 p->f.unpack = false;
                 p->f.tabled = p->f.tabled || f.tabled;
@@ -795,9 +795,9 @@ static void p_assignment(struct parse *p) {
 
         if (p->f.call) {
             p_expr(p);
-            encode(p, OP_CALL, p->sp-(p->args == 0xf ? 1 : p->args),
-                   p->args, 0,
-                   -(p->args == 0xf ? 1 : p->args)-1);
+            encode(p, OP_CALL, p->sp-(p->params == 0xf ? 1 : p->params),
+                   p->params, 0,
+                   -(p->params == 0xf ? 1 : p->params)-1);
         } else {
             p->f.tabled = false;
             p->f.target = 0;
@@ -824,9 +824,9 @@ static void p_stmt(struct parse *p) {
             if (p->f.call) {
                 p_expr(p);
                 encode(p, OP_TCALL, 
-                       p->sp - (p->args == 0xf ? 1 : p->args), 
-                       p->args, 0, 
-                       -(p->args == 0xf ? 1 : p->args)-1);
+                       p->sp - (p->params == 0xf ? 1 : p->params), 
+                       p->params, 0, 
+                       -(p->params == 0xf ? 1 : p->params)-1);
             } else {
                 p->f.unpack = false;
                 p_frame(p);

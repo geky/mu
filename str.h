@@ -17,9 +17,9 @@
 // Temporary mutable strings can be created and used through the 
 // mstr set of functions which store this info internally
 mu_aligned struct str {
-    ref_t ref;
-    len_t len;
-    byte_t data[];
+    ref_t ref;     // reference count
+    len_t len;     // length of string
+    byte_t data[]; // string data
 };
 
 // String creation functions
@@ -36,13 +36,8 @@ mu_inline const byte_t *str_bytes(mu_t m) {
 }
 
 
-// Basic string handling
-mu_t str_intern(const byte_t *s, uint_t len);
-void str_destroy(mu_t s);
-
-// Functions for handling mutable strings
+// Functions for handling temporary mutable strings
 byte_t *mstr_create(uint_t len);
-void mstr_destroy(byte_t *s);
 mu_t mstr_intern(byte_t *s, uint_t len);
 
 void mstr_insert(byte_t **s, uint_t *i, byte_t c);
@@ -53,10 +48,16 @@ void mstr_cconcat(byte_t **s, uint_t *i, const char *c);
 
 // Reference counting
 mu_inline mu_t str_inc(mu_t m) { ref_inc(m); return m; }
-mu_inline void str_dec(mu_t m) { if (ref_dec(m)) str_destroy(m); }
+mu_inline void str_dec(mu_t m) {
+    extern void str_destroy(mu_t);
+    if (ref_dec(m)) str_destroy(m); 
+}
 
 mu_inline byte_t *mstr_inc(byte_t *s) { ref_inc(s); return s; }
-mu_inline void mstr_dec(byte_t *s) { if (ref_dec(s)) mstr_destroy(s); }
+mu_inline void mstr_dec(byte_t *s) {
+    extern void mstr_destroy(byte_t *);
+    if (ref_dec(s)) mstr_destroy(s); 
+}
 
 
 // String parsing and representation
