@@ -20,7 +20,7 @@ mu_inline struct tbl *tbl_wtbl(mu_t m) {
     if (mu_unlikely(tbl_isro(m)))
         mu_err_readonly();
     else
-        return tbl_rtbl(m);
+        return (struct tbl *)((uint_t)m - MU_TBL);
 }
 
 
@@ -58,7 +58,6 @@ mu_t tbl_create(uint_t len) {
     t->npw2 = tbl_npw2(len);
     t->linear = true;
     t->len = 0;
-    t->nils = 0;
     t->tail = 0;
 
     int size = 1 << t->npw2;
@@ -89,8 +88,7 @@ void tbl_destroy(mu_t m) {
 // Recursively looks up a key in the table
 // returns either that value or nil
 mu_t tbl_lookup(mu_t m, mu_t k) {
-    if (!k)
-        return mnil;
+    if (!k) return mnil;
 
     for (struct tbl *t = tbl_rtbl(m); t; t = tbl_rtbl(t->tail)) {
         uint_t mask = (1 << t->npw2) - 1;
@@ -117,28 +115,19 @@ mu_t tbl_lookup(mu_t m, mu_t k) {
 }
 
 
-// Helper methods for modifying tables
-mu_inline void tbl_inc_len(struct tbl *t) {
-    if (mu_unlikely(t->len == MU_MAXLEN))
-        mu_err_len();
+// Modify table info according to specified replacement
+static void tbl_adjust(struct tbl *t, mu_t d, mu_t v) {
+    if (v && !d) {
+        if (t->len == MU_MAXLEN)
+            mu_err_len();
 
-    t->len++;
+        t->len++;
+        t->nils--;
+    } else if (!v && d) {
+        t->len--;
+        t->nils++;
+    }
 }
-
-mu_inline void tbl_dec_len(struct tbl *t) {
-    t->len--;
-}
-
-mu_inline void tbl_inc_nils(struct tbl *t) {
-    tbl_dec_len(t);
-    t->nils++;
-}
-
-mu_inline void tbl_dec_nils(struct tbl *t) {
-    tbl_inc_len(t);
-    t->nils--;
-}
-
 
 // Converts from array to full table
 static void tbl_realize(struct tbl *t) {
@@ -153,8 +142,7 @@ static void tbl_realize(struct tbl *t) {
         mu_t k = muint(j);
         mu_t v = t->array[j];
 
-        if (!v)
-            continue;
+        if (!v) continue;
 
         for (uint_t i = tbl_hash(k);; i++) {
             mu_t *p = &array[2*(i & mask)];
@@ -227,121 +215,63 @@ static void tbl_expand(struct tbl *t) {
 
 // Inserts a value in the table with the given key
 // without decending down the tail chain
-static void tbl_insert_nil(struct tbl *t, mu_t k) {
-    uint_t mask = (1 << t->npw2) - 1;
+void tbl_insert(mu_t m, mu_t k, mu_t v) {
+    if (!k) return;
 
-    if (t->linear) {
-        uint_t i = num_uint(k) & mask;
+    struct tbl *t = tbl_wtbl(m);
+    if (v) tbl_expand(t);
 
-        if (k == muint(i) && t->array[i]) {
-            tbl_dec_len(t);
-            mu_dec(t->array[i]);
-            t->array[i] = mnil;
-        }
-    } else {
-        for (uint_t i = tbl_hash(k);; i++) {
-            mu_t *p = &t->array[2*(i & mask)];
-
-            if (!p[0]) {
-                return;
-            } else if (k == p[0]) {
-                if (p[1]) tbl_inc_nils(t);
-                mu_dec(p[1]);
-                p[1] = mnil;
-            }
-        }
-    }
-}
-
-static void tbl_insert_val(struct tbl *t, mu_t k, mu_t v) {
-    // We expand just so we always have space to insert
-    // Worst case we have some extra space a bit early, 
-    // but at least we won't need to rehash what we're adding.
-    tbl_expand(t);
     uint_t mask = (1 << t->npw2) - 1;
 
     if (t->linear) {
         uint_t i = num_uint(k) & mask;
 
         if (k == muint(i)) {
-            if (!t->array[i]) tbl_inc_len(t);
+            tbl_adjust(t, t->array[i], v);
             mu_dec(t->array[i]);
             t->array[i] = v;
-            return;
+        } else if (v) {
+            // Index is out of range, convert to full table
+            tbl_realize(t);
+            return tbl_insert(m, k, v);
         }
+    } else {
+        for (uint_t i = tbl_hash(k);; i++) {
+            mu_t *p = &t->array[2*(i & mask)];
 
-        // Index is out of range, convert to full table
-        tbl_realize(t);
-    }
-
-    for (uint_t i = tbl_hash(k);; i++) {
-        mu_t *p = &t->array[2*(i & mask)];
-
-        if (!p[0]) {
-            tbl_inc_len(t);
-            p[0] = k;
-            p[1] = v;
-            return;
-        } else if (k == p[0]) {
-            if (!p[1]) tbl_dec_nils(t);
-            mu_dec(p[1]);
-            p[1] = v;
-            return;
+            if (!p[0]) {
+                if (v) {
+                    tbl_adjust(t, 0, v);
+                    p[0] = k;
+                    p[1] = v;
+                }
+                return;
+            } else if (k == p[0]) {
+                tbl_adjust(t, p[1], v);
+                mu_dec(p[1]);
+                p[1] = v;
+                return;
+            }
         }
     }
 }
-
-void tbl_insert(mu_t m, mu_t k, mu_t v) {
-    if (k && v)
-        return tbl_insert_val(tbl_wtbl(m), k, v);
-    else if (k)
-        return tbl_insert_nil(tbl_wtbl(m), k);
-}
-
 
 // Recursively assigns a value in the table with the given key
 // decends down the tail chain until its found
-static void tbl_assign_nil(struct tbl *t, mu_t k) {
-    while (t->tail && !tbl_isro(t->tail)) {
-        t = tbl_rtbl(t->tail);
-        uint_t mask = (1 << t->npw2) - 1;
+void tbl_assign(mu_t m, mu_t k, mu_t v) {
+    if (!k) return;
 
+    mu_t head = m;
+
+    for (struct tbl *t; mu_type(m) == MU_TBL; m = t->tail) {
+        t = tbl_rtbl(m);
+        uint_t mask = (1 << t->npw2) - 1;
+        
         if (t->linear) {
             uint_t i = num_uint(k) & mask;
 
             if (k == muint(i) && t->array[i]) {
-                tbl_dec_len(t);
-                mu_dec(t->array[i]);
-                t->array[i] = mnil;
-                return;
-            }
-        } else {
-            for (uint_t i = tbl_hash(k);; i++) {
-                mu_t *p = &t->array[2*(i & mask)];
-
-                if (!p[0] && (k == p[0] && !p[1])) {
-                    break;
-                } else if (k == p[0]) {
-                    tbl_inc_nils(t);
-                    mu_dec(p[1]);
-                    p[1] = mnil;
-                }
-            }
-        }
-    }
-}
-
-static void tbl_assign_val(struct tbl *t, mu_t k, mu_t v) {
-    struct tbl *head = t;
-
-    while (t->tail && !tbl_isro(t->tail)) {
-        t = tbl_rtbl(t->tail);
-        uint_t mask = (1 << t->npw2) - 1;
-
-        if (t->linear) {
-            uint_t i = num_uint(k) & mask;
-
-            if (k == muint(i) && t->array[i]) {
+                tbl_adjust(t, t->array[i], v);
                 mu_dec(t->array[i]);
                 t->array[i] = v;
                 return;
@@ -353,6 +283,7 @@ static void tbl_assign_val(struct tbl *t, mu_t k, mu_t v) {
                 if (!p[0] || (k == p[0] && !p[1])) {
                     break;
                 } else if (k == p[0]) {
+                    tbl_adjust(t, p[1], v);
                     mu_dec(p[1]);
                     p[1] = v;
                     return;
@@ -361,16 +292,9 @@ static void tbl_assign_val(struct tbl *t, mu_t k, mu_t v) {
         }
     }
 
-    return tbl_insert_val(head, k, v);
+    if (v)
+        tbl_insert(head, k, v);
 }
-
-void tbl_assign(mu_t m, mu_t k, mu_t v) {
-    if (k && v)
-        return tbl_assign_val(tbl_wtbl(m), k, v);
-    else if (k)
-        return tbl_assign_nil(tbl_wtbl(m), k);
-}
-
 
 
 // Performs iteration on a table

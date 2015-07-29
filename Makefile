@@ -20,7 +20,6 @@ CFLAGS += -O2
 endif
 CFLAGS += -std=c99
 CFLAGS += -include stdio.h
-CFLAGS += -foptimize-sibling-calls -freg-struct-return
 CFLAGS += -m32
 CFLAGS += -Wall -Winline
 
@@ -46,7 +45,7 @@ $(LIBTARGET): $(OBJ)
 	$(CC) -c -MMD $(CFLAGS) $< -o $@
 
 %.s: %.c
-	$(CC) -S -fverbose-asm $(CFLAGS) $< -o $@
+	$(CC) -S $(CFLAGS) $< -o $@
 
 
 clean:
