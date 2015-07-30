@@ -96,12 +96,13 @@ mu_inline void code_dec(struct code *c) {
 }
 
 
-// function calls
+// Function calls
 void fn_fcall(mu_t f, frame_t fc, mu_t *frame);
 void bfn_fcall(mu_t f, frame_t fc, mu_t *frame);
 void sbfn_fcall(mu_t f, frame_t fc, mu_t *frame);
 
-// Function representation
+// Function operations
+mu_t fn_bind(mu_t f, mu_t args);
 mu_t fn_repr(mu_t f);
 
 

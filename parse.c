@@ -18,7 +18,7 @@ static void emit(struct parse *p, byte_t byte) {
 }
 
 static void encode(struct parse *p, op_t op,
-                   uint_t d, uint_t a, uint_t b, 
+                   uint_t d, uint_t a, uint_t b,
                    len_t sdiff) {
     p->sp += sdiff;
 
@@ -79,30 +79,27 @@ static void expect(struct parse *p, enum tok tok) {
 }
 
 static void expect_indirect(struct parse *p) {
-    if (p->state != P_INDIRECT && p->state != P_SCOPED)
+    if (p->state != P_INDIRECT &&
+        p->state != P_SCOPED &&
+        p->state != P_NIL)
         mu_err_parse();
 }
 
-static void expect_direct(struct parse *p) {
+static void expect_direct(struct parse *p, uint_t offset) {
     if (p->state == P_INDIRECT) {
-        encode(p, OP_LOOKDN, p->sp-1, p->sp-1, p->sp, -1);
+        encode(p, OP_LOOKDN, p->sp+offset-1, p->sp-1, p->sp, +offset-1);
     } else if (p->state == P_SCOPED) {
-        encode(p, OP_LOOKUP, p->sp, 0, p->sp, 0);
-    } else if (p->state == P_CALLED) {
-        encode(p, OP_CALL, p->sp-(p->params == 0xf ? 1 : p->params), 
-               p->params, 1, 
-               -(p->params == 0xf ? 1 : p->params));
-    }
-}
-
-static void expect_second(struct parse *p) {
-    if (p->state == P_INDIRECT) {
-        encode(p, OP_LOOKDN, p->sp, p->sp-1, p->sp, 0);
-    } else if (p->state == P_SCOPED) {
-        encode(p, OP_LOOKUP, p->sp+1, 0, p->sp, +1);
+        encode(p, OP_LOOKUP, p->sp+offset, 0, p->sp, +offset);
+    } else if (p->state == P_NIL) {
+        encode(p, OP_IMM, p->sp+offset+1, imm(p, mnil), 0, +offset+1);
     } else {
-        expect_direct(p);
-        encode(p, OP_MOVE, p->sp+1, p->sp, 0, +1);
+        if (p->state == P_CALLED)
+            encode(p, OP_CALL, p->sp-(p->params == 0xf ? 1 : p->params),
+                   p->params, 1,
+                   -(p->params == 0xf ? 1 : p->params));
+
+        if (offset != 0)
+            encode(p, OP_MOVE, p->sp+offset, p->sp, 0, +offset);
     }
 }
 
@@ -239,13 +236,17 @@ static void p_postexpr_scan(struct parse *p) {
             return p_postexpr_scan(p);
 
         case T_OP:
-        case T_OPASSIGN:
         case T_EXPAND:
             mu_scan(&p->l);
             p_expr_scan(p);
             p->f.call = true;
             return p_postexpr_scan(p);
 
+        case T_AND:
+        case T_OR:
+            // TODO handle these differently to prevent issues
+            // with things like this?
+            // let a = b or c  +  2
         case T_FN:
         case T_TYPE:
         case T_IF:
@@ -362,14 +363,14 @@ static void p_if(struct parse *p) {
     expect(p, T_LPAREN);
     p_expr(p);
     expect(p, T_RPAREN);
-    expect_direct(p);
+    expect_direct(p, 0);
 
     len_t before_if = p->bcount;
     encode(p, OP_JFALSE, p->sp, 0, 0, 0);
     len_t after_if = p->bcount;
     encode(p, OP_DROP, p->sp, 0, 0, -1);
     p_expr(p);
-    expect_direct(p);
+    expect_direct(p, 0);
 
     if (p->l.tok == T_ELSE) {
         mu_lex(&p->l);
@@ -377,7 +378,7 @@ static void p_if(struct parse *p) {
         encode(p, OP_JUMP, 0, 0, 0, -1);
         len_t after_else = p->bcount;
         p_expr(p);
-        expect_direct(p);
+        expect_direct(p, 0);
 
         patch(p, before_if, OP_JFALSE, p->sp, after_else - after_if);
         patch(p, before_else, OP_JUMP, 0, p->bcount - after_else);
@@ -390,7 +391,7 @@ static void p_if(struct parse *p) {
         patch(p, before_if, OP_JFALSE, p->sp, after_else - after_if);
         patch(p, before_else, OP_JUMP, 0, p->bcount - after_else);
     }
-}   
+}
 
 static void p_subexpr(struct parse *p) {
     switch (p->l.tok) {
@@ -435,7 +436,7 @@ static void p_subexpr(struct parse *p) {
             encode(p, OP_LOOKDN, p->sp-1, p->sp-1, p->sp, -1);
             mu_lex(&p->l);
             p_subexpr(p);
-            expect_direct(p);
+            expect_direct(p, 0);
             p->params = 1;
             p->state = P_CALLED;
             return p_postexpr(p);
@@ -450,6 +451,11 @@ static void p_subexpr(struct parse *p) {
             encode(p, OP_IMM, p->sp+1, imm(p, p->l.val), 0, +1);
             mu_lex(&p->l);
             p->state = P_DIRECT;
+            return p_postexpr(p);
+
+        case T_NIL:
+            mu_lex(&p->l);
+            p->state = P_NIL;
             return p_postexpr(p);
 
         case T_FN:
@@ -473,7 +479,7 @@ static void p_postexpr(struct parse *p) {
     switch (p->l.tok) {
         case T_LPAREN:
             mu_lex(&p->l);
-            expect_direct(p);
+            expect_direct(p, 0);
             {   struct f_parse f = p->f;
                 struct lex l = p->l;
                 p_frame_scan(p);
@@ -505,27 +511,48 @@ static void p_postexpr(struct parse *p) {
                 p->l.lprec = p->l.rprec;
                 mu_t sym = mu_inc(p->l.val);
                 mu_lex(&p->l);
-                expect_second(p);
-                
+                expect_direct(p, 1);
+
                 encode(p, OP_IMM, p->sp-1, imm(p, mcstr("ops")), 0, 0);
                 encode(p, OP_LOOKUP, p->sp-1, 0, p->sp-1, 0);
                 encode(p, OP_IMM, p->sp+1, imm(p, sym), 0, +1);
                 encode(p, OP_LOOKDN, p->sp-2, p->sp-2, p->sp, -1);
 
                 p_subexpr(p);
-                expect_direct(p);
+                expect_direct(p, 0);
                 p->l.lprec = lprec;
             }
             p->params = 2;
             p->state = P_CALLED;
             return p_postexpr(p);
 
+        case T_LTABLE:
+            mu_lex(&p->l);
+            expect_direct(p, 0);
+            p_expr(p);
+            expect_direct(p, 0);
+            expect(p, T_RTABLE);
+            p->state = P_INDIRECT;
+            return p_postexpr(p);
+
         case T_DOT:
             mu_lex(&p->l);
-            expect_direct(p);
+            expect_direct(p, 0);
             encode(p, OP_IMM, p->sp+1, imm(p, p->l.val), 0, +1);
-            expect(p, T_SYM);
+            expect(p, T_SYM); // TODO what constitutes a sym?
             p->state = P_INDIRECT;
+            return p_postexpr(p);
+
+        case T_ARROW:
+            mu_lex(&p->l);
+            expect_direct(p, 2);
+            encode(p, OP_IMM, p->sp-1, imm(p, p->l.val), 0, 0);
+            encode(p, OP_LOOKUP, p->sp-1, p->sp, p->sp-1, 0);
+            expect(p, T_SYM); // TODO what constitutes a sym?
+            encode(p, OP_IMM, p->sp-2, imm(p, mcstr("bind")), 0, 0);
+            encode(p, OP_LOOKUP, p->sp-2, 0, p->sp-2, 0);
+            encode(p, OP_CALL, p->sp-2, 2, 1, -2);
+            p->state = P_DIRECT;
             return p_postexpr(p);
 
         case T_RPAREN:
@@ -565,15 +592,18 @@ static void p_entry(struct parse *p) {
 
     if (p->l.tok == T_PAIR) {
         mu_lex(&p->l);
-        expect_direct(p);
 
         if (p->f.unpack && p->f.expand) {
+            expect_direct(p, 1);
             encode(p, OP_IMM, p->sp+1, imm(p, mnil), 0, +1);
             encode(p, OP_LOOKUP, p->sp-2, p->sp-3, p->sp-1, 0);
             encode(p, OP_INSERT, p->sp, p->sp-3, p->sp-1, -2);
         } else if (p->f.unpack) {
+            expect_direct(p, 0);
             encode(p, p->f.count == p->f.target-1 ? OP_LOOKDN : OP_LOOKUP,
                    p->sp, p->sp-1, p->sp, 0);
+        } else {
+            expect_direct(p, 0);
         }
 
         if (p->f.key && !mu_isexpr(p->l.tok)) {
@@ -588,20 +618,25 @@ static void p_entry(struct parse *p) {
         else
             p->f.key = true;
     } else if (p->f.tabled) {
+        // TODO move this?
+        int offset = p->state == P_INDIRECT ? 2
+                   : p->state == P_SCOPED ? 1
+                   : 0;
+
         if (p->f.unpack && p->f.expand) {
             encode(p, OP_IMM, p->sp+1, imm(p, mcstr("pop")), 0, +1);
             encode(p, OP_LOOKUP, p->sp, 0, p->sp, 0);
-            encode(p, OP_DUP, p->sp+1, p->sp-2-(p->state!=P_SCOPED), 0, +1);
+            encode(p, OP_DUP, p->sp+1, p->sp-1-offset, 0, +1);
             encode(p, OP_IMM, p->sp+1, imm(p, muint(p->f.index)), 0, +1);
             encode(p, OP_CALL, p->sp-2, 2, 1, -2);
         } else if (p->f.unpack) {
             encode(p, OP_IMM, p->sp+1, imm(p, muint(p->f.index)), 0, +1);
             encode(p, p->f.count == p->f.target-1 ? OP_LOOKDN : OP_LOOKUP,
-                   p->sp, p->sp-2-(p->state!=P_SCOPED), p->sp, 0);
+                   p->sp, p->sp-1-offset, p->sp, 0);
         }
     } else {
         if (p->f.unpack && p->l.tok == T_LTABLE && p->f.count < p->f.target-1)
-            encode(p, OP_MOVE, p->sp+1, 
+            encode(p, OP_MOVE, p->sp+1,
                    p->sp - (p->f.target-1 - p->f.count), 0, +1);
     }
 
@@ -623,7 +658,9 @@ static void p_entry(struct parse *p) {
         expect_indirect(p);
 
         if (p->f.key) {
-            if (p->state == P_SCOPED) {
+            if (p->state == P_NIL) {
+                encode(p, OP_DROP, p->sp, 0, 0, -1);
+            } else if (p->state == P_SCOPED) {
                 encode(p, p->f.insert ? OP_INSERT : OP_ASSIGN,
                        p->sp-1, 0, p->sp, -2);
             } else {
@@ -632,7 +669,9 @@ static void p_entry(struct parse *p) {
                 encode(p, OP_DROP, p->sp-1, 0, 0, -3);
             }
         } else if (p->f.tabled) {
-            if (p->state == P_SCOPED) {
+            if (p->state == P_NIL) {
+                encode(p, OP_DROP, p->sp, 0, 0, -1);
+            } else if (p->state == P_SCOPED) {
                 encode(p, p->f.insert ? OP_INSERT : OP_ASSIGN,
                        p->sp, 0, p->sp-1, -2);
             } else {
@@ -641,7 +680,10 @@ static void p_entry(struct parse *p) {
                 encode(p, OP_DROP, p->sp-2, 0, 0, -3);
             }
         } else {
-            if (p->state == P_SCOPED) {
+            if (p->state == P_NIL) {
+                encode(p, OP_DROP, p->sp - (p->f.target-1 - p->f.count),
+                          0, 0, 0);
+            } else if (p->state == P_SCOPED) {
                 encode(p, p->f.insert ? OP_INSERT : OP_ASSIGN,
                        p->sp-1 - (p->f.target-1 - p->f.count),
                        0, p->sp, -1);
@@ -653,7 +695,7 @@ static void p_entry(struct parse *p) {
             }
         }
     } else {
-        expect_direct(p);
+        expect_direct(p, 0);
 
         if (p->f.key) {
             encode(p, OP_INSERT, p->sp, p->sp-2, p->sp-1, -2);
@@ -667,7 +709,7 @@ static void p_entry(struct parse *p) {
 }
 
 static void p_frame(struct parse *p) {
-    if (!p->f.unpack && p->f.tabled && !p->f.call && 
+    if (!p->f.unpack && p->f.tabled && !p->f.call &&
         !(p->f.expand && p->f.count == 0))
         encode(p, OP_TBL, p->sp+1, p->f.count, 0, +1);
 
@@ -705,7 +747,10 @@ static void p_frame(struct parse *p) {
             p_subexpr(p);
             expect_indirect(p);
 
-            if (p->state == P_SCOPED) {
+            // TODO combine this somehow?
+            if (p->state == P_NIL) {
+                encode(p, OP_DROP, p->sp, 0, 0, -1);
+            } else if (p->state == P_SCOPED) {
                 encode(p, p->f.insert ? OP_INSERT : OP_ASSIGN,
                        p->sp-1, 0, p->sp, -1);
             } else {
@@ -722,12 +767,12 @@ static void p_frame(struct parse *p) {
             encode(p, OP_IMM, p->sp-1, imm(p, mcstr("concat")), 0, 0);
             encode(p, OP_LOOKUP, p->sp-1, 0, p->sp-1, 0);
             p_subexpr(p);
-            expect_direct(p);
+            expect_direct(p, 0);
             encode(p, OP_IMM, p->sp+1, imm(p, muint(p->f.index)), 0, +1);
             encode(p, OP_CALL, p->sp-3, 3, 1, -3);
         } else if (p->f.expand && p->f.tabled) {
             p_subexpr(p);
-            expect_direct(p);
+            expect_direct(p, 0);
         } else if (!p->f.tabled) {
             while (p->f.target > p->f.count) {
                 encode(p, OP_IMM, p->sp+1, imm(p, mnil), 0, +1);
@@ -751,7 +796,7 @@ static void p_assignment(struct parse *p) {
             p_frame_scan(p);
             p->l = l;
 
-            if ((p->f.count == 0 && !p->f.tabled) || 
+            if ((p->f.count == 0 && !p->f.tabled) ||
                 (f.count == 0 && !f.tabled)) {
                 mu_err_parse(); // TODO better message
             } else if (p->f.call) {
@@ -767,15 +812,15 @@ static void p_assignment(struct parse *p) {
                 p_frame(p);
 
                 if (p->f.tabled && !f.tabled) {
-                    encode(p, OP_MOVE, p->sp + p->f.target, 
+                    encode(p, OP_MOVE, p->sp + p->f.target,
                            p->sp, 0, +p->f.target);
 
                     for (int i = 0; i < p->f.target; i++) {
-                        encode(p, OP_IMM, p->sp-1 - (p->f.target-1 - i), 
+                        encode(p, OP_IMM, p->sp-1 - (p->f.target-1 - i),
                                imm(p, muint(i)), 0, 0);
                         encode(p, i == p->f.target-1 ? OP_LOOKDN : OP_LOOKUP,
                                p->sp-1 - (p->f.target-1 - i), p->sp,
-                               p->sp-1 - (p->f.target-1 - i), 
+                               p->sp-1 - (p->f.target-1 - i),
                                -(p->f.target-1 == i));
                     }
                 }
@@ -823,16 +868,16 @@ static void p_stmt(struct parse *p) {
 
             if (p->f.call) {
                 p_expr(p);
-                encode(p, OP_TCALL, 
-                       p->sp - (p->params == 0xf ? 1 : p->params), 
-                       p->params, 0, 
+                encode(p, OP_TCALL,
+                       p->sp - (p->params == 0xf ? 1 : p->params),
+                       p->params, 0,
                        -(p->params == 0xf ? 1 : p->params)-1);
             } else {
                 p->f.unpack = false;
                 p_frame(p);
                 encode(p, OP_RET,
                        p->sp - (p->f.tabled ? 0 : p->f.count-1),
-                       0, p->f.tabled ? 0xf : p->f.count, 
+                       0, p->f.tabled ? 0xf : p->f.count,
                        -(p->f.tabled ? 1 : p->f.count));
             }
             return;

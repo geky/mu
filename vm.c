@@ -32,7 +32,7 @@ void mu_encode(void (*emit)(void *, byte_t), void *p,
     } else if (op >= OP_JFALSE && op <= OP_JUMP) {
         mu_assert(a <= 0xff && a >= -0x100);
         ins.i |= 0xff & (a>>1);
-    } else { 
+    } else {
         mu_assert(a <= 0xf);
         mu_assert(b <= 0xf);
         ins.i |= a << 4;
@@ -61,10 +61,32 @@ mu_inline uint_t  fr(uint16_t ins) { return rb(ins) > MU_FRAME ? 1 : rb(ins); }
 // or just dropped completely.
 void mu_dis(struct code *c) {
     mu_t *imms = code_imms(c);
+    struct code **fns = code_fns(c);
     const uint16_t *pc = code_bcode(c);
     const uint16_t *end = pc + c->bcount/2;
     uint16_t ins;
 
+    printf("-- dis 0x%08x --\n", (uint_t)c);
+    printf("regs: %u, scope: %u, args: %x\n",
+           c->regs, c->scope, c->args);
+
+    if (c->icount > 0) {
+        printf("imms:\n");
+        for (uint_t i = 0; i < c->icount; i++) {
+            mu_t repr = mu_repr(imms[i]);
+            printf("%08x (%.*s)\n", (uint_t)imms[i], str_len(repr), str_bytes(repr));
+            str_dec(repr);
+        }
+    }
+
+    if (c->fcount > 0) {
+        printf("fns:\n");
+        for (uint_t i = 0; i < c->fcount; i++) {
+            printf("%08x\n", (uint_t)fns[i]);
+        }
+    }
+
+    printf("bcode:\n");
     while (pc < end) {
         ins = *pc++;
         printf("%04x ", ins);
@@ -138,9 +160,6 @@ void mu_exec(struct code *c, mu_t scope, frame_t fc, mu_t *frame) {
 
 reenter:
     // TODO Just here for debugging
-    printf("-- dis --\n");
-    printf("regs: %u, scope: %u, args: %x\n", 
-           c->regs, c->scope, c->args);
     mu_dis(c);
     //
 
@@ -237,7 +256,7 @@ reenter:
                     mu_dec(regs[0]);
                     code_dec(c);
 
-                    // Use a direct goto to garuntee a tail call when the target 
+                    // Use a direct goto to garuntee a tail call when the target
                     // is another mu function. Otherwise, we just try our hardest
                     // to get a tail call emitted.
                     if (mu_type(scratch) == MU_FN) {

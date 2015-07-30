@@ -191,9 +191,6 @@ static void l_op(struct lex *l) {
     // TODO make these strings preinterned so this is actually reasonable
     if (tok) {
         l->tok = num_uint(tok);
-    } else if (op_end[-1] == '=') {
-        l->tok = T_OPASSIGN;
-        l->val = mnstr(op_pos, op_end-op_pos-1);
     } else {
         l->tok = T_OP;
     }

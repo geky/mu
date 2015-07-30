@@ -3,6 +3,7 @@ LIBTARGET = libmu.a
 
 CC = gcc
 AR = ar
+SIZE = size
 
 SRC += mu.c types.c frame.c
 SRC += num.c str.c tbl.c fn.c
@@ -31,6 +32,9 @@ all: $(TARGET)
 lib: $(LIBTARGET)
 
 asm: $(ASM)
+
+size: $(OBJ) $(TARGET)
+	$(SIZE) $^
 
 -include $(DEP)
 

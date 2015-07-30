@@ -6,6 +6,7 @@
 #define MU_STR_H
 #include "mu.h"
 #include "types.h"
+#include <string.h>
 
 
 // Definition of Mu's string types
@@ -25,6 +26,7 @@ mu_aligned struct str {
 // String creation functions
 mu_t mnstr(const byte_t *s, uint_t len);
 mu_t mcstr(const char *s);
+
 
 // String access functions
 mu_inline len_t str_len(mu_t m) {

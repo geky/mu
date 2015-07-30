@@ -25,7 +25,7 @@ mu_packed enum tok {
     T_IF, T_WHILE, T_FOR,
 
     T_NIL, T_IMM, T_SYM, T_KEY,
-    T_OP, T_OPASSIGN, T_EXPAND,
+    T_OP, T_EXPAND,
     T_RPAREN, T_RTABLE, T_RBLOCK
 };
 

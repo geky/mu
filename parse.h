@@ -38,7 +38,8 @@ struct parse {
         P_DIRECT,
         P_INDIRECT,
         P_SCOPED,
-        P_CALLED
+        P_CALLED,
+        P_NIL
     } state;
 
     uintq_t params;

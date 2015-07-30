@@ -45,18 +45,21 @@ mu_t mfn(struct code *c, mu_t closure) {
 
 
 // Called by garbage collector to clean up
-void bfn_destroy(mu_t f) {
+void bfn_destroy(mu_t m) {
+    struct fn *f = fn_fn(m);
     ref_dealloc(f, sizeof(struct fn));
 }
 
-void sbfn_destroy(mu_t f) {
-    mu_dec(fn_closure(f));
+void sbfn_destroy(mu_t m) {
+    struct fn *f = fn_fn(m);
+    mu_dec(f->closure);
     ref_dealloc(f, sizeof(struct fn));
 }
 
-void fn_destroy(mu_t f) {
-    mu_dec(fn_closure(f));
-    code_dec(fn_code(f));
+void fn_destroy(mu_t m) {
+    struct fn *f = fn_fn(m);
+    mu_dec(f->closure);
+    code_dec(f->code);
     ref_dealloc(f, sizeof(struct fn));
 }
 
@@ -93,6 +96,25 @@ void fn_fcall(mu_t m, frame_t fc, mu_t *frame) {
     struct fn *f = fn_fn(m);
     mu_t scope = tbl_extend(f->code->scope, f->closure);
     mu_exec(f->code, scope, fc, frame);
+}
+
+
+// Binds arguments to function
+static frame_t fn_bound(mu_t scope, mu_t *frame) {
+    mu_t f = tbl_lookup(scope, muint(0));
+    mu_t args = tbl_lookup(scope, muint(1));
+
+    frame[0] = tbl_concat(args, frame[0], mnil);
+    mu_fcall(f, 0xff, frame);
+    return 0xf;
+}
+
+mu_t fn_bind(mu_t f, mu_t args) {
+    mu_t scope = tbl_create(2);
+    tbl_insert(scope, muint(0), f);
+    tbl_insert(scope, muint(1), args);
+
+    return msbfn(0xf, fn_bound, scope);
 }
 
 

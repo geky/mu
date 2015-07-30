@@ -156,6 +156,13 @@ static frame_t b_push(mu_t *frame) {
     return 0;
 }
 
+static frame_t b_bind(mu_t *frame) {
+    mu_t f = tbl_pop(frame[0], muint(0));
+    assert(mu_isfn(f));
+    frame[0] = fn_bind(f, frame[0]);
+    return 1;
+}   
+
 static frame_t b_equals(mu_t *frame) {
     bool r = frame[0] == frame[1];
     mu_dec(frame[0]); mu_dec(frame[1]);
@@ -213,10 +220,13 @@ static void genscope() {
     tbl_assign(tbltbl, mcstr("pop"), mbfn(0x2, b_pop));
     tbl_assign(tbltbl, mcstr("push"), mbfn(0x3, b_push));
     tbl_assign(scope, mcstr("tbl"), tbltbl);
+    mu_t fntbl = tbl_create(0);
+    tbl_assign(fntbl, mcstr("bind"), mbfn(0xf, b_bind));
+    tbl_assign(scope, mcstr("fn_"), fntbl);
     tbl_assign(scope, mcstr("concat"), tbl_lookup(tbltbl, mcstr("concat")));
     tbl_assign(scope, mcstr("pop"), tbl_lookup(tbltbl, mcstr("pop")));
     tbl_assign(scope, mcstr("push"), tbl_lookup(tbltbl, mcstr("push")));
-    
+    tbl_assign(scope, mcstr("bind"), tbl_lookup(fntbl, mcstr("bind")));
 }
 
 static int genargs(int i, int argc, const char **argv) {
