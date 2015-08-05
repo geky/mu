@@ -10,40 +10,6 @@
 #include <string.h>
 
 
-// Encode the specified opcode and return its size
-// Encode the specified opcode and return its size
-// Note: size of the jump opcodes currently can not change based on argument
-// TODO: change asserts to err throwing checks
-void mu_encode(void (*emit)(void *, byte_t), void *p,
-               op_t op, int_t d, int_t a, int_t b) {
-    union {
-        uint16_t i;
-        byte_t d[2];
-    } ins = {0};
-
-    mu_assert(op <= 0xf);
-    mu_assert(d <= 0xf);
-    ins.i |= op << 12;
-    ins.i |= d << 8;
-
-    if (op >= OP_IMM && op <= OP_DROP) {
-        mu_assert(a <= 0xff);
-        ins.i |= a;
-    } else if (op >= OP_JFALSE && op <= OP_JUMP) {
-        mu_assert(a <= 0xff && a >= -0x100);
-        ins.i |= 0xff & (a>>1);
-    } else {
-        mu_assert(a <= 0xf);
-        mu_assert(b <= 0xf);
-        ins.i |= a << 4;
-        ins.i |= b;
-    }
-
-    emit(p, ins.d[0]);
-    emit(p, ins.d[1]);
-}
-
-
 // Instruction access functions
 mu_inline enum op op(uint16_t ins) { return (enum op)(ins >> 12); }
 mu_inline uint_t  rd(uint16_t ins) { return 0xf & (ins >> 8); }
@@ -53,6 +19,48 @@ mu_inline uint_t  i(uint16_t ins)  { return (uint8_t)ins; }
 mu_inline int_t   j(uint16_t ins)  { return (int8_t)ins; }
 mu_inline uint_t  fa(uint16_t ins) { return ra(ins) > MU_FRAME ? 1 : ra(ins); }
 mu_inline uint_t  fr(uint16_t ins) { return rb(ins) > MU_FRAME ? 1 : rb(ins); }
+
+
+// Encode the specified opcode and return its size
+// Encode the specified opcode and return its size
+// Note: size of the jump opcodes currently can not change based on argument
+// TODO: change asserts to err throwing checks
+void mu_encode(void (*emit)(void *, byte_t), void *p,
+               op_t op, int_t d, int_t a, int_t b) {
+    uint16_t ins = 0;
+    mu_assert(op <= 0xf);
+    mu_assert(d <= 0xf);
+    ins |= op << 12;
+    ins |= d << 8;
+
+    if (op >= OP_IMM && op <= OP_DROP) {
+        mu_assert(a <= 0xff);
+        ins |= a;
+    } else if (op >= OP_JFALSE && op <= OP_JUMP) {
+        mu_assert(a-2 <= 0xff && a-2 >= -0x100);
+        ins |= 0xff & ((a-2)>>1);
+    } else {
+        mu_assert(a <= 0xf);
+        mu_assert(b <= 0xf);
+        ins |= a << 4;
+        ins |= b;
+    }
+
+    emit(p, ((byte_t *)&ins)[0]);
+    emit(p, ((byte_t *)&ins)[1]);
+}
+
+int_t mu_patch(void *c, int_t nj) {
+    uint16_t ins = *(uint16_t *)c;
+    mu_assert(op(ins) >= OP_JFALSE && op(ins) <= OP_JUMP);
+    mu_assert(nj-2 <= 0xff && nj-2 >= -0x100);
+
+    int_t pj = (j(ins) << 1)+2;
+    ins = (ins & 0xff00) | (0xff & ((nj-2) >> 1));
+    *(uint16_t *)c = ins;
+
+    return pj;
+}
 
 
 // Disassemble bytecode for debugging and introspection

@@ -4,6 +4,7 @@
 #include "tbl.h"
 #include "fn.h"
 #include "err.h"
+#include "parse.h"
 #include <string.h>
 
 
@@ -218,112 +219,34 @@ void mstr_nconcat(byte_t **b, uint_t *i, const byte_t *c, uint_t len) {
 }
 
 
-// Parses a string and returns a string
-mu_t str_parse(const byte_t **ppos, const byte_t *end) {
-    const byte_t *pos = *ppos + 1;
-    byte_t quote = **ppos;
-    byte_t *s = mstr_create(0);
-    uint_t len = 0;
-
-    while (*pos != quote) {
-        if (pos == end) {
-            mstr_dec(s);
-            mu_err_parse(); // Unterminated string
-        }
-
-        if (*pos == '\\' && end-pos >= 2) {
-            switch (pos[1]) {
-                case 'o':
-                    if (end-pos >= 5 && num_val(pos[2]) < 8 &&
-                                        num_val(pos[3]) < 8 &&
-                                        num_val(pos[4]) < 8) {
-                        mstr_insert(&s, &len, num_val(pos[2])*7*7 +
-                                              num_val(pos[3])*7 +
-                                              num_val(pos[4]));
-                        pos += 5;
-                    }
-                    break;
-
-                case 'd':
-                    if (end-pos >= 5 && num_val(pos[2]) < 10 &&
-                                        num_val(pos[3]) < 10 &&
-                                        num_val(pos[4]) < 10) {
-                        mstr_insert(&s, &len, num_val(pos[2])*10*10 +
-                                              num_val(pos[3])*10 +
-                                              num_val(pos[4]));
-                        pos += 5;
-                    }
-                    break;
-
-                case 'x':
-                    if (end-pos >= 4 && num_val(pos[2]) < 16 &&
-                                        num_val(pos[3]) < 16) {
-                        mstr_insert(&s, &len, num_val(pos[2])*16 +
-                                              num_val(pos[3]));
-                        pos += 4;
-                    }
-                    break;
-
-                case '\n': pos += 2; break;
-
-                case '\\': mstr_insert(&s, &len, '\\'); pos += 2; break;
-                case '\'': mstr_insert(&s, &len, '\''); pos += 2; break;
-                case '"':  mstr_insert(&s, &len,  '"'); pos += 2; break;
-                case 'a':  mstr_insert(&s, &len, '\a'); pos += 2; break;
-                case 'b':  mstr_insert(&s, &len, '\b'); pos += 2; break;
-                case 'f':  mstr_insert(&s, &len, '\f'); pos += 2; break;
-                case 'n':  mstr_insert(&s, &len, '\n'); pos += 2; break;
-                case 'r':  mstr_insert(&s, &len, '\r'); pos += 2; break;
-                case 't':  mstr_insert(&s, &len, '\t'); pos += 2; break;
-                case 'v':  mstr_insert(&s, &len, '\v'); pos += 2; break;
-                case '0':  mstr_insert(&s, &len, '\0'); pos += 2; break;
-                default:   mstr_insert(&s, &len, '\\'); pos += 1; break;
-            }
-        } else {
-            mstr_insert(&s, &len, *pos++);
-        }
-    }
-
-    *ppos = pos + 1;
-
-    return mstr_intern(s, len);
-}
-
-
 // Returns a string representation of a string
 mu_t str_repr(mu_t m) {
     const byte_t *pos = str_bytes(m);
-    const byte_t *end = str_bytes(m) + str_len(m);
+    const byte_t *end = pos + str_len(m);
     byte_t *s = mstr_create(2);
     uint_t len = 0;
 
     mstr_insert(&s, &len, '\'');
 
-    while (pos < end) {
+    for (; pos < end; pos++) {
         if (*pos < ' ' || *pos > '~' ||
             *pos == '\\' || *pos == '\'') {
-            switch (*pos) {
-                case '\\': mstr_cconcat(&s, &len, "\\\\"); break;
-                case '\'': mstr_cconcat(&s, &len, "\\'"); break;
-                case '\a': mstr_cconcat(&s, &len, "\\a"); break;
-                case '\b': mstr_cconcat(&s, &len, "\\b"); break;
-                case '\f': mstr_cconcat(&s, &len, "\\f"); break;
-                case '\n': mstr_cconcat(&s, &len, "\\n"); break;
-                case '\r': mstr_cconcat(&s, &len, "\\r"); break;
-                case '\t': mstr_cconcat(&s, &len, "\\t"); break;
-                case '\v': mstr_cconcat(&s, &len, "\\v"); break;
-                case '\0': mstr_cconcat(&s, &len, "\\0"); break;
-                default:
-                    mstr_nconcat(&s, &len,
-                        (byte_t[]){'\\', 'x', num_ascii(*pos / 16),
-                                              num_ascii(*pos % 16)}, 4);
-                    break;
-            }
+            if (*pos == '\\') mstr_cconcat(&s, &len, "\\\\");
+            else if (*pos == '\'') mstr_cconcat(&s, &len, "\\'");
+            else if (*pos == '\a') mstr_cconcat(&s, &len, "\\a");
+            else if (*pos == '\b') mstr_cconcat(&s, &len, "\\b");
+            else if (*pos == '\f') mstr_cconcat(&s, &len, "\\f");
+            else if (*pos == '\n') mstr_cconcat(&s, &len, "\\n");
+            else if (*pos == '\r') mstr_cconcat(&s, &len, "\\r");
+            else if (*pos == '\t') mstr_cconcat(&s, &len, "\\t");
+            else if (*pos == '\v') mstr_cconcat(&s, &len, "\\v");
+            else if (*pos == '\0') mstr_cconcat(&s, &len, "\\0");
+            else mstr_nconcat(&s, &len, (byte_t[]){
+                    '\\', 'x', mu_toascii(*pos / 16),
+                               mu_toascii(*pos % 16)}, 4);
         } else {
             mstr_insert(&s, &len, *pos);
         }
-
-        pos++;
     }
 
     mstr_insert(&s, &len, '\'');
@@ -348,10 +271,9 @@ bool str_next(mu_t s, uint_t *ip, mu_t *cp) {
 frame_t str_step(mu_t scope, mu_t *frame) {
     mu_t s = tbl_lookup(scope, muint(0));
     uint_t i = num_uint(tbl_lookup(scope, muint(1)));
-    mu_t c;
 
-    str_next(s, &i, &c);
-    tbl_insert(scope, muint(0), muint(i));
+    str_next(s, &i, &frame[0]);
+    tbl_insert(scope, muint(1), muint(i));
     return 1;
 }
 

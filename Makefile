@@ -8,13 +8,13 @@ SIZE = size
 SRC += mu.c types.c frame.c
 SRC += num.c str.c tbl.c fn.c
 SRC += mem.c err.c
-SRC += lex.c vm.c parse.c
+SRC += vm.c parse.c
 OBJ := $(SRC:.c=.o)
 DEP := $(SRC:.c=.d)
 ASM := $(SRC:.c=.s)
 
 ifdef DEBUG
-CFLAGS += -O0 -g3 -gdwarf-2 -ggdb -DMU_DEBUG
+CFLAGS += -O0 -g3 -DMU_DEBUG
 CFLAGS += -fkeep-inline-functions
 else
 CFLAGS += -O2

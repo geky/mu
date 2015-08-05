@@ -163,6 +163,26 @@ static frame_t b_bind(mu_t *frame) {
     return 1;
 }   
 
+static frame_t b_map(mu_t *frame) {
+    assert(mu_isfn(frame[0]));
+    frame[0] = fn_map(frame[0], frame[1]);
+    return 1;
+}
+
+static frame_t b_filter(mu_t *frame) {
+    assert(mu_isfn(frame[0]));
+    frame[0] = fn_filter(frame[0], frame[1]);
+    return 1;
+}
+
+static frame_t b_reduce(mu_t *frame) {
+    mu_t f = tbl_pop(frame[0], muint(0));
+    mu_t i = tbl_pop(frame[0], muint(0));
+    assert(mu_isfn(f));
+    frame[0] = fn_reduce(f, i, frame[0]);
+    return 0xf;
+}
+
 static frame_t b_equals(mu_t *frame) {
     bool r = frame[0] == frame[1];
     mu_dec(frame[0]); mu_dec(frame[1]);
@@ -197,6 +217,12 @@ static frame_t b_test(mu_t *frame) {
     return 4;
 }
 
+static frame_t b_iter(mu_t *frame) {
+    frame[0] = mu_iter(frame[0]);
+    return 1;
+}
+
+
 static void genscope() {
     scope = tbl_create(0);
 
@@ -222,11 +248,18 @@ static void genscope() {
     tbl_assign(scope, mcstr("tbl"), tbltbl);
     mu_t fntbl = tbl_create(0);
     tbl_assign(fntbl, mcstr("bind"), mbfn(0xf, b_bind));
+    tbl_assign(fntbl, mcstr("map"), mbfn(0x2, b_map));
+    tbl_assign(fntbl, mcstr("filter"), mbfn(0x2, b_filter));
+    tbl_assign(fntbl, mcstr("reduce"), mbfn(0xf, b_reduce));
     tbl_assign(scope, mcstr("fn_"), fntbl);
     tbl_assign(scope, mcstr("concat"), tbl_lookup(tbltbl, mcstr("concat")));
     tbl_assign(scope, mcstr("pop"), tbl_lookup(tbltbl, mcstr("pop")));
     tbl_assign(scope, mcstr("push"), tbl_lookup(tbltbl, mcstr("push")));
     tbl_assign(scope, mcstr("bind"), tbl_lookup(fntbl, mcstr("bind")));
+    tbl_assign(scope, mcstr("map"), tbl_lookup(fntbl, mcstr("map")));
+    tbl_assign(scope, mcstr("filter"), tbl_lookup(fntbl, mcstr("filter")));
+    tbl_assign(scope, mcstr("reduce"), tbl_lookup(fntbl, mcstr("reduce")));
+    tbl_assign(scope, mcstr("iter"), mbfn(0x1, b_iter));
 }
 
 static int genargs(int i, int argc, const char **argv) {
@@ -241,7 +274,7 @@ static int genargs(int i, int argc, const char **argv) {
 
 
 static void execute(const char *input) {
-    struct code *c = mu_parse_fn(mcstr(input));
+    struct code *c = parse_fn(mcstr(input));
     mu_exec(c, tbl_create(c->scope), 0x00, 
             (mu_t [MU_FRAME]){0});
 }
@@ -264,7 +297,7 @@ static void load_file(FILE *file) {
         off++;
     }
 
-    struct code *c = mu_parse_fn(mnstr(buffer+off, len-off));
+    struct code *c = parse_fn(mnstr(buffer+off, len-off));
     mu_exec(c, tbl_extend(c->scope, scope), 0x00, 
             (mu_t [MU_FRAME]){0});
 }
@@ -291,7 +324,7 @@ static mu_noreturn interpret() {
         
         mu_try_begin {
             mu_t frame[MU_FRAME];
-            struct code *c = mu_parse_fn(code);
+            struct code *c = parse_fn(code);
             mu_exec(c, scope, 0x0f, frame); 
 //    
 //            mu_try_begin {

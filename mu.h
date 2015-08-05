@@ -35,9 +35,6 @@ typedef uint32_t uint_t;
 // Definition of alignment for Mu types
 #define mu_aligned __attribute__((aligned(8)))
 
-// Definition for packing enums into minimum size
-#define mu_packed __attribute__((packed))
-
 // Definition of thread local variables
 #define mu_thread __thread
 

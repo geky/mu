@@ -62,13 +62,11 @@ mu_inline void mstr_dec(byte_t *s) {
 }
 
 
-// String parsing and representation
-mu_t str_parse(const byte_t **off, const byte_t *end);
-mu_t str_repr(mu_t s);
-
 // String iteration
 mu_t str_iter(mu_t s);
 bool str_next(mu_t s, uint_t *i, mu_t *c);
 
+// String representation
+mu_t str_repr(mu_t s);
 
 #endif

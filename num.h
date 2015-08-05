@@ -40,30 +40,8 @@ mu_inline float  num_float(mu_t m)  { return (float) num_num(m); }
 mu_inline double num_double(mu_t m) { return (double)num_num(m); }
 
 
-// Number parsing and representation
-mu_t num_parse(const byte_t **off, const byte_t *end);
+// Number representation
 mu_t num_repr(mu_t n);
-
-
-// TODO move to lexer?
-// Obtains ascii value
-mu_inline int_t num_val(byte_t s) {
-    if (s >= '0' && s <= '9')
-        return s - '0';
-    else if (s >= 'a' && s <= 'f')
-        return s - 'a' + 10;
-    else if (s >= 'A' && s <= 'F')
-        return s - 'A' + 10;
-    else
-        return 0xff;
-}
-
-mu_inline byte_t num_ascii(int_t i) {
-    if (i < 10)
-        return '0' + i;
-    else
-        return 'a' + (i-10);
-}
 
 
 #endif

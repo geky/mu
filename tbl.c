@@ -326,7 +326,7 @@ static frame_t tbl_step(mu_t scope, mu_t *frame) {
     uint_t i = num_uint(tbl_lookup(scope, muint(1)));
 
     tbl_next(t, &i, &frame[0], &frame[1]);
-    tbl_insert(scope, muint(0), muint(i));
+    tbl_insert(scope, muint(1), muint(i));
     return 2;
 }
 
@@ -335,7 +335,7 @@ mu_t tbl_iter(mu_t t) {
     tbl_insert(scope, muint(0), t);
     tbl_insert(scope, muint(1), muint(0));
 
-    return msbfn(0x00, tbl_step, scope);
+    return msbfn(0x0, tbl_step, scope);
 }
 
 

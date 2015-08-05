@@ -6,57 +6,37 @@
 #define MU_PARSE_H
 #include "mu.h"
 #include "types.h"
-#include "lex.h"
 #include "fn.h"
 
 
-// State of parsing
-struct parse {
-    byte_t *bcode;
-    len_t bcount;
-    mu_t imms;
-    mu_t fns;
+// Parse literals without side-effects
+mu_t parse_num(mu_t s);
+mu_t parse_str(mu_t s);
 
-    struct lex l;
-
-    struct f_parse {
-        len_t target;
-        len_t count;
-        len_t index;
-        uintq_t paren;
-
-        uintq_t single  : 1;
-        uintq_t unpack  : 1;
-        uintq_t insert  : 1;
-        uintq_t tabled  : 1;
-        uintq_t key     : 1;
-        uintq_t call    : 1;
-        uintq_t expand  : 1;
-    } f;
-
-    mu_packed enum {
-        P_DIRECT,
-        P_INDIRECT,
-        P_SCOPED,
-        P_CALLED,
-        P_NIL
-    } state;
-
-    uintq_t params;
-    uintq_t regs;
-    uintq_t scope;
-    uintq_t sp;
-    uintq_t args;
-};
+// Parse Mu code objects
+struct code *parse_expr(mu_t s);
+struct code *parse_fn(mu_t s);
+struct code *parse_module(mu_t s);
 
 
-// Entry points into parsing Mu source into bytecode
-// The only difference between parsing functions and
-// modules is that modules return their scope for use 
-// in type and module definitions
-struct code *mu_parse_expr(mu_t code);
-struct code *mu_parse_fn(mu_t code);
-struct code *mu_parse_module(mu_t code);
+// Conversion to/from ascii
+mu_inline uint_t mu_fromascii(byte_t c) {
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    else if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+    else if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+    else
+        return -1;
+}
+
+mu_inline byte_t mu_toascii(byte_t c) {
+    if (c < 10)
+        return '0' + c;
+    else
+        return 'a' + (c-10);
+}
 
 
 #endif

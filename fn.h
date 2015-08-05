@@ -103,6 +103,9 @@ void sbfn_fcall(mu_t f, frame_t fc, mu_t *frame);
 
 // Function operations
 mu_t fn_bind(mu_t f, mu_t args);
+mu_t fn_map(mu_t f, mu_t m);
+mu_t fn_filter(mu_t f, mu_t m);
+mu_t fn_reduce(mu_t f, mu_t m, mu_t inits);
 mu_t fn_repr(mu_t f);
 
 
