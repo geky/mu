@@ -119,7 +119,6 @@ typedef uint8_t class_t;
 enum class {
     L_NONE,
     L_TERM, L_SEP,
-    L_ASSIGN, L_PAIR,
 
     L_NL, L_WS, L_COMMENT,
     L_OP, L_KW, L_STR, L_NUM,
@@ -144,8 +143,8 @@ static const class_t class[256] = {
 /*  ,  -  .  / */   L_SEP,      L_OP,       L_OP,       L_OP,
 /*  0  1  2  3 */   L_NUM,      L_NUM,      L_NUM,      L_NUM,
 /*  4  5  6  7 */   L_NUM,      L_NUM,      L_NUM,      L_NUM,
-/*  8  9  :  ; */   L_NUM,      L_NUM,      L_PAIR,     L_TERM,
-/*  <  =  >  ? */   L_OP,       L_ASSIGN,   L_OP,       L_OP,
+/*  8  9  :  ; */   L_NUM,      L_NUM,      L_OP,       L_TERM,
+/*  <  =  >  ? */   L_OP,       L_OP,       L_OP,       L_OP,
 /*  @  A  B  C */   L_OP,       L_KW,       L_KW,       L_KW,
 /*  D  E  F  G */   L_KW,       L_KW,       L_KW,       L_KW,
 /*  H  I  J  K */   L_KW,       L_KW,       L_KW,       L_KW,
@@ -280,6 +279,7 @@ struct expr {
 
 
 //// Lexical analysis ////
+static void lex_init(struct lex *, mu_t);
 static void lex_next(struct lex *);
 
 // Helper function for skipping whitespace
@@ -436,7 +436,7 @@ static void l_num(struct lex *l) {
 
 static void l_str(struct lex *l) {
     byte_t quote = *l->pos++;
-    if (!class[quote] == L_STR)
+    if (class[quote] != L_STR)
         mu_err_parse();
 
     byte_t *s = mstr_create(0);
@@ -544,8 +544,6 @@ static void lex_next(struct lex *l) {
 
         case L_TERM:    l->tok = T_TERM;   l->pos++; return;
         case L_SEP:     l->tok = T_SEP;    l->pos++; return;
-        case L_ASSIGN:  l->tok = T_ASSIGN; l->pos++; return;
-        case L_PAIR:    l->tok = T_PAIR;   l->pos++; return;
 
         case L_LBLOCK:  l->tok = T_LBLOCK; l->nblock = +1; l->pos++; return;
         case L_RBLOCK:  l->tok = T_RBLOCK; l->nblock = -1; l->pos++; return;
@@ -564,13 +562,8 @@ static mu_noreturn unexpected(struct parse *p) {
     mu_err_parse();
 }
 
-static bool lookahead(struct parse *p, class_t c) {
-    return (p->l.pos < p->l.end &&
-            class[*p->l.pos] == c);
-}
-
 static bool next(struct parse *p, tok_t tok) {
-    return (p->l.tok & tok);
+    return p->l.tok & tok;
 }
 
 static bool match(struct parse *p, tok_t tok) {
@@ -587,6 +580,15 @@ static bool match(struct parse *p, tok_t tok) {
 static void expect(struct parse *p, tok_t tok) {
     if (!match(p, tok))
         mu_err_parse();
+}
+
+static bool lookahead(struct parse *p, tok_t a, tok_t b) {
+    struct lex l = p->l;
+    if (match(p, a) && next(p, b))
+        return true;
+
+    p->l = l;
+    return false;
 }
 
 
@@ -822,19 +824,15 @@ static void s_frame(struct parse *p, struct frame *f, bool update) {
 
 //// Grammar rules ////
 static void p_fn(struct parse *p);
-static void p_if_expr(struct parse *p);
-static void p_if_stmt(struct parse *p);
-static void p_while_expr(struct parse *p);
-static void p_while_stmt(struct parse *p);
-static void p_for_expr(struct parse *p);
-static void p_for_stmt(struct parse *p);
+static void p_if(struct parse *p, bool expr);
+static void p_while(struct parse *p);
+static void p_for(struct parse *p);
 static void p_expr(struct parse *p);
 static void p_subexpr(struct parse *p, struct expr *e);
 static void p_postexpr(struct parse *p, struct expr *e);
 static void p_entry(struct parse *p, struct frame *f);
 static void p_frame(struct parse *p, struct frame *f);
-static void p_insert(struct parse *p);
-static void p_assign(struct parse *p);
+static void p_assign(struct parse *p, bool insert);
 static void p_return(struct parse *p);
 static void p_stmt(struct parse *p);
 static void p_block(struct parse *p);
@@ -870,7 +868,7 @@ static void p_fn(struct parse *p) {
     encode(p, OP_FN, p->sp+1, fn(p, compile(&q)), 0, +1);
 }
 
-static void p_if_expr(struct parse *p) {
+static void p_if(struct parse *p, bool expr) {
     expect(p, T_LPAREN);
     p_expr(p);
     expect(p, T_RPAREN);
@@ -879,52 +877,31 @@ static void p_if_expr(struct parse *p) {
     encode(p, OP_JFALSE, p->sp, 0, 0, 0);
     encode(p, OP_DROP, p->sp, 0, 0, -1);
 
-    p_expr(p);
-
-    len_t exit_offset = p->bcount;
-    encode(p, OP_JUMP, 0, 0, 0, -1);
-    len_t else_offset = p->bcount;
-
-    if (match(p, T_ELSE))
+    if (expr)
         p_expr(p);
     else
-        encode(p, OP_IMM, p->sp+1, imm(p, mnil), 0, +1);
-
-    patch(p, cond_offset, else_offset - cond_offset);
-    patch(p, exit_offset, p->bcount - exit_offset);
-}
-
-static void p_if_stmt(struct parse *p) {
-    expect(p, T_LPAREN);
-    p_expr(p);
-    expect(p, T_RPAREN);
-
-    len_t cond_offset = p->bcount;
-    encode(p, OP_JFALSE, p->sp, 0, 0, 0);
-    encode(p, OP_DROP, p->sp, 0, 0, -1);
-
-    p_stmt(p);
+        p_stmt(p);
 
     if (match(p, T_ELSE)) {
         len_t exit_offset = p->bcount;
-        encode(p, OP_JUMP, 0, 0, 0, 0);
+        encode(p, OP_JUMP, 0, 0, 0, -expr);
         len_t else_offset = p->bcount;
 
-        p_stmt(p);
+        if (expr)
+            p_expr(p);
+        else
+            p_stmt(p);
 
         patch(p, cond_offset, else_offset - cond_offset);
         patch(p, exit_offset, p->bcount - exit_offset);
-    } else {
+    } else if (!expr) {
         patch(p, cond_offset, p->bcount - cond_offset);
+    } else {
+        mu_err_parse(); // TODO better message
     }
 }
 
-static void p_while_expr(struct parse *p) {
-    // TODO message
-    mu_err_parse();
-}
-
-static void p_while_stmt(struct parse *p) {
+static void p_while(struct parse *p) {
     len_t while_offset = p->bcount;
     expect(p, T_LPAREN);
     p_expr(p);
@@ -948,50 +925,7 @@ static void p_while_stmt(struct parse *p) {
     p->cchain = cchain;
 }
 
-static void p_for_expr(struct parse *p) {
-    expect(p, T_LPAREN);
-    struct parse q = {
-        .bcode = mstr_create(0),
-        .bcount = 0,
-
-        .imms = tbl_create(0),
-        .fns = tbl_create(0),
-        .bchain = -1,
-        .cchain = -1,
-
-        .regs = 1,
-        .scope = 4, // TODO
-
-        .l = p->l,
-    };
-
-    struct frame f = {.unpack = true, .insert = true};
-    s_frame(p, &f, true);
-
-    expect(p, T_ASSIGN);
-    if (f.count == 0 && !f.tabled)
-        mu_err_parse(); // TODO better message
-
-    encode(p, OP_IMM, p->sp+1, imm(p, mcstr("map")), 0, +2);
-    encode(p, OP_LOOKUP, p->sp-1, 0, p->sp-1, 0);
-    p_expr(p);
-    expect(p, T_RPAREN);
-
-    q.sp = f.tabled ? 1 : f.count;
-    q.args = f.tabled ? 0xf : f.count;
-    p_frame(&q, &f);
-    expect(&q, T_ASSIGN);
-
-    q.l = p->l;
-    p_expr(&q);
-    encode(&q, OP_RET, q.sp, 0, 1, -1);
-
-    p->l = q.l;
-    encode(p, OP_FN, p->sp-1, fn(p, compile(&q)), 0, 0);
-    encode(p, OP_CALL, p->sp-2, 2, 1, -2);
-}
-
-static void p_for_stmt(struct parse *p) {
+static void p_for(struct parse *p) {
     expect(p, T_LPAREN);
     struct lex ll = p->l;
     struct frame f = {.unpack = true, .insert = true};
@@ -1078,17 +1012,7 @@ static void p_subexpr(struct parse *p, struct expr *e) {
         return p_postexpr(p, e);
 
     } else if (match(p, T_IF)) {
-        p_if_expr(p);
-        e->state = P_DIRECT;
-        return p_postexpr(p, e);
-
-    } else if (match(p, T_WHILE)) {
-        p_while_expr(p);
-        e->state = P_DIRECT;
-        return p_postexpr(p, e);
-
-    } else if (match(p, T_FOR)) {
-        p_for_expr(p);
+        p_if(p, true);
         e->state = P_DIRECT;
         return p_postexpr(p, e);
 
@@ -1224,7 +1148,7 @@ static void p_entry(struct parse *p, struct frame *f) {
     struct expr e = {.prec = -1};
     f->key = false;
 
-    if (lookahead(p, L_PAIR) && match(p, T_ANY_SYM)) {
+    if (lookahead(p, T_ANY_SYM, T_PAIR)) {
         encode(p, OP_IMM, p->sp+1, imm(p, p->m.val), 0, +1);
         e.state = P_DIRECT;
         f->key = true;
@@ -1386,41 +1310,13 @@ static void p_frame(struct parse *p, struct frame *f) {
     p->l.depth = f->depth;
 }
 
-static void p_insert(struct parse *p) {
-    struct lex ll = p->l;
-    struct frame fl = {.unpack = true, .insert = true};
-    s_frame(p, &fl, true);
-
-    expect(p, T_ASSIGN);
-
-    struct frame fr = {.unpack = false};
-    s_frame(p, &fr, false);
-
-    if ((fr.count == 0 && !fr.tabled) ||
-        (fl.count == 0 && !fl.tabled)) {
-        mu_err_parse(); // TODO better message
-    } else {
-        fr.tabled = fr.tabled || fl.tabled;
-        fr.target = fl.count;
-        fr.flatten = !fl.tabled;
-        p_frame(p, &fr);
-    }
-
-    struct lex lr = p->l;
-    p->l = ll;
-
-    p_frame(p, &fl);
-    expect(p, T_ASSIGN);
-    p->l = lr;
-}
-
-static void p_assign(struct parse *p) {
+static void p_assign(struct parse *p, bool insert) {
     struct lex ll = p->l;
     struct frame fl = {};
     s_frame(p, &fl, true);
 
     if (match(p, T_ASSIGN)) {
-        struct frame fr = {.unpack = false};
+        struct frame fr = {.unpack = false, .insert = insert};
         s_frame(p, &fr, false);
 
         if ((fr.count == 0 && !fr.tabled) ||
@@ -1440,13 +1336,15 @@ static void p_assign(struct parse *p) {
         p_frame(p, &fl);
         expect(p, T_ASSIGN);
         p->l = lr;
-    } else {
+    } else if (!insert) {
         p->l = ll;
 
         fl.unpack = false;
         fl.tabled = false;
         fl.target = 0;
         p_frame(p, &fl);
+    } else {
+        mu_err_parse(); // TODO better message
     }
 }
 
@@ -1478,8 +1376,7 @@ static void p_stmt(struct parse *p) {
     if (next(p, T_LBLOCK)) {
         p_block(p);
 
-    } else if (lookahead(p, L_KW) && match(p, T_FN)) {
-        // TODO make this work for lex classes
+    } else if (lookahead(p, T_FN, T_ANY_SYM)) {
         expect(p, T_ANY_SYM);
         mu_t sym = p->m.val;
         p_fn(p);
@@ -1487,13 +1384,13 @@ static void p_stmt(struct parse *p) {
         encode(p, OP_INSERT, p->sp-1, 0, p->sp, -2);
 
     } else if (match(p, T_IF)) {
-        p_if_stmt(p);
+        p_if(p, false);
 
     } else if (match(p, T_WHILE)) {
-        p_while_stmt(p);
+        p_while(p);
 
     } else if (match(p, T_FOR)) {
-        p_for_stmt(p);
+        p_for(p);
 
     } else if (match(p, T_BREAK)) {
         if (p->bchain == (len_t)-1)
@@ -1515,10 +1412,10 @@ static void p_stmt(struct parse *p) {
         p_return(p);
 
     } else if (match(p, T_LET)) {
-        p_insert(p);
+        p_assign(p, true);
 
     } else {
-        p_assign(p);
+        p_assign(p, false);
     }
 }
 
