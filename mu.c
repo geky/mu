@@ -192,7 +192,6 @@ static frame_t b_equals(mu_t *frame) {
 
 static frame_t b_repr(mu_t *frame) {
     mu_t r = mu_repr(frame[0]);
-    mu_dec(frame[0]);
     frame[0] = r;
     return 1;
 }
@@ -269,6 +268,8 @@ static int genargs(int i, int argc, const char **argv) {
         tbl_insert(args, muint(j), mcstr(argv[i]));
     }
 
+    // TODO use this?
+    mu_dec(args);
     return i;
 }
 
@@ -290,15 +291,11 @@ static void load_file(FILE *file) {
                 mcstr("encountered file reading error"));
     }
 
-    if (!memcmp(buffer, "#!", 2)) {
-        for (off = 2; buffer[off] != '\n'; off++)
-            ;
-
-        off++;
-    }
-
     struct code *c = parse_fn(mnstr(buffer+off, len-off));
-    mu_exec(c, tbl_extend(c->scope, scope), 0x00, 
+    mu_dealloc(buffer, BUFFER_SIZE);
+
+    mu_t s = tbl_extend(c->scope, mu_inc(scope));
+    mu_exec(c, s, 0x00, 
             (mu_t [MU_FRAME]){0});
 }
 
@@ -325,7 +322,7 @@ static mu_noreturn interpret() {
         mu_try_begin {
             mu_t frame[MU_FRAME];
             struct code *c = parse_fn(code);
-            mu_exec(c, scope, 0x0f, frame); 
+            mu_exec(c, mu_inc(scope), 0x0f, frame); 
 //    
 //            mu_try_begin {
 //                f = fn_create_expr(0, code);
@@ -340,7 +337,6 @@ static mu_noreturn interpret() {
 
             printoutput(frame[0]);
             mu_dec(frame[0]);
-            code_dec(c);
         } mu_on_err (err) {
             printerr(err);
         } mu_try_end;

@@ -33,6 +33,27 @@ mu_aligned struct code {
     } data[];
 };
 
+// Code access functions
+mu_inline mu_t *code_imms(struct code *c) {
+    return &c->data[0].imms;
+}
+
+mu_inline struct code **code_fns(struct code *c) {
+    return &c->data[c->icount].fns;
+}
+
+mu_inline void *code_bcode(struct code *c) {
+    return (void *)&c->data[c->icount+c->fcount].bcode;
+}
+
+// Code reference counting
+mu_inline struct code *code_inc(struct code *c) { ref_inc(c); return c; }
+mu_inline void code_dec(struct code *c) {
+    extern void code_destroy(struct code *);
+    if (ref_dec(c)) code_destroy(c); 
+}
+
+
 // Definition of the function type
 //
 // Functions are stored as function pointers paired with closures.
@@ -52,47 +73,28 @@ mu_aligned struct fn {
     };
 };
 
+// Function access functions
+mu_inline struct code *fn_code(mu_t m) {
+    return code_inc(((struct fn *)((uint_t)m - MU_FN))->code);
+}
+
+mu_inline mu_t fn_closure(mu_t m) {
+    return mu_inc(((struct fn *)((uint_t)m - MU_FN))->closure);
+}
+
 
 // C Function creating functions
 mu_t mfn(struct code *c, mu_t closure);
 mu_t mbfn(frame_t args, bfn_t *bfn);
 mu_t msbfn(frame_t args, sbfn_t *sbfn, mu_t closure);
 
-// Function access functions
-mu_inline struct code *fn_code(mu_t m) {
-    return ((struct fn *)((uint_t)m - MU_FN))->code;
-}
-
-mu_inline mu_t fn_closure(mu_t m) {
-    return ((struct fn *)((uint_t)m - MU_FN))->closure;
-}
-
-// Code access functions
-mu_inline mu_t *code_imms(struct code *c) {
-    return &c->data[0].imms;
-}
-
-mu_inline struct code **code_fns(struct code *c) {
-    return &c->data[c->icount].fns;
-}
-
-mu_inline void *code_bcode(struct code *c) {
-    return (void *)&c->data[c->icount+c->fcount].bcode;
-}
-
 
 // Function reference counting
 mu_inline mu_t fn_inc(mu_t m) { ref_inc(m); return m; }
 mu_inline void fn_dec(mu_t m) { 
+    mu_assert(mu_isfn(m));
     extern void (*const mu_destroy_table[6])(mu_t);
     if (ref_dec(m)) mu_destroy_table[mu_type(m)-2](m); 
-}
-
-// Code reference counting
-mu_inline struct code *code_inc(struct code *c) { ref_inc(c); return c; }
-mu_inline void code_dec(struct code *c) {
-    extern void code_destroy(struct code *);
-    if (ref_dec(c)) code_destroy(c); 
 }
 
 

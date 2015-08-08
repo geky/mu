@@ -72,14 +72,14 @@ enum tok {
     (T_EXPR | T_LBLOCK | T_ASSIGN | T_LET | T_DOT | \
      T_ARROW | T_CONT | T_BREAK | T_RETURN)
 
-#define T_ANY 0xffffffff
+#define T_ANY (-1)
 
 
 // Internal tables for keywords/symbols
 static mu_const mu_t mu_keys(void) {
     static mu_t keyt = 0;
 
-    if (keyt) return keyt;
+    if (keyt) return tbl_inc(keyt);
 
     keyt = tbl_create(0);
     tbl_insert(keyt, mcstr("let"),      muint(T_LET));
@@ -102,7 +102,7 @@ static mu_const mu_t mu_keys(void) {
 static mu_const mu_t mu_syms(void) {
     static mu_t symt = 0;
 
-    if (symt) return symt;
+    if (symt) return tbl_inc(symt);
 
     symt = tbl_create(0);
     tbl_insert(symt, mcstr("="),  muint(T_ASSIGN));
@@ -303,12 +303,18 @@ static void wskip(struct lex *l) {
 static void l_nl(struct lex *l) {
     const byte_t *npos = l->pos+1;
 
-    while (npos < l->end && class[*npos] == L_WS)
-        npos++;
-
-    if (npos < l->end && (*npos == '\n' || *npos == '#')) {
-        l->pos = npos;
-        return l_nl(l);
+    while (npos < l->end) {
+        if (*npos == '#') {
+            while (npos < l->end && *npos != '\n')
+                npos++;
+        } else if (*npos == '\n') {
+            l->line++;
+            l->pos = npos++;
+        } else if (class[*npos] == L_WS) {
+            npos++;
+        } else {
+            break;
+        }
     }
 
     int nindent = npos - (l->pos+1);
@@ -319,17 +325,15 @@ static void l_nl(struct lex *l) {
         l->tok = T_LBLOCK;
         l->nblock = nindent - l->indent;
         l->indent = nindent;
-        return;
     } else if (nindent < l->indent) {
         l->tok = T_RBLOCK;
         l->nblock = nindent - l->indent;
         l->indent = nindent;
-        return;
+    } else {
+        l->tok = T_TERM;
+        l->pos = npos;
+        l->line++;
     }
-
-    l->tok = T_TERM;
-    l->pos = npos;
-    l->line++;
 }
 
 static void l_op(struct lex *l) {
@@ -341,15 +345,11 @@ static void l_op(struct lex *l) {
     const byte_t *end = l->pos;
 
     l->val = mnstr(start, end-start);
-    mu_t tok = tbl_lookup(mu_syms(), l->val);
+    mu_t tok = tbl_lookup(mu_syms(), mu_inc(l->val));
+    l->tok = tok ? num_uint(tok) : T_OP;
 
     wskip(l);
     l->prec = l->pos - end;
-
-    if (tok)
-        l->tok = num_uint(tok);
-    else
-        l->tok = T_OP;
 }
 
 static void l_kw(struct lex *l) {
@@ -362,15 +362,11 @@ static void l_kw(struct lex *l) {
     const byte_t *end = l->pos;
 
     l->val = mnstr(start, end-start);
-    mu_t tok = tbl_lookup(mu_keys(), l->val);
+    mu_t tok = tbl_lookup(mu_keys(), mu_inc(l->val));
+    l->tok = tok ? num_uint(tok) : T_SYM;
 
     wskip(l);
     l->prec = l->pos - end;
-
-    if (tok)
-        l->tok = num_uint(tok);
-    else
-        l->tok = T_SYM;
 }
 
 static void l_num(struct lex *l) {
@@ -501,8 +497,8 @@ static void l_str(struct lex *l) {
     if (quote != *l->pos++)
         mu_err_parse();
 
-    l->tok = T_IMM;
     l->val = mstr_intern(s, len);
+    l->tok = T_IMM;
 }
 
 
@@ -524,6 +520,7 @@ static void lex_next(struct lex *l) {
     l->nblock = 0;
     l->paren += l->nparen;
     l->nparen = 0;
+    l->val = mnil;
 
     if (l->pos >= l->end) {
         l->tok = 0;
@@ -535,15 +532,16 @@ static void lex_next(struct lex *l) {
 
         case L_NL:      if (!l->paren) return l_nl(l);
         case L_COMMENT:
-        case L_WS:      wskip(l); return lex_next(l);
+        case L_WS:      wskip(l); 
+                        return lex_next(l);
 
         case L_OP:      return l_op(l);
         case L_KW:      return l_kw(l);
         case L_STR:     return l_str(l);
         case L_NUM:     return l_num(l);
 
-        case L_TERM:    l->tok = T_TERM;   l->pos++; return;
-        case L_SEP:     l->tok = T_SEP;    l->pos++; return;
+        case L_TERM:    l->tok = T_TERM; l->pos++; return;
+        case L_SEP:     l->tok = T_SEP;  l->pos++; return;
 
         case L_LBLOCK:  l->tok = T_LBLOCK; l->nblock = +1; l->pos++; return;
         case L_RBLOCK:  l->tok = T_RBLOCK; l->nblock = -1; l->pos++; return;
@@ -552,6 +550,15 @@ static void lex_next(struct lex *l) {
         case L_LPAREN:  l->tok = T_LPAREN; l->nparen = +1; l->pos++; return;
         case L_RPAREN:  l->tok = T_RPAREN; l->nparen = -1; l->pos++; return;
     }
+}
+
+mu_inline struct lex lex_inc(struct lex l) {
+    mu_inc(l.val);
+    return l;
+}
+
+mu_inline void lex_dec(struct lex l) {
+    mu_dec(l.val);
 }
 
 
@@ -568,6 +575,7 @@ static bool next(struct parse *p, tok_t tok) {
 
 static bool match(struct parse *p, tok_t tok) {
     if (next(p, tok)) {
+        mu_dec(p->m.val);
         p->m.val = p->l.val;
         p->m.prec = p->l.prec;
         lex_next(&p->l);
@@ -583,12 +591,15 @@ static void expect(struct parse *p, tok_t tok) {
 }
 
 static bool lookahead(struct parse *p, tok_t a, tok_t b) {
-    struct lex l = p->l;
-    if (match(p, a) && next(p, b))
+    struct lex l = lex_inc(p->l);
+    if (match(p, a) && next(p, b)) {
+        lex_dec(l);
         return true;
-
-    p->l = l;
-    return false;
+    } else {
+        lex_dec(p->l);
+        p->l = l;
+        return false;
+    }
 }
 
 
@@ -629,20 +640,22 @@ static void patch_all(struct parse *p, int_t chain, int_t offset) {
 static mu_const mu_t imm_nil(void) {
     static mu_t nil = 0;
 
-    if (nil)
-        return nil;
-    else
-        return nil = mbfn(0, 0);
+    if (!nil)
+        nil = mbfn(0,0);
+
+    return fn_inc(nil);
 }
 
 static uint_t imm(struct parse *p, mu_t m) {
     if (!m)
         m = imm_nil();
 
-    mu_t mindex = tbl_lookup(p->imms, m);
+    mu_t mindex = tbl_lookup(p->imms, mu_inc(m));
 
-    if (mindex)
+    if (mindex) {
+        mu_dec(m);
         return num_uint(mindex);
+    }
 
     uint_t index = tbl_len(p->imms);
     tbl_insert(p->imms, m, muint(index));
@@ -708,6 +721,7 @@ static struct code *compile(struct parse *p) {
         p->bcount);
 
     code->args = p->args;
+    code->type = 0;
     code->regs = p->regs;
     code->scope = p->scope;
     code->icount = tbl_len(p->imms);
@@ -720,16 +734,20 @@ static struct code *compile(struct parse *p) {
 
     mu_t k, v;
     for (uint_t i = 0; tbl_next(p->imms, &i, &k, &v);)
-        imms[num_uint(v)] = (k == imm_nil()) ? mnil : mu_inc(k);
+        imms[num_uint(v)] = (k == imm_nil()) ? mnil : k;
 
-    for (uint_t i = 0; tbl_next(p->fns, &i, &k, &v);)
+    // TODO make this just an mstr array
+    for (uint_t i = 0; tbl_next(p->fns, &i, &k, &v);) {
         fns[num_uint(k)] = fn_code(v);
+        mu_dec(v);
+    }
 
     memcpy(bcode, p->bcode, p->bcount);
 
     tbl_dec(p->imms);
     tbl_dec(p->fns);
     mstr_dec(p->bcode);
+    mu_dec(p->m.val);
 
     return code;
 }
@@ -791,7 +809,7 @@ static void s_expr(struct parse *p, struct frame *f, uintq_t prec) {
 }
 
 static void s_frame(struct parse *p, struct frame *f, bool update) {
-    struct lex l = p->l;
+    struct lex l = lex_inc(p->l);
     f->depth = p->l.depth; p->l.depth = p->l.paren;
 
     do {
@@ -814,7 +832,12 @@ static void s_frame(struct parse *p, struct frame *f, bool update) {
     }
 
     p->l.depth = f->depth;
-    if (!update) p->l = l;
+    if (!update) {
+        lex_dec(p->l);
+        p->l = l;
+    } else {
+        lex_dec(l);
+    }
 
     f->tabled = f->tabled || f->expand || f->count > MU_FRAME;
     f->target = f->count;
@@ -927,7 +950,7 @@ static void p_while(struct parse *p) {
 
 static void p_for(struct parse *p) {
     expect(p, T_LPAREN);
-    struct lex ll = p->l;
+    struct lex ll = lex_inc(p->l);
     struct frame f = {.unpack = true, .insert = true};
     s_frame(p, &f, true);
 
@@ -961,7 +984,7 @@ static void p_for(struct parse *p) {
 
     p_frame(p, &f);
     expect(p, T_ASSIGN);
-    p->l = lr;
+    lex_dec(p->l); p->l = lr;
     expect(p, T_RPAREN);
 
 
@@ -1017,7 +1040,7 @@ static void p_subexpr(struct parse *p, struct expr *e) {
         return p_postexpr(p, e);
 
     } else if (match(p, T_IMM)) {
-        encode(p, OP_IMM, p->sp+1, imm(p, p->m.val), 0, +1);
+        encode(p, OP_IMM, p->sp+1, imm(p, mu_inc(p->m.val)), 0, +1);
         e->state = P_DIRECT;
         return p_postexpr(p, e);
 
@@ -1026,14 +1049,14 @@ static void p_subexpr(struct parse *p, struct expr *e) {
         return p_postexpr(p, e);
 
     } else if (match(p, T_SYM)) {
-        encode(p, OP_IMM, p->sp+1, imm(p, p->m.val), 0, +1);
+        encode(p, OP_IMM, p->sp+1, imm(p, mu_inc(p->m.val)), 0, +1);
         e->state = P_SCOPED;
         return p_postexpr(p, e);
 
     } else if (match(p, T_ANY_OP)) {
         encode(p, OP_IMM, p->sp+1, imm(p, mcstr("ops")), 0, +1);
         encode(p, OP_LOOKUP, p->sp, 0, p->sp, 0);
-        encode(p, OP_IMM, p->sp+1, imm(p, p->m.val), 0, +1);
+        encode(p, OP_IMM, p->sp+1, imm(p, mu_inc(p->m.val)), 0, +1);
         encode(p, OP_LOOKDN, p->sp-1, p->sp-1, p->sp, -1);
         p_subexpr(p, e);
         encode_load(p, e, 0);
@@ -1067,15 +1090,15 @@ static void p_postexpr(struct parse *p, struct expr *e) {
     } else if (match(p, T_DOT)) {
         expect(p, T_ANY_SYM);
         encode_load(p, e, 0);
-        encode(p, OP_IMM, p->sp+1, imm(p, p->m.val), 0, +1);
+        encode(p, OP_IMM, p->sp+1, imm(p, mu_inc(p->m.val)), 0, +1);
         e->state = P_INDIRECT;
         return p_postexpr(p, e);
 
     } else if (match(p, T_ARROW)) {
         expect(p, T_ANY_SYM);
-        mu_t sym = p->m.val;
+        mu_t sym = mu_inc(p->m.val);
         if (next(p, T_LPAREN)) {
-            struct lex l = p->l;
+            struct lex l = lex_inc(p->l);
             expect(p, T_LPAREN);
             struct frame f = {.unpack = false};
             s_frame(p, &f, false);
@@ -1089,7 +1112,7 @@ static void p_postexpr(struct parse *p, struct expr *e) {
                 e->params = f.count + 1;
                 return p_postexpr(p, e);
             }
-            p->l = l;
+            lex_dec(p->l); p->l = l;
         }
         encode_load(p, e, 2);
         encode(p, OP_IMM, p->sp-1, imm(p, sym), 0, 0);
@@ -1104,7 +1127,7 @@ static void p_postexpr(struct parse *p, struct expr *e) {
         encode_load(p, e, 1);
         encode(p, OP_IMM, p->sp-1, imm(p, mcstr("ops")), 0, 0);
         encode(p, OP_LOOKUP, p->sp-1, 0, p->sp-1, 0);
-        encode(p, OP_IMM, p->sp+1, imm(p, p->m.val), 0, +1);
+        encode(p, OP_IMM, p->sp+1, imm(p, mu_inc(p->m.val)), 0, +1);
         encode(p, OP_LOOKDN, p->sp-2, p->sp-2, p->sp, -1);
         uintq_t prec = e->prec; e->prec = p->m.prec;
         p_subexpr(p, e);
@@ -1149,7 +1172,7 @@ static void p_entry(struct parse *p, struct frame *f) {
     f->key = false;
 
     if (lookahead(p, T_ANY_SYM, T_PAIR)) {
-        encode(p, OP_IMM, p->sp+1, imm(p, p->m.val), 0, +1);
+        encode(p, OP_IMM, p->sp+1, imm(p, mu_inc(p->m.val)), 0, +1);
         e.state = P_DIRECT;
         f->key = true;
     } else if (!(f->unpack && next(p, T_LTABLE))) {
@@ -1311,7 +1334,7 @@ static void p_frame(struct parse *p, struct frame *f) {
 }
 
 static void p_assign(struct parse *p, bool insert) {
-    struct lex ll = p->l;
+    struct lex ll = lex_inc(p->l);
     struct frame fl = {};
     s_frame(p, &fl, true);
 
@@ -1335,9 +1358,9 @@ static void p_assign(struct parse *p, bool insert) {
         fl.unpack = true;
         p_frame(p, &fl);
         expect(p, T_ASSIGN);
-        p->l = lr;
+        lex_dec(p->l); p->l = lr;
     } else if (!insert) {
-        p->l = ll;
+        lex_dec(p->l); p->l = ll;
 
         fl.unpack = false;
         fl.tabled = false;
@@ -1378,7 +1401,7 @@ static void p_stmt(struct parse *p) {
 
     } else if (lookahead(p, T_FN, T_ANY_SYM)) {
         expect(p, T_ANY_SYM);
-        mu_t sym = p->m.val;
+        mu_t sym = mu_inc(p->m.val);
         p_fn(p);
         encode(p, OP_IMM, p->sp+1, imm(p, sym), 0, +1);
         encode(p, OP_INSERT, p->sp-1, 0, p->sp, -2);
@@ -1482,6 +1505,8 @@ struct code *parse_expr(mu_t source) {
     if (p.l.tok)
         unexpected(&p);
 
+    lex_dec(p.l);
+    str_dec(source);
     return compile(&p);
 }
 
@@ -1503,6 +1528,8 @@ struct code *parse_fn(mu_t source) {
         unexpected(&p);
 
     encode(&p, OP_RET, 0, 0, 0, 0);
+    lex_dec(p.l);
+    str_dec(source);
     return compile(&p);
 }
 
@@ -1524,6 +1551,8 @@ struct code *parse_module(mu_t source) {
         unexpected(&p);
 
     encode(&p, OP_RET, 0, 0, 1, 0);
+    lex_dec(p.l);
+    str_dec(source);
     return compile(&p);
 }
 

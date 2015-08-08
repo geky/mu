@@ -183,11 +183,12 @@ void mstr_insert(byte_t **b, uint_t *i, byte_t c) {
 }
 
 void mstr_concat(byte_t **b, uint_t *i, mu_t c) {
-    return mstr_nconcat(b, i, str_bytes(c), str_len(c));
+    mstr_nconcat(b, i, str_bytes(c), str_len(c));
+    mu_dec(c);
 }
 
 void mstr_cconcat(byte_t **b, uint_t *i, const char *c) {
-    return mstr_nconcat(b, i, (byte_t *)c, strlen(c));
+    mstr_nconcat(b, i, (byte_t *)c, strlen(c));
 }
 
 void mstr_nconcat(byte_t **b, uint_t *i, const byte_t *c, uint_t len) {
@@ -249,6 +250,7 @@ mu_t str_repr(mu_t m) {
         }
     }
 
+    mu_dec(m);
     mstr_insert(&s, &len, '\'');
     return mstr_intern(s, len);
 }

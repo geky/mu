@@ -24,6 +24,8 @@ void *mu_alloc(size_t size) {
 }
 
 void *mu_realloc(void *m, size_t prev, size_t size) {
+    mu_assert(0); // Unused?
+
     m = realloc(m, size);
 
     if (m == 0)
@@ -36,6 +38,6 @@ void *mu_realloc(void *m, size_t prev, size_t size) {
 }
 
 void mu_dealloc(void *m, size_t size) {
-//    free(m);
+    free(m);
 }
 

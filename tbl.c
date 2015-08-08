@@ -81,6 +81,7 @@ void tbl_destroy(mu_t m) {
         mu_dec(t->array[i]);
 
     mu_dealloc(t->array, size * sizeof(mu_t));
+    mu_dec(t->tail);
     ref_dealloc(t, sizeof(struct tbl));
 }
 
@@ -97,26 +98,39 @@ mu_t tbl_lookup(mu_t m, mu_t k) {
             uint_t i = num_uint(k) & mask;
 
             if (k == muint(i))
-                return t->array[i];
+                return mu_inc(t->array[i]);
 
         } else {
             for (uint_t i = tbl_hash(k);; i++) {
                 mu_t *p = &t->array[2*(i & mask)];
 
-                if (!p[0] || (k == p[0] && !p[1]))
+                if (!p[0] || (k == p[0] && !p[1])) {
                     break;
-                else if (k == p[0])
-                    return p[1];
+                } else if (k == p[0]) {
+                    mu_dec(k);
+                    return mu_inc(p[1]);
+                }
             }
         }
     }
 
+    mu_dec(k);
     return mnil;
 }
 
 
-// Modify table info according to specified replacement
-static void tbl_adjust(struct tbl *t, mu_t d, mu_t v) {
+// Modify table info according to placement/replacement
+static void tbl_place(struct tbl *t, mu_t *dp, mu_t v) {
+    if (t->len == MU_MAXLEN)
+        mu_err_len();
+
+    t->len++;
+    *dp = v;
+}
+
+static void tbl_replace(struct tbl *t, mu_t *dp, mu_t v) {
+    mu_t d = *dp;
+
     if (v && !d) {
         if (t->len == MU_MAXLEN)
             mu_err_len();
@@ -127,6 +141,10 @@ static void tbl_adjust(struct tbl *t, mu_t d, mu_t v) {
         t->len--;
         t->nils++;
     }
+        
+    // We must replace before decrementing in case destructors run
+    *dp = v;
+    mu_dec(d);
 }
 
 // Converts from array to full table
@@ -216,10 +234,14 @@ static void tbl_expand(struct tbl *t) {
 // Inserts a value in the table with the given key
 // without decending down the tail chain
 void tbl_insert(mu_t m, mu_t k, mu_t v) {
-    if (!k) return;
+    if (!k) {
+        mu_dec(v);
+        return;
+    }
 
     struct tbl *t = tbl_wtbl(m);
-    if (v) tbl_expand(t);
+    if (v)
+        tbl_expand(t);
 
     uint_t mask = (1 << t->npw2) - 1;
 
@@ -227,9 +249,7 @@ void tbl_insert(mu_t m, mu_t k, mu_t v) {
         uint_t i = num_uint(k) & mask;
 
         if (k == muint(i)) {
-            tbl_adjust(t, t->array[i], v);
-            mu_dec(t->array[i]);
-            t->array[i] = v;
+            tbl_replace(t, &t->array[i], v);
         } else if (v) {
             // Index is out of range, convert to full table
             tbl_realize(t);
@@ -239,17 +259,16 @@ void tbl_insert(mu_t m, mu_t k, mu_t v) {
         for (uint_t i = tbl_hash(k);; i++) {
             mu_t *p = &t->array[2*(i & mask)];
 
-            if (!p[0]) {
-                if (v) {
-                    tbl_adjust(t, 0, v);
-                    p[0] = k;
-                    p[1] = v;
-                }
+            if (!p[0] && v) {
+                p[0] = k;
+                tbl_place(t, &p[1], v);
+                return;
+            } else if (!p[0]) {
+                mu_dec(k);
                 return;
             } else if (k == p[0]) {
-                tbl_adjust(t, p[1], v);
-                mu_dec(p[1]);
-                p[1] = v;
+                mu_dec(k);
+                tbl_replace(t, &p[1], v);
                 return;
             }
         }
@@ -259,7 +278,10 @@ void tbl_insert(mu_t m, mu_t k, mu_t v) {
 // Recursively assigns a value in the table with the given key
 // decends down the tail chain until its found
 void tbl_assign(mu_t m, mu_t k, mu_t v) {
-    if (!k) return;
+    if (!k) {
+        mu_dec(v);
+        return;
+    }
 
     mu_t head = m;
 
@@ -271,9 +293,7 @@ void tbl_assign(mu_t m, mu_t k, mu_t v) {
             uint_t i = num_uint(k) & mask;
 
             if (k == muint(i) && t->array[i]) {
-                tbl_adjust(t, t->array[i], v);
-                mu_dec(t->array[i]);
-                t->array[i] = v;
+                tbl_replace(t, &t->array[i], v);
                 return;
             }
         } else {
@@ -283,16 +303,17 @@ void tbl_assign(mu_t m, mu_t k, mu_t v) {
                 if (!p[0] || (k == p[0] && !p[1])) {
                     break;
                 } else if (k == p[0]) {
-                    tbl_adjust(t, p[1], v);
-                    mu_dec(p[1]);
-                    p[1] = v;
+                    mu_dec(k);
+                    tbl_replace(t, &p[1], v);
                     return;
                 }
             }
         }
     }
 
-    if (v)
+    if (!v)
+        mu_dec(k);
+    else
         tbl_insert(head, k, v);
 }
 
@@ -316,8 +337,8 @@ bool tbl_next(mu_t m, uint_t *ip, mu_t *kp, mu_t *vp) {
     } while (!k || !v);
 
     *ip = i;
-    *kp = k;
-    *vp = v;
+    *kp = mu_inc(k);
+    *vp = mu_inc(v);
     return true;
 }           
 
@@ -344,7 +365,7 @@ mu_t tbl_repr(mu_t t) {
     byte_t *s = mstr_create(0);
     uint_t si = 0;
     uint_t ti = 0;
-    mu_t k, v, r;
+    mu_t k, v;
 
     bool linear = tbl_rtbl(t)->linear;
     for (int i = 0; linear && i < tbl_len(t); i++) {
@@ -356,21 +377,20 @@ mu_t tbl_repr(mu_t t) {
 
     while (tbl_next(t, &ti, &k, &v)) {
         if (!linear) {
-            r = mu_repr(k);
-            mstr_concat(&s, &si, r);
+            mstr_concat(&s, &si, mu_repr(k));
             mstr_cconcat(&s, &si, ": ");
-            mu_dec(r);
+        } else {
+            mu_dec(k);
         }
 
-        r = mu_repr(v);
-        mstr_concat(&s, &si, r);
+        mstr_concat(&s, &si, mu_repr(v));
         mstr_cconcat(&s, &si, ", ");
-        mu_dec(r);
     }
 
     if (tbl_len(t) > 0)
         si -= 2;
 
+    tbl_dec(t);
     mstr_insert(&s, &si, ']');
     return mstr_intern(s, si);
 }
@@ -390,21 +410,13 @@ mu_t tbl_concat(mu_t a, mu_t b, mu_t moffset) {
         }
     }
 
-    mu_t res;
-    if (mu_ref(a) == 1) {
-        res = a;
-    } else {
-        res = tbl_create(tbl_len(a) + tbl_len(b));
+    mu_t res = tbl_create(tbl_len(a) + tbl_len(b));
+    mu_t k, v;
 
-        mu_t k, v;
-        for (uint_t i = 0; tbl_next(a, &i, &k, &v);) {
-            tbl_insert(res, k, v);
-        }
-
-        tbl_dec(a);
+    for (uint_t i = 0; tbl_next(a, &i, &k, &v);) {
+        tbl_insert(res, k, v);
     }
 
-    mu_t k, v;
     for (uint_t i = 0; tbl_next(b, &i, &k, &v);) {
         uint_t n = num_uint(k);
         if (k == muint(n))
@@ -413,8 +425,8 @@ mu_t tbl_concat(mu_t a, mu_t b, mu_t moffset) {
             tbl_insert(res, k, v);
     }
 
+    tbl_dec(a);
     tbl_dec(b);
-
     return res;
 }
 
@@ -422,7 +434,7 @@ mu_t tbl_pop(mu_t t, mu_t k) {
     if (!k)
         k = muint(tbl_len(t)-1);
 
-    mu_t ret = tbl_lookup(t, k);
+    mu_t ret = tbl_lookup(t, mu_inc(k));
     tbl_insert(t, k, mnil);
 
     uint_t i = num_uint(k);
@@ -448,6 +460,8 @@ mu_t tbl_pop(mu_t t, mu_t k) {
             for (uint_t j = 0; tbl_next(temp, &j, &k, &v);) {
                 tbl_insert(t, k, v);
             }
+
+            tbl_dec(temp);
         }
     }
 
@@ -481,6 +495,8 @@ void tbl_push(mu_t t, mu_t v, mu_t k) {
             for (uint_t j = 0; tbl_next(temp, &j, &k, &v);) {
                 tbl_insert(t, k, v);
             }
+
+            tbl_dec(temp);
         }
     }
 

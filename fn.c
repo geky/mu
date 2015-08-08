@@ -20,7 +20,7 @@ mu_t mbfn(frame_t args, bfn_t *bfn) {
     struct fn *f = ref_alloc(sizeof(struct fn));
     f->args = args;
     f->type = MU_BFN - MU_FN;
-    f->closure = 0;
+    f->closure = mnil;
     f->bfn = bfn;
     return (mu_t)((uint_t)f + MU_BFN);
 }
@@ -37,9 +37,9 @@ mu_t msbfn(frame_t args, sbfn_t *sbfn, mu_t closure) {
 mu_t mfn(struct code *c, mu_t closure) {
     struct fn *f = ref_alloc(sizeof(struct fn));
     f->args = c->args;
-    f->type = c->type;
-    f->code = c;
+    f->type = MU_FN - MU_FN;
     f->closure = closure;
+    f->code = c;
     return (mu_t)((uint_t)f + MU_FN);
 }
 
@@ -83,6 +83,7 @@ void bfn_fcall(mu_t m, frame_t fc, mu_t *frame) {
     mu_fconvert(f->args, frame, fc >> 4, frame);
     frame_t rets = f->bfn(frame);
     mu_fconvert(fc & 0xf, frame, rets, frame);
+    fn_dec(m);
 }
 
 void sbfn_fcall(mu_t m, frame_t fc, mu_t *frame) {
@@ -90,12 +91,15 @@ void sbfn_fcall(mu_t m, frame_t fc, mu_t *frame) {
     mu_fconvert(f->args, frame, fc >> 4, frame);
     frame_t rets = f->sbfn(f->closure, frame);
     mu_fconvert(fc & 0xf, frame, rets, frame);
+    fn_dec(m);
 }
 
 void fn_fcall(mu_t m, frame_t fc, mu_t *frame) {
     struct fn *f = fn_fn(m);
-    mu_t scope = tbl_extend(f->code->scope, f->closure);
-    mu_exec(f->code, scope, fc, frame);
+    struct code *c = code_inc(f->code);
+    mu_t scope = tbl_extend(c->scope, mu_inc(f->closure));
+    fn_dec(m);
+    mu_exec(c, scope, fc, frame);
 }
 
 

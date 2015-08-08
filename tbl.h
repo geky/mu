@@ -73,6 +73,7 @@ void tbl_push(mu_t a, mu_t v, mu_t i);
 // Table reference counting
 mu_inline mu_t tbl_inc(mu_t m) { ref_inc(m); return m; }
 mu_inline void tbl_dec(mu_t m) {
+    mu_assert(mu_istbl(m));
     extern void tbl_destroy(mu_t);
     if (ref_dec(m)) tbl_destroy(m);
 }

@@ -81,7 +81,7 @@ void mu_dis(struct code *c) {
     if (c->icount > 0) {
         printf("imms:\n");
         for (uint_t i = 0; i < c->icount; i++) {
-            mu_t repr = mu_repr(imms[i]);
+            mu_t repr = mu_repr(mu_inc(imms[i]));
             printf("%08x (%.*s)\n", (uint_t)imms[i], str_len(repr), str_bytes(repr));
             str_dec(repr);
         }
@@ -102,7 +102,7 @@ void mu_dis(struct code *c) {
         switch (op(ins)) {
             case OP_IMM:
                 printf("imm r%d, %d", rd(ins), i(ins));
-                { mu_t repr = mu_repr(imms[i(ins)]);
+                { mu_t repr = mu_repr(mu_inc(imms[i(ins)]));
                   printf("(%.*s)\n", str_len(repr), str_bytes(repr));
                   str_dec(repr);
                 }
@@ -191,7 +191,7 @@ reenter:
                     break;
 
                 case OP_FN:
-                    regs[rd(ins)] = mfn(fns[i(ins)], regs[0]);
+                    regs[rd(ins)] = mfn(code_inc(fns[i(ins)]), mu_inc(regs[0]));
                     break;
 
                 case OP_TBL:
@@ -212,14 +212,12 @@ reenter:
 
                 case OP_LOOKUP:
                     scratch = mu_lookup(regs[ra(ins)], regs[rb(ins)]);
-                    mu_dec(regs[rb(ins)]);
                     regs[rd(ins)] = scratch;
                     break;
 
                 case OP_LOOKDN:
                     scratch = mu_lookup(regs[ra(ins)], regs[rb(ins)]);
                     mu_dec(regs[ra(ins)]);
-                    mu_dec(regs[rb(ins)]);
                     regs[rd(ins)] = scratch;
                     break;
 
@@ -252,7 +250,7 @@ reenter:
                     break;
 
                 case OP_RET:
-                    mu_dec(regs[0]);
+                    tbl_dec(regs[0]);
                     code_dec(c);
                     mu_fconvert(fc & 0xf, frame, rb(ins), &regs[rd(ins)]);
                     return;
@@ -261,7 +259,7 @@ reenter:
                     scratch = regs[rd(ins)];
                     fc = (ra(ins) << 4) | (fc & 0xf);
                     memcpy(frame, &regs[rd(ins)+1], sizeof(mu_t)*fa(ins));
-                    mu_dec(regs[0]);
+                    tbl_dec(regs[0]);
                     code_dec(c);
 
                     // Use a direct goto to garuntee a tail call when the target
@@ -270,6 +268,7 @@ reenter:
                     if (mu_type(scratch) == MU_FN) {
                         c = fn_code(scratch);
                         scope = tbl_extend(c->scope, fn_closure(scratch));
+                        fn_dec(scratch);
                         goto reenter;
                     } else {
                         return mu_fcall(scratch, fc, frame);
