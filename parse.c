@@ -77,40 +77,32 @@ enum tok {
 
 // Internal tables for keywords/symbols
 static mu_const mu_t mu_keys(void) {
-    static mu_t keyt = 0;
-
-    if (keyt) return tbl_inc(keyt);
-
-    keyt = tbl_create(0);
-    tbl_insert(keyt, mcstr("let"),      muint(T_LET));
-    tbl_insert(keyt, mcstr("else"),     muint(T_ELSE));
-    tbl_insert(keyt, mcstr("and"),      muint(T_AND));
-    tbl_insert(keyt, mcstr("or"),       muint(T_OR));
-    tbl_insert(keyt, mcstr("continue"), muint(T_CONT));
-    tbl_insert(keyt, mcstr("break"),    muint(T_BREAK));
-    tbl_insert(keyt, mcstr("return"),   muint(T_RETURN));
-    tbl_insert(keyt, mcstr("fn"),       muint(T_FN));
-    tbl_insert(keyt, mcstr("type"),     muint(T_TYPE));
-    tbl_insert(keyt, mcstr("if"),       muint(T_IF));
-    tbl_insert(keyt, mcstr("while"),    muint(T_WHILE));
-    tbl_insert(keyt, mcstr("for"),      muint(T_FOR));
-    tbl_insert(keyt, mcstr("_"),        muint(T_NIL));
-    tbl_insert(keyt, mcstr("nil"),      muint(T_NIL));
-    return keyt;
+    return mctbl({
+        { mcstr("let"),      muint(T_LET)    },
+        { mcstr("else"),     muint(T_ELSE)   },
+        { mcstr("and"),      muint(T_AND)    },
+        { mcstr("or"),       muint(T_OR)     },
+        { mcstr("continue"), muint(T_CONT)   },
+        { mcstr("break"),    muint(T_BREAK)  },
+        { mcstr("return"),   muint(T_RETURN) },
+        { mcstr("fn"),       muint(T_FN)     },
+        { mcstr("type"),     muint(T_TYPE)   },
+        { mcstr("if"),       muint(T_IF)     },
+        { mcstr("while"),    muint(T_WHILE)  },
+        { mcstr("for"),      muint(T_FOR)    },
+        { mcstr("_"),        muint(T_NIL)    },
+        { mcstr("nil"),      muint(T_NIL)    }
+    });
 }
 
 static mu_const mu_t mu_syms(void) {
-    static mu_t symt = 0;
-
-    if (symt) return tbl_inc(symt);
-
-    symt = tbl_create(0);
-    tbl_insert(symt, mcstr("="),  muint(T_ASSIGN));
-    tbl_insert(symt, mcstr(":"),  muint(T_PAIR));
-    tbl_insert(symt, mcstr("."),  muint(T_DOT));
-    tbl_insert(symt, mcstr("->"), muint(T_ARROW));
-    tbl_insert(symt, mcstr(".."), muint(T_EXPAND));
-    return symt;
+    return mctbl({
+        { mcstr("="),  muint(T_ASSIGN) },
+        { mcstr(":"),  muint(T_PAIR)   },
+        { mcstr("."),  muint(T_DOT)    },
+        { mcstr("->"), muint(T_ARROW)  },
+        { mcstr(".."), muint(T_EXPAND) }
+    });
 }
 
 
@@ -532,7 +524,7 @@ static void lex_next(struct lex *l) {
 
         case L_NL:      if (!l->paren) return l_nl(l);
         case L_COMMENT:
-        case L_WS:      wskip(l); 
+        case L_WS:      wskip(l);
                         return lex_next(l);
 
         case L_OP:      return l_op(l);
@@ -612,7 +604,7 @@ static void emit(struct parse *p, byte_t byte) {
     p->bcount = bcount;
 }
 
-static void encode(struct parse *p, op_t op,
+static void encode(struct parse *p, enum op op,
                    uint_t d, uint_t a, uint_t b,
                    uint_t sdiff) {
     p->sp += sdiff;
@@ -641,7 +633,7 @@ static mu_const mu_t imm_nil(void) {
     static mu_t nil = 0;
 
     if (!nil)
-        nil = mbfn(0,0);
+        nil = mcfn(0,0);
 
     return fn_inc(nil);
 }
@@ -688,7 +680,7 @@ static void encode_load(struct parse *p, struct expr *e, uint_t offset) {
     } else {
         if (e->state == P_CALLED)
             encode(p, OP_CALL, p->sp-(e->params == 0xf ? 1 : e->params),
-                   e->params, 1,
+                   (e->params << 4) | 1, 0,
                    -(e->params == 0xf ? 1 : e->params));
 
         if (offset != 0)
@@ -961,20 +953,20 @@ static void p_for(struct parse *p) {
     encode(p, OP_IMM, p->sp+1, imm(p, mcstr("iter")), 0, +1);
     encode(p, OP_LOOKUP, p->sp, 0, p->sp, 0);
     p_expr(p);
-    encode(p, OP_CALL, p->sp-1, 1, 1, -1);
+    encode(p, OP_CALL, p->sp-1, 0x11, 0, -1);
 
     len_t for_offset = p->bcount;
     len_t cond_offset;
     encode(p, OP_DUP, p->sp+1, p->sp, 0, +1);
     if (f.tabled) {
-        encode(p, OP_CALL, p->sp, 0, 0xf, 0);
+        encode(p, OP_CALL, p->sp, 0x0f, 0, 0);
         encode(p, OP_IMM, p->sp+1, imm(p, muint(0)), 0, +1);
         encode(p, OP_LOOKUP, p->sp, p->sp-1, p->sp, 0);
         cond_offset = p->bcount;
         encode(p, OP_JFALSE, p->sp, 0, 0, 0);
         encode(p, OP_DROP, p->sp, 0, 0, -1);
     } else {
-        encode(p, OP_CALL, p->sp, 0, f.count, +f.count-1);
+        encode(p, OP_CALL, p->sp, 0 | f.count, 0, +f.count-1);
         cond_offset = p->bcount;
         encode(p, OP_JFALSE, p->sp-f.count+1, 0, 0, 0);
     }
@@ -1119,7 +1111,7 @@ static void p_postexpr(struct parse *p, struct expr *e) {
         encode(p, OP_LOOKUP, p->sp-1, p->sp, p->sp-1, 0);
         encode(p, OP_IMM, p->sp-2, imm(p, mcstr("bind")), 0, 0);
         encode(p, OP_LOOKUP, p->sp-2, 0, p->sp-2, 0);
-        encode(p, OP_CALL, p->sp-2, 2, 1, -2);
+        encode(p, OP_CALL, p->sp-2, 0x21, 0, -2);
         e->state = P_DIRECT;
         return p_postexpr(p, e);
 
@@ -1214,7 +1206,7 @@ static void p_entry(struct parse *p, struct frame *f) {
             encode(p, OP_LOOKUP, p->sp, 0, p->sp, 0);
             encode(p, OP_DUP, p->sp+1, p->sp-1-offset(&e), 0, +1);
             encode(p, OP_IMM, p->sp+1, imm(p, muint(f->index)), 0, +1);
-            encode(p, OP_CALL, p->sp-2, 2, 1, -2);
+            encode(p, OP_CALL, p->sp-2, 0x21, 0, -2);
         } else if (f->unpack) {
             encode(p, OP_IMM, p->sp+1, imm(p, muint(f->index)), 0, +1);
             encode(p, f->count == f->target-1 ? OP_LOOKDN : OP_LOOKUP,
@@ -1262,7 +1254,7 @@ static void p_frame(struct parse *p, struct frame *f) {
         struct expr e = {.prec = -1};
         p_subexpr(p, &e);
         encode(p, OP_CALL, p->sp-(e.params == 0xf ? 1 : e.params),
-               e.params, f->tabled ? 0xf : f->target,
+               (e.params << 4) | (f->tabled ? 0xf : f->target), 0,
                +(f->tabled ? 1 : f->target)
                -(e.params == 0xf ? 1 : e.params)-1);
         return;
@@ -1298,7 +1290,7 @@ static void p_frame(struct parse *p, struct frame *f) {
             encode(p, OP_LOOKUP, p->sp-1, 0, p->sp-1, 0);
             p_expr(p);
             encode(p, OP_IMM, p->sp+1, imm(p, muint(f->index)), 0, +1);
-            encode(p, OP_CALL, p->sp-3, 3, 1, -3);
+            encode(p, OP_CALL, p->sp-3, 0x31, 0, -3);
         } else {
             p_expr(p);
         }
@@ -1390,7 +1382,7 @@ static void p_return(struct parse *p) {
         p_frame(p, &f);
         encode(p, OP_RET,
                p->sp - (f.tabled ? 0 : f.count-1),
-               0, f.tabled ? 0xf : f.count,
+               f.tabled ? 0xf : f.count, 0,
                -(f.tabled ? 1 : f.count));
     }
 }
@@ -1550,7 +1542,8 @@ struct code *parse_module(mu_t source) {
     if (p.l.tok)
         unexpected(&p);
 
-    encode(&p, OP_RET, 0, 0, 1, 0);
+    encode(&p, OP_DUP, 0, 0, 0, 0);
+    encode(&p, OP_RET, 0, 1, 0, 0);
     lex_dec(p.l);
     str_dec(source);
     return compile(&p);

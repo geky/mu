@@ -36,7 +36,7 @@ mu_t num_repr(mu_t m) {
             n /= digit;
             digit = 1;
             count = MU_NUMLEN-6;
-        } else { 
+        } else {
             digit = digit < 1 ? 1 : digit;
             count = MU_NUMLEN-1;
         }

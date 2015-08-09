@@ -30,12 +30,12 @@ void eh_handle(struct eh *eh, mu_t err) {
 mu_noreturn mu_err(mu_t err) {
     struct eh *eh = eh_get();
 
-    // If no error handler has been registered, we 
+    // If no error handler has been registered, we
     // just abort here
     if (!eh)
         abort();
 
-    // Just jump to the seteh call. We'll let it take care 
+    // Just jump to the seteh call. We'll let it take care
     // of handling things there since it has more stack space
     longjmp(eh->env, (int)err);
 }
@@ -51,7 +51,7 @@ mu_noreturn mu_cerr(mu_t type, mu_t reason) {
 mu_noreturn mu_err_nomem(void) {
     mu_assert(false); // Figure out how to recover later
 
-    mu_cerr(mcstr("memory"), 
+    mu_cerr(mcstr("memory"),
             mcstr("out of memory"));
 }
 

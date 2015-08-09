@@ -60,7 +60,7 @@ mu_inline bool mu_isstr(mu_t m) { return mu_type(m) == MU_STR; }
 mu_inline bool mu_isfn(mu_t m)  { return mu_type(m) >= MU_FN;  }
 mu_inline bool mu_istbl(mu_t m) { return (6 & mu_type(m)) == MU_TBL; }
 mu_inline bool mu_isref(mu_t m) { return 6 & (uint_t)m; }
-mu_inline bool mu_isro(mu_t m)  { return 1 & (uint_t)m; }
+
 
 // Reference counting
 mu_inline mu_t mu_inc(mu_t m) {
@@ -79,39 +79,19 @@ mu_inline void mu_dec(mu_t m) {
 
 
 // Returns a string representation of the variable
-mu_inline mu_t mu_repr(mu_t m) {
-    extern mu_t (*const mu_repr_table[8])(mu_t);
-    return mu_repr_table[mu_type(m)](m);
-}
+mu_t mu_repr(mu_t m);
 
 // Performs iteration on variables
-mu_inline mu_t mu_iter(mu_t m) {
-    extern mu_t (*const mu_iter_table[8])(mu_t);
-    return mu_iter_table[mu_type(m)](m);
-}
+mu_t mu_iter(mu_t m);
 
 // Table related functions performed on variables
-mu_inline mu_t mu_lookup(mu_t m, mu_t key) {
-    extern mu_t (*const mu_lookup_table[8])(mu_t, mu_t);
-    return mu_lookup_table[mu_type(m)](m, key);
-}
-
-mu_inline void mu_insert(mu_t m, mu_t key, mu_t val) {
-    extern void (*const mu_insert_table[8])(mu_t, mu_t, mu_t);
-    return mu_insert_table[mu_type(m)](m, key, val);
-}
-
-mu_inline void mu_assign(mu_t m, mu_t key, mu_t val) {
-    extern void (*const mu_assign_table[8])(mu_t, mu_t, mu_t);
-    return mu_assign_table[mu_type(m)](m, key, val);
-}
+mu_t mu_lookup(mu_t m, mu_t key);
+void mu_insert(mu_t m, mu_t key, mu_t val);
+void mu_assign(mu_t m, mu_t key, mu_t val);
 
 // Function calls performed on variables
-mu_inline void mu_fcall(mu_t m, frame_t fc, mu_t *frame) {
-    extern void (*const mu_fcall_table[8])(mu_t, frame_t, mu_t *);
-    return mu_fcall_table[mu_type(m)](m, fc, frame);
-}
-
+frame_t mu_tcall(mu_t m, frame_t fc, mu_t *frame);
+void mu_fcall(mu_t m, frame_t fc, mu_t *frame);
 mu_t mu_vcall(mu_t m, frame_t fc, va_list args);
 mu_t mu_call(mu_t m, frame_t fc, ...);
 

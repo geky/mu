@@ -17,8 +17,9 @@ mu_inline uint_t  ra(uint16_t ins) { return 0xf & (ins >> 4); }
 mu_inline uint_t  rb(uint16_t ins) { return 0xf & (ins >> 0); }
 mu_inline uint_t  i(uint16_t ins)  { return (uint8_t)ins; }
 mu_inline int_t   j(uint16_t ins)  { return (int8_t)ins; }
-mu_inline uint_t  fa(uint16_t ins) { return ra(ins) > MU_FRAME ? 1 : ra(ins); }
-mu_inline uint_t  fr(uint16_t ins) { return rb(ins) > MU_FRAME ? 1 : rb(ins); }
+mu_inline uint_t  f(uint16_t ins)  { return mu_fcount(i(ins)); }
+mu_inline uint_t  fa(uint16_t ins) { return mu_fcount(ra(ins)); }
+mu_inline uint_t  fr(uint16_t ins) { return mu_fcount(rb(ins)); }
 
 
 // Encode the specified opcode and return its size
@@ -26,14 +27,14 @@ mu_inline uint_t  fr(uint16_t ins) { return rb(ins) > MU_FRAME ? 1 : rb(ins); }
 // Note: size of the jump opcodes currently can not change based on argument
 // TODO: change asserts to err throwing checks
 void mu_encode(void (*emit)(void *, byte_t), void *p,
-               op_t op, int_t d, int_t a, int_t b) {
+               enum op op, int_t d, int_t a, int_t b) {
     uint16_t ins = 0;
     mu_assert(op <= 0xf);
     mu_assert(d <= 0xf);
     ins |= op << 12;
     ins |= d << 8;
 
-    if (op >= OP_IMM && op <= OP_DROP) {
+    if (op >= OP_RET && op <= OP_DROP) {
         mu_assert(a <= 0xff);
         ins |= a;
     } else if (op >= OP_JFALSE && op <= OP_JUMP) {
@@ -147,10 +148,10 @@ void mu_dis(struct code *c) {
                 printf("call r%d, 0x%02x\n", rd(ins), i(ins));
                 break;
             case OP_TCALL:
-                printf("tcall r%d, 0x%02x\n", rd(ins), i(ins));
+                printf("tcall r%d, 0x%01x\n", rd(ins), i(ins));
                 break;
             case OP_RET:
-                printf("ret r%d, 0x%02x\n", rd(ins), i(ins));
+                printf("ret r%d, 0x%01x\n", rd(ins), i(ins));
                 break;
         }
     }
@@ -158,7 +159,7 @@ void mu_dis(struct code *c) {
 
 
 // Execute bytecode
-void mu_exec(struct code *c, mu_t scope, frame_t fc, mu_t *frame) {
+frame_t mu_exec(struct code *c, mu_t scope, mu_t *frame) {
     // Allocate temporary variables
     register const uint16_t *pc;
     mu_t *imms;
@@ -174,7 +175,7 @@ reenter:
     {   // Setup the registers and scope
         mu_t regs[c->regs];
         regs[0] = scope;
-        mu_fconvert(c->args, &regs[1], fc >> 4, frame);
+        memcpy(&regs[1], frame, mu_fcount(c->args)*sizeof(mu_t));
 
         // Setup other state
         imms = code_imms(c);
@@ -250,16 +251,15 @@ reenter:
                     break;
 
                 case OP_RET:
-                    tbl_dec(regs[0]);
+                    memcpy(frame, &regs[rd(ins)], sizeof(mu_t)*fr(ins));
+                    tbl_dec(scope);
                     code_dec(c);
-                    mu_fconvert(fc & 0xf, frame, rb(ins), &regs[rd(ins)]);
-                    return;
+                    return i(ins);
 
                 case OP_TCALL:
                     scratch = regs[rd(ins)];
-                    fc = (ra(ins) << 4) | (fc & 0xf);
-                    memcpy(frame, &regs[rd(ins)+1], sizeof(mu_t)*fa(ins));
-                    tbl_dec(regs[0]);
+                    memcpy(frame, &regs[rd(ins)+1], sizeof(mu_t)*fr(ins));
+                    tbl_dec(scope);
                     code_dec(c);
 
                     // Use a direct goto to garuntee a tail call when the target
@@ -268,10 +268,11 @@ reenter:
                     if (mu_type(scratch) == MU_FN) {
                         c = fn_code(scratch);
                         scope = tbl_extend(c->scope, fn_closure(scratch));
+                        mu_fto(c->args, i(ins), frame);
                         fn_dec(scratch);
                         goto reenter;
                     } else {
-                        return mu_fcall(scratch, fc, frame);
+                        return mu_tcall(scratch, i(ins), frame);
                     }
 
                 default:

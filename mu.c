@@ -101,7 +101,7 @@ static len_t prompt(byte_t *input) {
     while (1) {
         byte_t c = getchar();
         input[len++] = c;
-        
+
         if (c == '\n')
             return len;
     }
@@ -161,7 +161,7 @@ static frame_t b_bind(mu_t *frame) {
     assert(mu_isfn(f));
     frame[0] = fn_bind(f, frame[0]);
     return 1;
-}   
+}
 
 static frame_t b_map(mu_t *frame) {
     assert(mu_isfn(frame[0]));
@@ -223,49 +223,55 @@ static frame_t b_iter(mu_t *frame) {
 
 
 static void genscope() {
-    scope = tbl_create(0);
+    mu_t ops = mctbl({
+        { mcstr("+"), mcfn(0x2, b_add) },
+        { mcstr("*"), mcfn(0x2, b_mul) },
+        { mcstr("-"), mcfn(0x2, b_sub) },
+        { mcstr("~"), mcfn(0x2, b_equals) },
+        { mcstr("=="), mcfn(0x2, b_equals) }
+    });
 
-    mu_t ops = tbl_create(0);
-    tbl_assign(ops, mcstr("+"), mbfn(0x2, b_add));
-    tbl_assign(ops, mcstr("*"), mbfn(0x2, b_mul));
-    tbl_assign(ops, mcstr("-"), mbfn(0x2, b_sub));
-    tbl_assign(ops, mcstr("~"), mbfn(0x2, b_equals));
-    tbl_assign(ops, mcstr("=="), mbfn(0x2, b_equals));
-    tbl_assign(scope, mcstr("+"), mbfn(0x2, b_add));
-    tbl_assign(scope, mcstr("-"), mbfn(0x2, b_sub));
-    tbl_assign(scope, mcstr("*"), mbfn(0x2, b_mul));
-    tbl_assign(scope, mcstr("~"), mbfn(0x2, b_equals));
-    tbl_assign(scope, mcstr("=="), mbfn(0x2, b_equals));
-    tbl_assign(scope, mcstr("ops"), ops);
-    tbl_assign(scope, mcstr("repr"), mbfn(0x1, b_repr));
-    tbl_assign(scope, mcstr("print"), mbfn(0xf, b_print));
-    tbl_assign(scope, mcstr("test"), mbfn(0x0, b_test));
-    mu_t tbltbl = tbl_create(0);
-    tbl_assign(tbltbl, mcstr("concat"), mbfn(0x3, b_concat));
-    tbl_assign(tbltbl, mcstr("pop"), mbfn(0x2, b_pop));
-    tbl_assign(tbltbl, mcstr("push"), mbfn(0x3, b_push));
-    tbl_assign(scope, mcstr("tbl"), tbltbl);
-    mu_t fntbl = tbl_create(0);
-    tbl_assign(fntbl, mcstr("bind"), mbfn(0xf, b_bind));
-    tbl_assign(fntbl, mcstr("map"), mbfn(0x2, b_map));
-    tbl_assign(fntbl, mcstr("filter"), mbfn(0x2, b_filter));
-    tbl_assign(fntbl, mcstr("reduce"), mbfn(0xf, b_reduce));
-    tbl_assign(scope, mcstr("fn_"), fntbl);
-    tbl_assign(scope, mcstr("concat"), tbl_lookup(tbltbl, mcstr("concat")));
-    tbl_assign(scope, mcstr("pop"), tbl_lookup(tbltbl, mcstr("pop")));
-    tbl_assign(scope, mcstr("push"), tbl_lookup(tbltbl, mcstr("push")));
-    tbl_assign(scope, mcstr("bind"), tbl_lookup(fntbl, mcstr("bind")));
-    tbl_assign(scope, mcstr("map"), tbl_lookup(fntbl, mcstr("map")));
-    tbl_assign(scope, mcstr("filter"), tbl_lookup(fntbl, mcstr("filter")));
-    tbl_assign(scope, mcstr("reduce"), tbl_lookup(fntbl, mcstr("reduce")));
-    tbl_assign(scope, mcstr("iter"), mbfn(0x1, b_iter));
+    mu_t tbltbl = mctbl({
+        { mcstr("concat"), mcfn(0x3, b_concat) },
+        { mcstr("pop"), mcfn(0x2, b_pop) },
+        { mcstr("push"), mcfn(0x3, b_push) },
+    });
+
+    mu_t fntbl = mctbl({
+        { mcstr("bind"), mcfn(0xf, b_bind) },
+        { mcstr("map"), mcfn(0x2, b_map) },
+        { mcstr("filter"), mcfn(0x2, b_filter) },
+        { mcstr("reduce"), mcfn(0xf, b_reduce) },
+    });
+
+    scope = mctbl({
+        { mcstr("+"), mcfn(0x2, b_add) },
+        { mcstr("-"), mcfn(0x2, b_sub) },
+        { mcstr("*"), mcfn(0x2, b_mul) },
+        { mcstr("~"), mcfn(0x2, b_equals) },
+        { mcstr("=="), mcfn(0x2, b_equals) },
+        { mcstr("ops"), ops },
+        { mcstr("repr"), mcfn(0x1, b_repr) },
+        { mcstr("print"), mcfn(0xf, b_print) },
+        { mcstr("test"), mcfn(0x0, b_test) },
+        { mcstr("tbl"), tbltbl },
+        { mcstr("fn_"), fntbl },
+        { mcstr("concat"), tbl_lookup(tbltbl, mcstr("concat")) },
+        { mcstr("pop"), tbl_lookup(tbltbl, mcstr("pop")) },
+        { mcstr("push"), tbl_lookup(tbltbl, mcstr("push")) },
+        { mcstr("bind"), tbl_lookup(fntbl, mcstr("bind")) },
+        { mcstr("map"), tbl_lookup(fntbl, mcstr("map")) },
+        { mcstr("filter"), tbl_lookup(fntbl, mcstr("filter")) },
+        { mcstr("reduce"), tbl_lookup(fntbl, mcstr("reduce")) },
+        { mcstr("iter"), mcfn(0x1, b_iter) }
+    });
 }
 
 static int genargs(int i, int argc, const char **argv) {
     mu_t args = tbl_create(argc-i);
 
     for (uint_t j = 0; j < argc-i; j++) {
-        tbl_insert(args, muint(j), mcstr(argv[i]));
+        tbl_insert(args, muint(j), mzstr(argv[i]));
     }
 
     // TODO use this?
@@ -275,9 +281,10 @@ static int genargs(int i, int argc, const char **argv) {
 
 
 static void execute(const char *input) {
-    struct code *c = parse_fn(mcstr(input));
-    mu_exec(c, tbl_create(c->scope), 0x00, 
-            (mu_t [MU_FRAME]){0});
+    struct code *c = parse_fn(mzstr(input));
+    mu_t frame[MU_FRAME];
+    frame_t rets = mu_exec(c, tbl_create(c->scope), frame);
+    mu_fto(0, rets, frame);
 }
 
 static void load_file(FILE *file) {
@@ -287,7 +294,7 @@ static void load_file(FILE *file) {
     size_t len = fread(buffer, 1, BUFFER_SIZE, file);
 
     if (ferror(file)) {
-        mu_cerr(mcstr("io"), 
+        mu_cerr(mcstr("io"),
                 mcstr("encountered file reading error"));
     }
 
@@ -295,15 +302,16 @@ static void load_file(FILE *file) {
     mu_dealloc(buffer, BUFFER_SIZE);
 
     mu_t s = tbl_extend(c->scope, mu_inc(scope));
-    mu_exec(c, s, 0x00, 
-            (mu_t [MU_FRAME]){0});
+    mu_t frame[MU_FRAME];
+    frame_t rets = mu_exec(c, s, frame);
+    mu_fto(0, rets, frame);
 }
 
 static void load(const char *name) {
     FILE *file;
 
     if (!(file = fopen(name, "r"))) {
-        mu_cerr(mcstr("io"), 
+        mu_cerr(mcstr("io"),
                 mcstr("could not open file"));
     }
 
@@ -318,12 +326,13 @@ static mu_noreturn interpret() {
     while (1) {
         len_t len = prompt(buffer);
         mu_t code = mnstr(buffer, len);
-        
+
         mu_try_begin {
             mu_t frame[MU_FRAME];
             struct code *c = parse_fn(code);
-            mu_exec(c, mu_inc(scope), 0x0f, frame); 
-//    
+            frame_t rets = mu_exec(c, mu_inc(scope), frame);
+            mu_fto(0xf, rets, frame);
+//
 //            mu_try_begin {
 //                f = fn_create_expr(0, code);
 //            } mu_on_err (err) {

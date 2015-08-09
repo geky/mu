@@ -10,7 +10,7 @@
 
 
 // Internally used conversion between mu_t and struct tbl
-mu_inline struct fn *fn_fn(mu_t m) {
+mu_inline struct fn *fromfn(mu_t m) {
     return (struct fn *)(~7 & (uint_t)m);
 }
 
@@ -46,18 +46,18 @@ mu_t mfn(struct code *c, mu_t closure) {
 
 // Called by garbage collector to clean up
 void bfn_destroy(mu_t m) {
-    struct fn *f = fn_fn(m);
+    struct fn *f = fromfn(m);
     ref_dealloc(f, sizeof(struct fn));
 }
 
 void sbfn_destroy(mu_t m) {
-    struct fn *f = fn_fn(m);
+    struct fn *f = fromfn(m);
     mu_dec(f->closure);
     ref_dealloc(f, sizeof(struct fn));
 }
 
 void fn_destroy(mu_t m) {
-    struct fn *f = fn_fn(m);
+    struct fn *f = fromfn(m);
     mu_dec(f->closure);
     code_dec(f->code);
     ref_dealloc(f, sizeof(struct fn));
@@ -70,7 +70,7 @@ void code_destroy(struct code *c) {
     for (uint_t i = 0; i < c->fcount; i++)
         code_dec(c->data[c->icount+i].fns);
 
-    ref_dealloc(c, mu_offset(struct code, data) + 
+    ref_dealloc(c, mu_offset(struct code, data) +
                    c->icount*sizeof(mu_t) +
                    c->fcount*sizeof(struct code *) +
                    c->bcount);
@@ -78,28 +78,46 @@ void code_destroy(struct code *c) {
 
 
 // C interface for calling functions
-void bfn_fcall(mu_t m, frame_t fc, mu_t *frame) {
-    struct fn *f = fn_fn(m);
-    mu_fconvert(f->args, frame, fc >> 4, frame);
-    frame_t rets = f->bfn(frame);
-    mu_fconvert(fc & 0xf, frame, rets, frame);
+frame_t bfn_tcall(mu_t m, frame_t fc, mu_t *frame) {
+    bfn_t *bfn = fromfn(m)->bfn;
+    mu_fto(fromfn(m)->args, fc, frame);
     fn_dec(m);
+
+    return bfn(frame);
+}
+
+frame_t sbfn_tcall(mu_t m, frame_t fc, mu_t *frame) {
+    sbfn_t *sbfn = fromfn(m)->sbfn;
+    mu_t closure = fn_closure(m);
+    mu_fto(fromfn(m)->args, fc, frame);
+    fn_dec(m);
+
+    return sbfn(closure, frame);
+}
+
+frame_t fn_tcall(mu_t m, frame_t fc, mu_t *frame) {
+    struct code *c = fn_code(m);
+    mu_t scope = tbl_extend(c->scope, fn_closure(m));
+    mu_fto(c->args, fc, frame);
+    fn_dec(m);
+
+    return mu_exec(c, scope, frame);
+}
+
+
+void bfn_fcall(mu_t m, frame_t fc, mu_t *frame) {
+    frame_t rets = bfn_tcall(m, fc >> 4, frame);
+    mu_fto(fc & 0xf, rets, frame);
 }
 
 void sbfn_fcall(mu_t m, frame_t fc, mu_t *frame) {
-    struct fn *f = fn_fn(m);
-    mu_fconvert(f->args, frame, fc >> 4, frame);
-    frame_t rets = f->sbfn(f->closure, frame);
-    mu_fconvert(fc & 0xf, frame, rets, frame);
-    fn_dec(m);
+    frame_t rets = sbfn_tcall(m, fc >> 4, frame);
+    mu_fto(fc & 0xf, rets, frame);
 }
 
 void fn_fcall(mu_t m, frame_t fc, mu_t *frame) {
-    struct fn *f = fn_fn(m);
-    struct code *c = code_inc(f->code);
-    mu_t scope = tbl_extend(c->scope, mu_inc(f->closure));
-    fn_dec(m);
-    mu_exec(c, scope, fc, frame);
+    frame_t rets = fn_tcall(m, fc >> 4, frame);
+    mu_fto(fc & 0xf, rets, frame);
 }
 
 
@@ -109,16 +127,14 @@ static frame_t fn_bound(mu_t scope, mu_t *frame) {
     mu_t args = tbl_lookup(scope, muint(1));
 
     frame[0] = tbl_concat(args, frame[0], mnil);
-    mu_fcall(f, 0xff, frame);
-    return 0xf;
+    return mu_tcall(f, 0xf, frame);
 }
 
 mu_t fn_bind(mu_t f, mu_t args) {
-    mu_t scope = tbl_create(2);
-    tbl_insert(scope, muint(0), f);
-    tbl_insert(scope, muint(1), args);
-
-    return msbfn(0xf, fn_bound, scope);
+    return msbfn(0xf, fn_bound, mtbl({
+        { muint(0), f },
+        { muint(1), args }
+    }));
 }
 
 
@@ -147,13 +163,10 @@ static frame_t fn_map_step(mu_t scope, mu_t *frame) {
 }
 
 mu_t fn_map(mu_t f, mu_t m) {
-    mu_t i = mu_iter(m);
-
-    mu_t scope = tbl_create(2);
-    tbl_insert(scope, muint(0), f);
-    tbl_insert(scope, muint(1), i);
-
-    return msbfn(0, fn_map_step, scope);
+    return msbfn(0, fn_map_step, mtbl({
+        { muint(0), f },
+        { muint(1), mu_iter(m) }
+    }));
 }
 
 static frame_t fn_filter_step(mu_t scope, mu_t *frame) {
@@ -181,13 +194,10 @@ static frame_t fn_filter_step(mu_t scope, mu_t *frame) {
 }
 
 mu_t fn_filter(mu_t f, mu_t m) {
-    mu_t i = mu_iter(m);
-
-    mu_t scope = tbl_create(2);
-    tbl_insert(scope, muint(0), f);
-    tbl_insert(scope, muint(1), i);
-
-    return msbfn(0, fn_filter_step, scope);
+    return msbfn(0, fn_filter_step, mtbl({
+        { muint(0), f },
+        { muint(1), mu_iter(m) }
+    }));
 }
 
 mu_t fn_reduce(mu_t f, mu_t m, mu_t inits) {
@@ -220,7 +230,7 @@ mu_t fn_reduce(mu_t f, mu_t m, mu_t inits) {
 
 // Returns a string representation of a function
 mu_t fn_repr(mu_t f) {
-    uint_t bits = (uint_t)fn_fn(f);
+    uint_t bits = (uint_t)fromfn(f);
 
     byte_t *s = mstr_create(5 + 2*sizeof(uint_t));
     memcpy(s, "fn 0x", 5);

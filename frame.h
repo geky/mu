@@ -1,12 +1,11 @@
 /*
- * Variable types and definitions
+ * Frames for passing multiple variables
  */
 
 #ifndef MU_FRAME_H
 #define MU_FRAME_H
 #include "mu.h"
 #include "types.h"
-#include <stdarg.h>
 
 
 // Number of elements that can be stored in a frame.
@@ -20,12 +19,13 @@
 #define MU_FRAME 4
 
 
-// Varargs frame handling
-void mu_toframe(frame_t fc, mu_t *frame, va_list args);
-mu_t mu_fromframe(frame_t fc, mu_t *frame, va_list args);
-
 // Conversion between different frame types
-void mu_fconvert(frame_t dc, mu_t *dframe, frame_t sc, mu_t *sframe);
+void mu_fto(frame_t dc, frame_t sc, mu_t *frame);
+
+// Number of elements in frame
+mu_inline uint_t mu_fcount(frame_t fc) {
+    return (fc == 0xf) ? 1 : fc;
+}
 
 
 #endif

@@ -26,7 +26,7 @@
  * The special register r0 contains the scope of the current function at 
  * all times and is also used for creating unconditional jumps.
  */
-typedef enum op {
+enum op {
 /*  opcode     encoding  operation                  description                         */
     OP_IMM     = 0x3, /* rd = imms[a]               loads immediate                     */
     OP_FN      = 0x4, /* rd = fn(fns[a], r0)        creates new function in the scope   */
@@ -48,7 +48,7 @@ typedef enum op {
     OP_CALL    = 0x2, /* rd..d+b-1 = rd-(rd+1..d+a) performs function call              */
     OP_TCALL   = 0x1, /* return rd-(rd+1..d+a)      performs tail recursive call        */
     OP_RET     = 0x0, /* return rd..d+b-1           returns values                      */
-} op_t;
+};
 
 
 #endif

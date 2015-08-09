@@ -10,10 +10,10 @@
 
 // Definition of Mu's table type
 //
-// Each table is composed of an array of values 
-// with a stride for keys/values. If keys/values 
-// is not stored in the array it is implicitely 
-// stored as a range/offset based on the specified 
+// Each table is composed of an array of values
+// with a stride for keys/values. If keys/values
+// is not stored in the array it is implicitely
+// stored as a range/offset based on the specified
 // offset and length.
 mu_aligned struct tbl {
     ref_t ref;      // reference count
@@ -25,7 +25,6 @@ mu_aligned struct tbl {
     mu_t tail;      // tail chain of tables
     mu_t *array;    // pointer to stored data
 };
-
 
 // Table access functions
 mu_inline len_t tbl_len(mu_t m) {
@@ -40,6 +39,23 @@ mu_inline mu_t tbl_ro(mu_t m) {
 mu_inline bool tbl_isro(mu_t m) {
     return (MU_RTBL^MU_TBL) & (uint_t)m;
 }
+
+// Table creating functions
+mu_t mntbl(uint_t n, mu_t (*pairs)[2]);
+
+#define mtbl(...) ({                            \
+    mu_t _p[][2] = __VA_ARGS__;                 \
+    mntbl(sizeof _p / (2*sizeof(mu_t)), _p);    \
+})
+
+#define mctbl(...) ({                           \
+    static mu_t _m = 0;                         \
+                                                \
+    if (!_m)                                    \
+        _m = tbl_ro(mtbl(__VA_ARGS__));         \
+                                                \
+    _m;                                         \
+})
 
 
 // Table creating functions and macros
@@ -70,8 +86,14 @@ mu_t tbl_concat(mu_t a, mu_t b, mu_t offset);
 mu_t tbl_pop(mu_t a, mu_t i);
 void tbl_push(mu_t a, mu_t v, mu_t i);
 
+
 // Table reference counting
-mu_inline mu_t tbl_inc(mu_t m) { ref_inc(m); return m; }
+mu_inline mu_t tbl_inc(mu_t m) {
+    mu_assert(mu_istbl(m));
+    ref_inc(m);
+    return m;
+}
+
 mu_inline void tbl_dec(mu_t m) {
     mu_assert(mu_istbl(m));
     extern void tbl_destroy(mu_t);

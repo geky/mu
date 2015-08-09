@@ -9,16 +9,16 @@
 
 
 // Internally used conversion between mu_t and struct str
-mu_inline mu_t mstr(struct str *s) {
+mu_inline mu_t tostr(struct str *s) {
     return (mu_t)((uint_t)s + MU_STR);
 }
 
-mu_inline struct str *str_str(mu_t m) {
+mu_inline struct str *fromstr(mu_t m) {
     return (struct str *)((uint_t)m - MU_STR);
 }
 
 // Conversion from mstr's exposed pointer that gets passed around
-mu_inline struct str *str_mstr(byte_t *b) {
+mu_inline struct str *frommstr(byte_t *b) {
     return (struct str *)(b - mu_offset(struct str, data));
 }
 
@@ -59,7 +59,7 @@ static int str_table_find(const byte_t *s, len_t len) {
         }
     }
 
-    // Use inverted values to indicate not found but where to 
+    // Use inverted values to indicate not found but where to
     // insert since 0 is valid in both cases
     return ~min;
 }
@@ -104,10 +104,10 @@ static void str_table_remove(int i) {
 static mu_t str_intern(const byte_t *s, uint_t len) {
     if (len > MU_MAXLEN)
         mu_err_len();
-    
+
     int i = str_table_find(s, len);
     if (i >= 0)
-        return str_inc(mstr(str_table[i]));
+        return str_inc(tostr(str_table[i]));
 
     // create new string and insert
     struct str *ns = ref_alloc(mu_offset(struct str, data) + len);
@@ -115,7 +115,7 @@ static mu_t str_intern(const byte_t *s, uint_t len) {
     ns->len = len;
 
     str_table_insert(~i, ns);
-    return str_inc(mstr(ns));
+    return str_inc(tostr(ns));
 }
 
 void str_destroy(mu_t m) {
@@ -128,7 +128,7 @@ void str_destroy(mu_t m) {
 }
 
 // String creating functions
-mu_t mcstr(const char *s) {
+mu_t mzstr(const char *s) {
     return str_intern((const byte_t *)s, strlen(s));
 }
 
@@ -143,24 +143,24 @@ mu_t mnstr(const byte_t *s, uint_t len) {
 byte_t *mstr_create(uint_t len) {
     if (len > MU_MAXLEN)
         mu_err_len();
-    
+
     struct str *s = ref_alloc(mu_offset(struct str, data) + len);
     s->len = len;
     return s->data;
 }
 
 void mstr_destroy(byte_t *b) {
-    struct str *s = str_mstr(b);
+    struct str *s = frommstr(b);
     ref_dealloc(s, mu_offset(struct str, data) + s->len);
 }
 
 mu_t mstr_intern(byte_t *b, uint_t len) {
     if (len > MU_MAXLEN)
         mu_err_len();
-    
+
     // unfortunately, reusing the mstr struct only
     // works with exact length currently
-    if (str_mstr(b)->len != len) {
+    if (frommstr(b)->len != len) {
         mu_t m = str_intern(b, len);
         mstr_dec(b);
         return m;
@@ -169,30 +169,30 @@ mu_t mstr_intern(byte_t *b, uint_t len) {
     int i = str_table_find(b, len);
     if (i >= 0) {
         mstr_dec(b);
-        return str_inc(mstr(str_table[i]));
+        return str_inc(tostr(str_table[i]));
     }
 
-    struct str *s = str_mstr(b);
+    struct str *s = frommstr(b);
     str_table_insert(~i, s);
-    return str_inc(mstr(s));
+    return str_inc(tostr(s));
 }
 
 // Functions to modify mutable strings
 void mstr_insert(byte_t **b, uint_t *i, byte_t c) {
-    mstr_nconcat(b, i, &c, 1);
+    mstr_ncat(b, i, &c, 1);
 }
 
 void mstr_concat(byte_t **b, uint_t *i, mu_t c) {
-    mstr_nconcat(b, i, str_bytes(c), str_len(c));
+    mstr_ncat(b, i, str_bytes(c), str_len(c));
     mu_dec(c);
 }
 
-void mstr_cconcat(byte_t **b, uint_t *i, const char *c) {
-    mstr_nconcat(b, i, (byte_t *)c, strlen(c));
+void mstr_zcat(byte_t **b, uint_t *i, const char *c) {
+    mstr_ncat(b, i, (byte_t *)c, strlen(c));
 }
 
-void mstr_nconcat(byte_t **b, uint_t *i, const byte_t *c, uint_t len) {
-    uint_t size = str_mstr(*b)->len;
+void mstr_ncat(byte_t **b, uint_t *i, const byte_t *c, uint_t len) {
+    uint_t size = frommstr(*b)->len;
     uint_t nsize = *i + len;
 
     if (size < nsize) {
@@ -210,7 +210,7 @@ void mstr_nconcat(byte_t **b, uint_t *i, const byte_t *c, uint_t len) {
             mu_err_len();
 
         byte_t *nb = mstr_create(size);
-        memcpy(nb, *b, str_mstr(*b)->len);
+        memcpy(nb, *b, frommstr(*b)->len);
         mstr_dec(*b);
         *b = nb;
     }
@@ -232,17 +232,17 @@ mu_t str_repr(mu_t m) {
     for (; pos < end; pos++) {
         if (*pos < ' ' || *pos > '~' ||
             *pos == '\\' || *pos == '\'') {
-            if (*pos == '\\') mstr_cconcat(&s, &len, "\\\\");
-            else if (*pos == '\'') mstr_cconcat(&s, &len, "\\'");
-            else if (*pos == '\a') mstr_cconcat(&s, &len, "\\a");
-            else if (*pos == '\b') mstr_cconcat(&s, &len, "\\b");
-            else if (*pos == '\f') mstr_cconcat(&s, &len, "\\f");
-            else if (*pos == '\n') mstr_cconcat(&s, &len, "\\n");
-            else if (*pos == '\r') mstr_cconcat(&s, &len, "\\r");
-            else if (*pos == '\t') mstr_cconcat(&s, &len, "\\t");
-            else if (*pos == '\v') mstr_cconcat(&s, &len, "\\v");
-            else if (*pos == '\0') mstr_cconcat(&s, &len, "\\0");
-            else mstr_nconcat(&s, &len, (byte_t[]){
+            if (*pos == '\\') mstr_zcat(&s, &len, "\\\\");
+            else if (*pos == '\'') mstr_zcat(&s, &len, "\\'");
+            else if (*pos == '\a') mstr_zcat(&s, &len, "\\a");
+            else if (*pos == '\b') mstr_zcat(&s, &len, "\\b");
+            else if (*pos == '\f') mstr_zcat(&s, &len, "\\f");
+            else if (*pos == '\n') mstr_zcat(&s, &len, "\\n");
+            else if (*pos == '\r') mstr_zcat(&s, &len, "\\r");
+            else if (*pos == '\t') mstr_zcat(&s, &len, "\\t");
+            else if (*pos == '\v') mstr_zcat(&s, &len, "\\v");
+            else if (*pos == '\0') mstr_zcat(&s, &len, "\\0");
+            else mstr_ncat(&s, &len, (byte_t[]){
                     '\\', 'x', mu_toascii(*pos / 16),
                                mu_toascii(*pos % 16)}, 4);
         } else {
@@ -280,10 +280,9 @@ frame_t str_step(mu_t scope, mu_t *frame) {
 }
 
 mu_t str_iter(mu_t s) {
-    mu_t scope = tbl_create(2);
-    tbl_insert(scope, muint(0), s);
-    tbl_insert(scope, muint(1), muint(0));
-
-    return msbfn(0x00, str_step, scope);
+    return msbfn(0x00, str_step, mtbl({
+        { muint(0), s },
+        { muint(1), muint(0) }
+    }));
 }
 

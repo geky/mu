@@ -1,4 +1,4 @@
-/* 
+/*
  *  Memory management
  */
 
@@ -23,7 +23,7 @@ void mu_dealloc(void *, size_t size);
 
 
 // Garbage collected memory based on reference counting
-// Each block of memory starts with a ref_t reference count. 
+// Each block of memory starts with a ref_t reference count.
 // Deallocated immediately when ref hits zero.
 // A reference count of zero indicates a constant variable
 // which could be statically allocated. This nicely handles

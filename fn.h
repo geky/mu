@@ -13,7 +13,7 @@
 typedef frame_t bfn_t(mu_t *frame);
 typedef frame_t sbfn_t(mu_t closure, mu_t *frame);
 
-// Definition of code structure used to represent the 
+// Definition of code structure used to represent the
 // executable component of Mu functions.
 mu_aligned struct code {
     ref_t ref;      // reference count
@@ -50,14 +50,14 @@ mu_inline void *code_bcode(struct code *c) {
 mu_inline struct code *code_inc(struct code *c) { ref_inc(c); return c; }
 mu_inline void code_dec(struct code *c) {
     extern void code_destroy(struct code *);
-    if (ref_dec(c)) code_destroy(c); 
+    if (ref_dec(c)) code_destroy(c);
 }
 
 
 // Definition of the function type
 //
 // Functions are stored as function pointers paired with closures.
-// Additionally several flags are defined to specify how the 
+// Additionally several flags are defined to specify how the
 // function should be called.
 mu_aligned struct fn {
     ref_t ref;    // reference count
@@ -82,23 +82,24 @@ mu_inline mu_t fn_closure(mu_t m) {
     return mu_inc(((struct fn *)((uint_t)m - MU_FN))->closure);
 }
 
-
 // C Function creating functions
 mu_t mfn(struct code *c, mu_t closure);
 mu_t mbfn(frame_t args, bfn_t *bfn);
 mu_t msbfn(frame_t args, sbfn_t *sbfn, mu_t closure);
 
-
-// Function reference counting
-mu_inline mu_t fn_inc(mu_t m) { ref_inc(m); return m; }
-mu_inline void fn_dec(mu_t m) { 
-    mu_assert(mu_isfn(m));
-    extern void (*const mu_destroy_table[6])(mu_t);
-    if (ref_dec(m)) mu_destroy_table[mu_type(m)-2](m); 
-}
+#define mcfn(args, bfn) ({                      \
+    static const struct fn _c =                 \
+        {0, args, MU_BFN - MU_FN, 0, {bfn}};    \
+                                                \
+    (mu_t)((uint_t)&_c + MU_BFN);               \
+})
 
 
 // Function calls
+frame_t fn_tcall(mu_t f, frame_t fc, mu_t *frame);
+frame_t bfn_tcall(mu_t f, frame_t fc, mu_t *frame);
+frame_t sbfn_tcall(mu_t f, frame_t fc, mu_t *frame);
+
 void fn_fcall(mu_t f, frame_t fc, mu_t *frame);
 void bfn_fcall(mu_t f, frame_t fc, mu_t *frame);
 void sbfn_fcall(mu_t f, frame_t fc, mu_t *frame);
@@ -109,6 +110,19 @@ mu_t fn_map(mu_t f, mu_t m);
 mu_t fn_filter(mu_t f, mu_t m);
 mu_t fn_reduce(mu_t f, mu_t m, mu_t inits);
 mu_t fn_repr(mu_t f);
+
+
+// Function reference counting
+mu_inline mu_t fn_inc(mu_t m) {
+    mu_assert(mu_isfn(m));
+    ref_inc(m); return m;
+}
+
+mu_inline void fn_dec(mu_t m) {
+    mu_assert(mu_isfn(m));
+    extern void (*const mu_destroy_table[6])(mu_t);
+    if (ref_dec(m)) mu_destroy_table[mu_type(m)-2](m);
+}
 
 
 #endif

@@ -8,19 +8,19 @@
 
 
 // Internally used conversion between mu_t and struct tbl
-mu_inline mu_t mtbl(struct tbl *t) {
+mu_inline mu_t totbl(struct tbl *t) {
     return (mu_t)((uint_t)t + MU_TBL);
 }
 
-mu_inline struct tbl *tbl_rtbl(mu_t m) {
+mu_inline struct tbl *fromrtbl(mu_t m) {
     return (struct tbl *)(~7 & (uint_t)m);
 }
 
-mu_inline struct tbl *tbl_wtbl(mu_t m) {
+mu_inline struct tbl *fromwtbl(mu_t m) {
     if (mu_unlikely(tbl_isro(m)))
         mu_err_readonly();
-    else
-        return (struct tbl *)((uint_t)m - MU_TBL);
+
+    return (struct tbl *)((uint_t)m - MU_TBL);
 }
 
 
@@ -29,20 +29,12 @@ mu_inline uint_t tbl_hash(mu_t m) {
     // Mu garuntees bitwise equality for Mu types, which has the very
     // nice property of being a free hash function.
     //
-    // We remove the lower 3 bits, since they store the type, which 
-    // generally doesn't vary in tables. And we xor the upper and lower 
-    // halves so all bits can affect the range of the length type. 
-    // This is the boundary on the table size so it's really the only 
+    // We remove the lower 3 bits, since they store the type, which
+    // generally doesn't vary in tables. And we xor the upper and lower
+    // halves so all bits can affect the range of the length type.
+    // This is the boundary on the table size so it's really the only
     // part that matters.
     return ((uint_t)m >> (8*sizeof(len_t))) ^ ((uint_t)m >> 3);
-}
-
-// Finds next power of 2 and check for minimum bound
-mu_inline uintq_t tbl_npw2(uint_t s) {
-    if (s < (MU_MINALLOC/sizeof(mu_t)))
-        s = (MU_MINALLOC/sizeof(mu_t));
-
-    return mu_npw2(s);
 }
 
 // Finds capacity based on load factor of 2/3
@@ -50,12 +42,38 @@ mu_inline uint_t tbl_nsize(uint_t s) {
     return s + (s >> 1);
 }
 
+// Finds next power of 2 after checks for minimum bounds
+// and growing capacity based on load factor
+mu_inline uintq_t tbl_npw2(bool linear, uint_t s) {
+    if (!linear)
+        s = tbl_nsize(s);
+
+    if (linear && s < (MU_MINALLOC/sizeof(mu_t)))
+        s = MU_MINALLOC/sizeof(mu_t);
+    else if (!linear && s < (MU_MINALLOC/sizeof(mu_t[2])))
+        s = MU_MINALLOC/sizeof(mu_t[2]);
+
+    return mu_npw2(s);
+}
+
+
+// Table creating functions
+mu_t mntbl(uint_t n, mu_t (*pairs)[2]) {
+    mu_t t = tbl_create(n);
+
+    for (uint_t i = 0; i < n; i++) {
+        tbl_insert(t, pairs[i][0], pairs[i][1]);
+    }
+
+    return t;
+}
+
 
 // Functions for managing tables
 mu_t tbl_create(uint_t len) {
     struct tbl *t = ref_alloc(sizeof(struct tbl));
 
-    t->npw2 = tbl_npw2(len);
+    t->npw2 = tbl_npw2(true, len);
     t->linear = true;
     t->len = 0;
     t->tail = 0;
@@ -64,17 +82,17 @@ mu_t tbl_create(uint_t len) {
     t->array = mu_alloc(size * sizeof(mu_t));
     memset(t->array, 0, size * sizeof(mu_t));
 
-    return mtbl(t);
+    return totbl(t);
 }
 
 mu_t tbl_extend(uint_t len, mu_t tail) {
     mu_t t = tbl_create(len);
-    tbl_rtbl(t)->tail = tail;
+    fromrtbl(t)->tail = tail;
     return t;
 }
 
 void tbl_destroy(mu_t m) {
-    struct tbl *t = tbl_rtbl(m);
+    struct tbl *t = fromrtbl(m);
     int size = (t->linear ? 1 : 2) * (1 << t->npw2);
 
     for (int i = 0; i < size; i++)
@@ -91,7 +109,7 @@ void tbl_destroy(mu_t m) {
 mu_t tbl_lookup(mu_t m, mu_t k) {
     if (!k) return mnil;
 
-    for (struct tbl *t = tbl_rtbl(m); t; t = tbl_rtbl(t->tail)) {
+    for (struct tbl *t = fromrtbl(m); t; t = fromrtbl(t->tail)) {
         uint_t mask = (1 << t->npw2) - 1;
 
         if (t->linear) {
@@ -141,7 +159,7 @@ static void tbl_replace(struct tbl *t, mu_t *dp, mu_t v) {
         t->len--;
         t->nils++;
     }
-        
+
     // We must replace before decrementing in case destructors run
     *dp = v;
     mu_dec(d);
@@ -150,7 +168,7 @@ static void tbl_replace(struct tbl *t, mu_t *dp, mu_t v) {
 // Converts from array to full table
 static void tbl_realize(struct tbl *t) {
     uint_t size = 1 << t->npw2;
-    uintq_t npw2 = tbl_npw2(tbl_nsize(t->len + 1));
+    uintq_t npw2 = tbl_npw2(false, t->len + 1);
     uint_t nsize = 1 << npw2;
     uint_t mask = nsize - 1;
     mu_t *array = mu_alloc(2*nsize * sizeof(mu_t));
@@ -186,7 +204,7 @@ static void tbl_expand(struct tbl *t) {
 
     if (t->linear) {
         if (t->len + 1 > size) {
-            uintq_t npw2 = tbl_npw2(t->len + 1);
+            uintq_t npw2 = tbl_npw2(true, t->len + 1);
             uint_t nsize = 1 << npw2;
             mu_t *array = mu_alloc(nsize * sizeof(mu_t));
             memcpy(array, t->array, size * sizeof(mu_t));
@@ -198,7 +216,7 @@ static void tbl_expand(struct tbl *t) {
         }
     } else {
         if (tbl_nsize(t->len + t->nils + 1) > size) {
-            uintq_t npw2 = tbl_npw2(tbl_nsize(t->len + 1));
+            uintq_t npw2 = tbl_npw2(false, t->len + 1);
             uint_t nsize = 1 << npw2;
             uint_t mask = nsize - 1;
             mu_t *array = mu_alloc(2*nsize * sizeof(mu_t));
@@ -239,7 +257,7 @@ void tbl_insert(mu_t m, mu_t k, mu_t v) {
         return;
     }
 
-    struct tbl *t = tbl_wtbl(m);
+    struct tbl *t = fromwtbl(m);
     if (v)
         tbl_expand(t);
 
@@ -286,9 +304,9 @@ void tbl_assign(mu_t m, mu_t k, mu_t v) {
     mu_t head = m;
 
     for (struct tbl *t; mu_type(m) == MU_TBL; m = t->tail) {
-        t = tbl_rtbl(m);
+        t = fromrtbl(m);
         uint_t mask = (1 << t->npw2) - 1;
-        
+
         if (t->linear) {
             uint_t i = num_uint(k) & mask;
 
@@ -320,7 +338,7 @@ void tbl_assign(mu_t m, mu_t k, mu_t v) {
 
 // Performs iteration on a table
 bool tbl_next(mu_t m, uint_t *ip, mu_t *kp, mu_t *vp) {
-    struct tbl *t = tbl_rtbl(m);
+    struct tbl *t = fromrtbl(m);
     uint_t i = *ip;
     mu_t k, v;
 
@@ -340,7 +358,7 @@ bool tbl_next(mu_t m, uint_t *ip, mu_t *kp, mu_t *vp) {
     *kp = mu_inc(k);
     *vp = mu_inc(v);
     return true;
-}           
+}
 
 static frame_t tbl_step(mu_t scope, mu_t *frame) {
     mu_t t = tbl_lookup(scope, muint(0));
@@ -352,11 +370,10 @@ static frame_t tbl_step(mu_t scope, mu_t *frame) {
 }
 
 mu_t tbl_iter(mu_t t) {
-    mu_t scope = tbl_create(2);
-    tbl_insert(scope, muint(0), t);
-    tbl_insert(scope, muint(1), muint(0));
-
-    return msbfn(0x0, tbl_step, scope);
+    return msbfn(0x0, tbl_step, mtbl({
+        { muint(0), t },
+        { muint(1), muint(0) }
+    }));
 }
 
 
@@ -367,9 +384,9 @@ mu_t tbl_repr(mu_t t) {
     uint_t ti = 0;
     mu_t k, v;
 
-    bool linear = tbl_rtbl(t)->linear;
+    bool linear = fromrtbl(t)->linear;
     for (int i = 0; linear && i < tbl_len(t); i++) {
-        if (!tbl_rtbl(t)->array[i])
+        if (!fromrtbl(t)->array[i])
             linear = false;
     }
 
@@ -378,13 +395,13 @@ mu_t tbl_repr(mu_t t) {
     while (tbl_next(t, &ti, &k, &v)) {
         if (!linear) {
             mstr_concat(&s, &si, mu_repr(k));
-            mstr_cconcat(&s, &si, ": ");
+            mstr_zcat(&s, &si, ": ");
         } else {
             mu_dec(k);
         }
 
         mstr_concat(&s, &si, mu_repr(v));
-        mstr_cconcat(&s, &si, ", ");
+        mstr_zcat(&s, &si, ", ");
     }
 
     if (tbl_len(t) > 0)
@@ -439,9 +456,9 @@ mu_t tbl_pop(mu_t t, mu_t k) {
 
     uint_t i = num_uint(k);
     if (k == muint(i)) {
-        if (tbl_rtbl(t)->linear) {
-            uint_t size = 1 << tbl_rtbl(t)->npw2;
-            mu_t *array = tbl_rtbl(t)->array;
+        if (fromrtbl(t)->linear) {
+            uint_t size = 1 << fromrtbl(t)->npw2;
+            mu_t *array = fromrtbl(t)->array;
 
             memmove(&array[i], &array[i+1], (size - (i+1)) * sizeof(mu_t));
             array[size-1] = mnil;
@@ -466,7 +483,7 @@ mu_t tbl_pop(mu_t t, mu_t k) {
     }
 
     return ret;
-}            
+}
 
 void tbl_push(mu_t t, mu_t v, mu_t k) {
     if (!k)
@@ -474,10 +491,10 @@ void tbl_push(mu_t t, mu_t v, mu_t k) {
 
     uint_t i = num_uint(k);
     if (k == muint(i)) {
-        if (tbl_rtbl(t)->linear) {
-            tbl_expand(tbl_rtbl(t));
-            uint_t size = 1 << tbl_rtbl(t)->npw2;
-            mu_t *array = tbl_rtbl(t)->array;
+        if (fromrtbl(t)->linear) {
+            tbl_expand(fromrtbl(t));
+            uint_t size = 1 << fromrtbl(t)->npw2;
+            mu_t *array = fromrtbl(t)->array;
 
             memmove(&array[i+1], &array[i], (size - i) * sizeof(mu_t));
         } else {
