@@ -10,26 +10,20 @@
 
 
 // Smallest addressable unit
-typedef unsigned char byte_t;
-#define MU_MAXBYTE UCHAR_MAX
+typedef unsigned char mbyte_t;
 
 // Length type for strings/tables
-typedef uinth_t len_t;
-#define MU_MAXLEN MU_MAXUINTH
-
-// Type of hash results
-typedef uint_t hash_t;
-#define MU_MAXHASH MU_MAXUINT
+typedef muinth_t mlen_t;
 
 // Type for specifying frame counts
-typedef uint8_t frame_t;
+typedef uint8_t mc_t;
 
 
 // Three bit type specifier located in lowest bits of each variable
 // 3b00x indicates type is not reference counted
 // 3b100 is the only mutable variable
 // 3b11x are currently reserved
-enum mu_type {
+enum mtype {
     MU_NIL  = 0, // nil
     MU_NUM  = 1, // number
     MU_STR  = 4, // string
@@ -50,8 +44,8 @@ typedef struct mu *mu_t;
 #define mnil  ((mu_t)0)
 
 // Access to type and general components
-mu_inline enum mu_type mu_type(mu_t m) { return 7 & (uint_t)m; }
-mu_inline ref_t mu_ref(mu_t m) { return *(ref_t *)(~7 & (uint_t)m); }
+mu_inline enum mtype mu_type(mu_t m) { return 7 & (muint_t)m; }
+mu_inline mref_t mu_ref(mu_t m) { return *(mref_t *)(~7 & (muint_t)m); }
 
 // Properties of variables
 mu_inline bool mu_isnil(mu_t m) { return !m; }
@@ -59,7 +53,7 @@ mu_inline bool mu_isnum(mu_t m) { return mu_type(m) == MU_NUM; }
 mu_inline bool mu_isstr(mu_t m) { return mu_type(m) == MU_STR; }
 mu_inline bool mu_isfn(mu_t m)  { return mu_type(m) >= MU_FN;  }
 mu_inline bool mu_istbl(mu_t m) { return (6 & mu_type(m)) == MU_TBL; }
-mu_inline bool mu_isref(mu_t m) { return 6 & (uint_t)m; }
+mu_inline bool mu_isref(mu_t m) { return 6 & (muint_t)m; }
 
 
 // Reference counting
@@ -90,10 +84,10 @@ void mu_insert(mu_t m, mu_t key, mu_t val);
 void mu_assign(mu_t m, mu_t key, mu_t val);
 
 // Function calls performed on variables
-frame_t mu_tcall(mu_t m, frame_t fc, mu_t *frame);
-void mu_fcall(mu_t m, frame_t fc, mu_t *frame);
-mu_t mu_vcall(mu_t m, frame_t fc, va_list args);
-mu_t mu_call(mu_t m, frame_t fc, ...);
+mc_t mu_tcall(mu_t m, mc_t fc, mu_t *frame);
+void mu_fcall(mu_t m, mc_t fc, mu_t *frame);
+mu_t mu_vcall(mu_t m, mc_t fc, va_list args);
+mu_t mu_call(mu_t m, mc_t fc, ...);
 
 
 #endif

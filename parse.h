@@ -20,7 +20,7 @@ struct code *parse_module(mu_t s);
 
 
 // Conversion to/from ascii
-mu_inline uint_t mu_fromascii(byte_t c) {
+mu_inline muint_t mu_fromascii(mbyte_t c) {
     if (c >= '0' && c <= '9')
         return c - '0';
     else if (c >= 'a' && c <= 'f')
@@ -31,7 +31,7 @@ mu_inline uint_t mu_fromascii(byte_t c) {
         return -1;
 }
 
-mu_inline byte_t mu_toascii(byte_t c) {
+mu_inline mbyte_t mu_toascii(muint_t c) {
     if (c < 10)
         return '0' + c;
     else

@@ -17,8 +17,8 @@ void *mu_alloc(size_t size) {
     if (m == 0)
         mu_err_nomem();
 
-    mu_assert(sizeof m == sizeof(uint_t)); // garuntee address width
-    mu_assert((7 & (uint_t)m) == 0); // garuntee alignment
+    mu_assert(sizeof m == sizeof(muint_t)); // garuntee address width
+    mu_assert((7 & (muint_t)m) == 0); // garuntee alignment
 
     return m;
 }
@@ -31,8 +31,8 @@ void *mu_realloc(void *m, size_t prev, size_t size) {
     if (m == 0)
         mu_err_nomem();
 
-    mu_assert(sizeof m == sizeof(uint_t)); // garuntee address width
-    mu_assert((7 & (uint_t)m) == 0); // garuntee alignment
+    mu_assert(sizeof m == sizeof(muint_t)); // garuntee address width
+    mu_assert((7 & (muint_t)m) == 0); // garuntee alignment
 
     return m;
 }

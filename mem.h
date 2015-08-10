@@ -8,10 +8,10 @@
 
 
 // Reference type as word type aligned to 8 bytes
-typedef mu_aligned uinth_t ref_t;
+typedef mu_aligned muinth_t mref_t;
 
 // Smallest allocatable size
-#define MU_MINALLOC (4*sizeof(void*))
+#define MU_MINALLOC (4*sizeof(muint_t))
 
 
 // Manual memory management
@@ -30,25 +30,25 @@ void mu_dealloc(void *, size_t size);
 // overflow allowing a small reference count size.
 // It is up to the user to avoid cyclic dependencies.
 mu_inline void *ref_alloc(size_t size) {
-    ref_t *ref = mu_alloc(size);
+    mref_t *ref = mu_alloc(size);
     *ref = 1;
 
     return ref;
 }
 
 mu_inline void ref_dealloc(void *m, size_t size) {
-    mu_dealloc((ref_t *)(~7 & (uint_t)m), size);
+    mu_dealloc((mref_t *)(~7 & (muint_t)m), size);
 }
 
 mu_inline void ref_inc(void *m) {
-    ref_t *ref = (ref_t *)(~7 & (uint_t)m);
+    mref_t *ref = (mref_t *)(~7 & (muint_t)m);
 
     if (*ref != 0)
         (*ref)++;
 }
 
 mu_inline bool ref_dec(void *m) {
-    ref_t *ref = (ref_t *)(~7 & (uint_t)m);
+    mref_t *ref = (mref_t *)(~7 & (muint_t)m);
 
     if (*ref != 0) {
         (*ref)--;

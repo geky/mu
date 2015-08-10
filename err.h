@@ -19,6 +19,7 @@ struct eh {
 
 struct eh *eh_get(void);
 void eh_set(struct eh *eh);
+mu_t err_get(void);
 
 void eh_handle(struct eh *eh, mu_t err);
 
@@ -32,13 +33,18 @@ mu_noreturn mu_err_readonly(void);
 mu_noreturn mu_err_parse(void);
 mu_noreturn mu_err_undefined(void);
 
+mu_inline void mu_check_len(muint_t len) {
+    if (len > (mlen_t)-1)
+        mu_err_len();
+}
+
 
 #define mu_try_begin {                      \
     struct eh _eh = {eh_get(), 0};          \
-    mu_t _err = (mu_t)setjmp(_eh.env);      \
+    int _err = setjmp(_eh.env);             \
                                             \
     if (mu_unlikely(_err))                  \
-        eh_handle(&_eh, _err);              \
+        eh_handle(&_eh, err_get());         \
                                             \
     if (mu_likely(!_err)) {                 \
         eh_set(&_eh);                       \
@@ -46,7 +52,7 @@ mu_noreturn mu_err_undefined(void);
 #define mu_on_err(err)                      \
 }                                           \
     } else {                                \
-        mu_unused mu_t err = _err;          \
+        mu_unused mu_t err = err_get();     \
         eh_set(_eh.prev);                   \
 {
 #define mu_try_end                          \

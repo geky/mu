@@ -6,9 +6,11 @@
 
 
 static mu_thread struct eh *global_eh = 0;
+static mu_thread mu_t global_err = 0;
 
 struct eh *eh_get(void) { return global_eh; }
 void eh_set(struct eh *eh) { global_eh = eh; }
+mu_t err_get(void) { return global_err; }
 
 
 void eh_handle(struct eh *eh, mu_t err) {
@@ -29,6 +31,7 @@ void eh_handle(struct eh *eh, mu_t err) {
 
 mu_noreturn mu_err(mu_t err) {
     struct eh *eh = eh_get();
+    global_err = err;
 
     // If no error handler has been registered, we
     // just abort here
@@ -37,7 +40,7 @@ mu_noreturn mu_err(mu_t err) {
 
     // Just jump to the seteh call. We'll let it take care
     // of handling things there since it has more stack space
-    longjmp(eh->env, (int)err);
+    longjmp(eh->env, 1);
 }
 
 mu_noreturn mu_cerr(mu_t type, mu_t reason) {

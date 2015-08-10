@@ -9,23 +9,23 @@
 
 // Internally used conversion between mu_t and struct tbl
 mu_inline mu_t totbl(struct tbl *t) {
-    return (mu_t)((uint_t)t + MU_TBL);
+    return (mu_t)((muint_t)t + MU_TBL);
 }
 
 mu_inline struct tbl *fromrtbl(mu_t m) {
-    return (struct tbl *)(~7 & (uint_t)m);
+    return (struct tbl *)(~7 & (muint_t)m);
 }
 
 mu_inline struct tbl *fromwtbl(mu_t m) {
     if (mu_unlikely(tbl_isro(m)))
         mu_err_readonly();
 
-    return (struct tbl *)((uint_t)m - MU_TBL);
+    return (struct tbl *)((muint_t)m - MU_TBL);
 }
 
 
 // General purpose hash for mu types
-mu_inline uint_t tbl_hash(mu_t m) {
+mu_inline muint_t tbl_hash(mu_t m) {
     // Mu garuntees bitwise equality for Mu types, which has the very
     // nice property of being a free hash function.
     //
@@ -34,17 +34,17 @@ mu_inline uint_t tbl_hash(mu_t m) {
     // halves so all bits can affect the range of the length type.
     // This is the boundary on the table size so it's really the only
     // part that matters.
-    return ((uint_t)m >> (8*sizeof(len_t))) ^ ((uint_t)m >> 3);
+    return ((muint_t)m >> (8*sizeof(mlen_t))) ^ ((muint_t)m >> 3);
 }
 
 // Finds capacity based on load factor of 2/3
-mu_inline uint_t tbl_nsize(uint_t s) {
+mu_inline muint_t tbl_nsize(muint_t s) {
     return s + (s >> 1);
 }
 
 // Finds next power of 2 after checks for minimum bounds
 // and growing capacity based on load factor
-mu_inline uintq_t tbl_npw2(bool linear, uint_t s) {
+mu_inline muintq_t tbl_npw2(bool linear, muint_t s) {
     if (!linear)
         s = tbl_nsize(s);
 
@@ -58,10 +58,10 @@ mu_inline uintq_t tbl_npw2(bool linear, uint_t s) {
 
 
 // Table creating functions
-mu_t mntbl(uint_t n, mu_t (*pairs)[2]) {
+mu_t mntbl(muint_t n, mu_t (*pairs)[2]) {
     mu_t t = tbl_create(n);
 
-    for (uint_t i = 0; i < n; i++) {
+    for (muint_t i = 0; i < n; i++) {
         tbl_insert(t, pairs[i][0], pairs[i][1]);
     }
 
@@ -70,7 +70,7 @@ mu_t mntbl(uint_t n, mu_t (*pairs)[2]) {
 
 
 // Functions for managing tables
-mu_t tbl_create(uint_t len) {
+mu_t tbl_create(muint_t len) {
     struct tbl *t = ref_alloc(sizeof(struct tbl));
 
     t->npw2 = tbl_npw2(true, len);
@@ -78,14 +78,14 @@ mu_t tbl_create(uint_t len) {
     t->len = 0;
     t->tail = 0;
 
-    int size = 1 << t->npw2;
+    muint_t size = 1 << t->npw2;
     t->array = mu_alloc(size * sizeof(mu_t));
     memset(t->array, 0, size * sizeof(mu_t));
 
     return totbl(t);
 }
 
-mu_t tbl_extend(uint_t len, mu_t tail) {
+mu_t tbl_extend(muint_t len, mu_t tail) {
     mu_t t = tbl_create(len);
     fromrtbl(t)->tail = tail;
     return t;
@@ -93,9 +93,9 @@ mu_t tbl_extend(uint_t len, mu_t tail) {
 
 void tbl_destroy(mu_t m) {
     struct tbl *t = fromrtbl(m);
-    int size = (t->linear ? 1 : 2) * (1 << t->npw2);
+    muint_t size = (t->linear ? 1 : 2) * (1 << t->npw2);
 
-    for (int i = 0; i < size; i++)
+    for (muint_t i = 0; i < size; i++)
         mu_dec(t->array[i]);
 
     mu_dealloc(t->array, size * sizeof(mu_t));
@@ -110,16 +110,16 @@ mu_t tbl_lookup(mu_t m, mu_t k) {
     if (!k) return mnil;
 
     for (struct tbl *t = fromrtbl(m); t; t = fromrtbl(t->tail)) {
-        uint_t mask = (1 << t->npw2) - 1;
+        muint_t mask = (1 << t->npw2) - 1;
 
         if (t->linear) {
-            uint_t i = num_uint(k) & mask;
+            muint_t i = num_uint(k) & mask;
 
             if (k == muint(i))
                 return mu_inc(t->array[i]);
 
         } else {
-            for (uint_t i = tbl_hash(k);; i++) {
+            for (muint_t i = tbl_hash(k);; i++) {
                 mu_t *p = &t->array[2*(i & mask)];
 
                 if (!p[0] || (k == p[0] && !p[1])) {
@@ -139,9 +139,7 @@ mu_t tbl_lookup(mu_t m, mu_t k) {
 
 // Modify table info according to placement/replacement
 static void tbl_place(struct tbl *t, mu_t *dp, mu_t v) {
-    if (t->len == MU_MAXLEN)
-        mu_err_len();
-
+    mu_check_len(1 + (muint_t)t->len);
     t->len++;
     *dp = v;
 }
@@ -150,9 +148,7 @@ static void tbl_replace(struct tbl *t, mu_t *dp, mu_t v) {
     mu_t d = *dp;
 
     if (v && !d) {
-        if (t->len == MU_MAXLEN)
-            mu_err_len();
-
+        mu_check_len(1 + (muint_t)t->len);
         t->len++;
         t->nils--;
     } else if (!v && d) {
@@ -167,20 +163,20 @@ static void tbl_replace(struct tbl *t, mu_t *dp, mu_t v) {
 
 // Converts from array to full table
 static void tbl_realize(struct tbl *t) {
-    uint_t size = 1 << t->npw2;
-    uintq_t npw2 = tbl_npw2(false, t->len + 1);
-    uint_t nsize = 1 << npw2;
-    uint_t mask = nsize - 1;
+    muint_t size = 1 << t->npw2;
+    muintq_t npw2 = tbl_npw2(false, t->len + 1);
+    muint_t nsize = 1 << npw2;
+    muint_t mask = nsize - 1;
     mu_t *array = mu_alloc(2*nsize * sizeof(mu_t));
     memset(array, 0, 2*nsize * sizeof(mu_t));
 
-    for (uint_t j = 0; j < size; j++) {
+    for (muint_t j = 0; j < size; j++) {
         mu_t k = muint(j);
         mu_t v = t->array[j];
 
         if (!v) continue;
 
-        for (uint_t i = tbl_hash(k);; i++) {
+        for (muint_t i = tbl_hash(k);; i++) {
             mu_t *p = &array[2*(i & mask)];
 
             if (!p[0]) {
@@ -200,12 +196,12 @@ static void tbl_realize(struct tbl *t) {
 
 // Make room for an additional element
 static void tbl_expand(struct tbl *t) {
-    uint_t size = 1 << t->npw2;
+    muint_t size = 1 << t->npw2;
 
     if (t->linear) {
         if (t->len + 1 > size) {
-            uintq_t npw2 = tbl_npw2(true, t->len + 1);
-            uint_t nsize = 1 << npw2;
+            muintq_t npw2 = tbl_npw2(true, t->len + 1);
+            muint_t nsize = 1 << npw2;
             mu_t *array = mu_alloc(nsize * sizeof(mu_t));
             memcpy(array, t->array, size * sizeof(mu_t));
             memset(array+size, 0, (nsize-size) * sizeof(mu_t));
@@ -216,20 +212,20 @@ static void tbl_expand(struct tbl *t) {
         }
     } else {
         if (tbl_nsize(t->len + t->nils + 1) > size) {
-            uintq_t npw2 = tbl_npw2(false, t->len + 1);
-            uint_t nsize = 1 << npw2;
-            uint_t mask = nsize - 1;
+            muintq_t npw2 = tbl_npw2(false, t->len + 1);
+            muint_t nsize = 1 << npw2;
+            muint_t mask = nsize - 1;
             mu_t *array = mu_alloc(2*nsize * sizeof(mu_t));
             memset(array, 0, 2*nsize * sizeof(mu_t));
 
-            for (uint_t j = 0; j < size; j++) {
+            for (muint_t j = 0; j < size; j++) {
                 mu_t k = t->array[2*j+0];
                 mu_t v = t->array[2*j+1];
 
                 if (!k || !v)
                     continue;
 
-                for (uint_t i = tbl_hash(k);; i++) {
+                for (muint_t i = tbl_hash(k);; i++) {
                     mu_t *p = &array[2*(i & mask)];
 
                     if (!p[0]) {
@@ -261,10 +257,10 @@ void tbl_insert(mu_t m, mu_t k, mu_t v) {
     if (v)
         tbl_expand(t);
 
-    uint_t mask = (1 << t->npw2) - 1;
+    muint_t mask = (1 << t->npw2) - 1;
 
     if (t->linear) {
-        uint_t i = num_uint(k) & mask;
+        muint_t i = num_uint(k) & mask;
 
         if (k == muint(i)) {
             tbl_replace(t, &t->array[i], v);
@@ -274,7 +270,7 @@ void tbl_insert(mu_t m, mu_t k, mu_t v) {
             return tbl_insert(m, k, v);
         }
     } else {
-        for (uint_t i = tbl_hash(k);; i++) {
+        for (muint_t i = tbl_hash(k);; i++) {
             mu_t *p = &t->array[2*(i & mask)];
 
             if (!p[0] && v) {
@@ -305,17 +301,17 @@ void tbl_assign(mu_t m, mu_t k, mu_t v) {
 
     for (struct tbl *t; mu_type(m) == MU_TBL; m = t->tail) {
         t = fromrtbl(m);
-        uint_t mask = (1 << t->npw2) - 1;
+        muint_t mask = (1 << t->npw2) - 1;
 
         if (t->linear) {
-            uint_t i = num_uint(k) & mask;
+            muint_t i = num_uint(k) & mask;
 
             if (k == muint(i) && t->array[i]) {
                 tbl_replace(t, &t->array[i], v);
                 return;
             }
         } else {
-            for (uint_t i = tbl_hash(k);; i++) {
+            for (muint_t i = tbl_hash(k);; i++) {
                 mu_t *p = &t->array[2*(i & mask)];
 
                 if (!p[0] || (k == p[0] && !p[1])) {
@@ -337,9 +333,9 @@ void tbl_assign(mu_t m, mu_t k, mu_t v) {
 
 
 // Performs iteration on a table
-bool tbl_next(mu_t m, uint_t *ip, mu_t *kp, mu_t *vp) {
+bool tbl_next(mu_t m, muint_t *ip, mu_t *kp, mu_t *vp) {
     struct tbl *t = fromrtbl(m);
-    uint_t i = *ip;
+    muint_t i = *ip;
     mu_t k, v;
 
     do {
@@ -360,9 +356,9 @@ bool tbl_next(mu_t m, uint_t *ip, mu_t *kp, mu_t *vp) {
     return true;
 }
 
-static frame_t tbl_step(mu_t scope, mu_t *frame) {
+static mc_t tbl_step(mu_t scope, mu_t *frame) {
     mu_t t = tbl_lookup(scope, muint(0));
-    uint_t i = num_uint(tbl_lookup(scope, muint(1)));
+    muint_t i = num_uint(tbl_lookup(scope, muint(1)));
 
     tbl_next(t, &i, &frame[0], &frame[1]);
     tbl_insert(scope, muint(1), muint(i));
@@ -379,13 +375,13 @@ mu_t tbl_iter(mu_t t) {
 
 // Returns a string representation of the table
 mu_t tbl_repr(mu_t t) {
-    byte_t *s = mstr_create(0);
-    uint_t si = 0;
-    uint_t ti = 0;
+    mbyte_t *s = mstr_create(0);
+    muint_t si = 0;
+    muint_t ti = 0;
     mu_t k, v;
 
     bool linear = fromrtbl(t)->linear;
-    for (int i = 0; linear && i < tbl_len(t); i++) {
+    for (muint_t i = 0; linear && i < tbl_len(t); i++) {
         if (!fromrtbl(t)->array[i])
             linear = false;
     }
@@ -415,13 +411,13 @@ mu_t tbl_repr(mu_t t) {
 
 // Array-like manipulation
 mu_t tbl_concat(mu_t a, mu_t b, mu_t moffset) {
-    uint_t offset = num_uint(moffset);
+    muint_t offset = num_uint(moffset);
     if (moffset != muint(offset)) {
         offset = 0;
 
         mu_t k, v;
-        for (uint_t i = 0; tbl_next(a, &i, &k, &v);) {
-            uint_t n = num_uint(k);
+        for (muint_t i = 0; tbl_next(a, &i, &k, &v);) {
+            muint_t n = num_uint(k);
             if (k == muint(n) && n+1 > offset)
                 offset = n+1;
         }
@@ -430,12 +426,12 @@ mu_t tbl_concat(mu_t a, mu_t b, mu_t moffset) {
     mu_t res = tbl_create(tbl_len(a) + tbl_len(b));
     mu_t k, v;
 
-    for (uint_t i = 0; tbl_next(a, &i, &k, &v);) {
+    for (muint_t i = 0; tbl_next(a, &i, &k, &v);) {
         tbl_insert(res, k, v);
     }
 
-    for (uint_t i = 0; tbl_next(b, &i, &k, &v);) {
-        uint_t n = num_uint(k);
+    for (muint_t i = 0; tbl_next(b, &i, &k, &v);) {
+        muint_t n = num_uint(k);
         if (k == muint(n))
             tbl_insert(res, muint(n+offset), v);
         else
@@ -454,10 +450,10 @@ mu_t tbl_pop(mu_t t, mu_t k) {
     mu_t ret = tbl_lookup(t, mu_inc(k));
     tbl_insert(t, k, mnil);
 
-    uint_t i = num_uint(k);
+    muint_t i = num_uint(k);
     if (k == muint(i)) {
         if (fromrtbl(t)->linear) {
-            uint_t size = 1 << fromrtbl(t)->npw2;
+            muint_t size = 1 << fromrtbl(t)->npw2;
             mu_t *array = fromrtbl(t)->array;
 
             memmove(&array[i], &array[i+1], (size - (i+1)) * sizeof(mu_t));
@@ -466,15 +462,15 @@ mu_t tbl_pop(mu_t t, mu_t k) {
             mu_t temp = tbl_create(tbl_len(t));
             mu_t k, v;
 
-            for (uint_t j = 0; tbl_next(t, &j, &k, &v);) {
-                uint_t n = num_uint(k);
+            for (muint_t j = 0; tbl_next(t, &j, &k, &v);) {
+                muint_t n = num_uint(k);
                 if (k == muint(n) && n > i) {
                     tbl_insert(temp, muint(n-1), v);
                     tbl_insert(t, k, mnil);
                 }
             }
 
-            for (uint_t j = 0; tbl_next(temp, &j, &k, &v);) {
+            for (muint_t j = 0; tbl_next(temp, &j, &k, &v);) {
                 tbl_insert(t, k, v);
             }
 
@@ -489,11 +485,11 @@ void tbl_push(mu_t t, mu_t v, mu_t k) {
     if (!k)
         k = muint(tbl_len(t));
 
-    uint_t i = num_uint(k);
+    muint_t i = num_uint(k);
     if (k == muint(i)) {
         if (fromrtbl(t)->linear) {
             tbl_expand(fromrtbl(t));
-            uint_t size = 1 << fromrtbl(t)->npw2;
+            muint_t size = 1 << fromrtbl(t)->npw2;
             mu_t *array = fromrtbl(t)->array;
 
             memmove(&array[i+1], &array[i], (size - i) * sizeof(mu_t));
@@ -501,15 +497,15 @@ void tbl_push(mu_t t, mu_t v, mu_t k) {
             mu_t temp = tbl_create(tbl_len(t));
             mu_t k, v;
 
-            for (uint_t j = 0; tbl_next(t, &j, &k, &v);) {
-                uint_t n = num_uint(k);
+            for (muint_t j = 0; tbl_next(t, &j, &k, &v);) {
+                muint_t n = num_uint(k);
                 if (k == muint(n) && n >= i) {
                     tbl_insert(temp, muint(n+1), v);
                     tbl_insert(t, k, mnil);
                 }
             }
 
-            for (uint_t j = 0; tbl_next(temp, &j, &k, &v);) {
+            for (muint_t j = 0; tbl_next(temp, &j, &k, &v);) {
                 tbl_insert(t, k, v);
             }
 

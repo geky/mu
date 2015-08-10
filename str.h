@@ -17,63 +17,63 @@
 //
 // Temporary mutable strings can be created and used through the
 // mstr set of functions which store this info internally
-mu_aligned struct str {
-    ref_t ref;     // reference count
-    len_t len;     // length of string
-    byte_t data[]; // string data
+struct str {
+    mref_t ref;     // reference count
+    mlen_t len;     // length of string
+    mbyte_t data[]; // string data
 };
 
 // String access functions
-mu_inline len_t str_len(mu_t m) {
-    return ((struct str *)((uint_t)m - MU_STR))->len;
+mu_inline mlen_t str_len(mu_t m) {
+    return ((struct str *)((muint_t)m - MU_STR))->len;
 }
 
-mu_inline const byte_t *str_bytes(mu_t m) {
-    return ((struct str *)((uint_t)m - MU_STR))->data;
+mu_inline const mbyte_t *str_bytes(mu_t m) {
+    return ((struct str *)((muint_t)m - MU_STR))->data;
 }
 
 // String creation functions
-mu_t mnstr(const byte_t *s, uint_t len);
+mu_t mnstr(const mbyte_t *s, muint_t len);
 mu_t mzstr(const char *s);
 
-#define mcstr(s) ({                         \
-    static mu_t _m = 0;                     \
-    static const struct {                   \
-        ref_t ref; len_t len;               \
-        byte_t data[(sizeof s)-1];          \
-    } _c = {0, (sizeof s)-1, {s}};          \
-                                            \
-    if (!_m)                                \
-        _m = mstr_intern((byte_t *)_c.data, \
-                         (sizeof s)-1);     \
-    _m;                                     \
+#define mcstr(s) ({                             \
+    static mu_t _m = 0;                         \
+    static const struct {                       \
+        mref_t ref; mlen_t len;                 \
+        mbyte_t data[(sizeof s)-1];             \
+    } _c = {0, (sizeof s)-1, {s}};              \
+                                                \
+    if (!_m)                                    \
+        _m = mstr_intern((mbyte_t *)_c.data,    \
+                         (sizeof s)-1);         \
+    _m;                                         \
 })
 
 
 // Functions for handling temporary mutable strings
-byte_t *mstr_create(uint_t len);
-mu_t mstr_intern(byte_t *s, uint_t len);
+mbyte_t *mstr_create(muint_t len);
+mu_t mstr_intern(mbyte_t *s, muint_t len);
 
-void mstr_insert(byte_t **s, uint_t *i, byte_t c);
-void mstr_concat(byte_t **s, uint_t *i, mu_t c);
-void mstr_ncat(byte_t **s, uint_t *i, const byte_t *c, uint_t len);
-void mstr_zcat(byte_t **s, uint_t *i, const char *c);
+void mstr_insert(mbyte_t **s, muint_t *i, mbyte_t c);
+void mstr_concat(mbyte_t **s, muint_t *i, mu_t c);
+void mstr_ncat(mbyte_t **s, muint_t *i, const mbyte_t *c, muint_t len);
+void mstr_zcat(mbyte_t **s, muint_t *i, const char *c);
 
 
 // Reference counting
-mu_inline byte_t *mstr_inc(byte_t *s) {
-    ref_inc(s); return s;
+mu_inline mbyte_t *mstr_inc(mbyte_t *s) {
+    ref_inc(s - mu_offset(struct str, data)); return s;
 }
 
-mu_inline void mstr_dec(byte_t *s) {
-    extern void mstr_destroy(byte_t *);
-    if (ref_dec(s)) mstr_destroy(s);
+mu_inline void mstr_dec(mbyte_t *s) {
+    extern void mstr_destroy(mbyte_t *);
+    if (ref_dec(s - mu_offset(struct str, data))) mstr_destroy(s);
 }
 
 
 // String iteration
 mu_t str_iter(mu_t s);
-bool str_next(mu_t s, uint_t *i, mu_t *c);
+bool str_next(mu_t s, muint_t *i, mu_t *c);
 
 // String representation
 mu_t str_repr(mu_t s);

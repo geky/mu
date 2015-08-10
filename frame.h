@@ -20,11 +20,15 @@
 
 
 // Conversion between different frame types
-void mu_fto(frame_t dc, frame_t sc, mu_t *frame);
+void mu_fto(mc_t dc, mc_t sc, mu_t *frame);
 
 // Number of elements in frame
-mu_inline uint_t mu_fcount(frame_t fc) {
+mu_inline muint_t mu_fcount(mc_t fc) {
     return (fc == 0xf) ? 1 : fc;
+}
+
+mu_inline muint_t mu_fsize(mc_t fc) {
+    return sizeof(mu_t) * mu_fcount(fc);
 }
 
 

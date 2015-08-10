@@ -10,20 +10,36 @@
 #include <stddef.h>
 
 
+// Determine if mu is 32-bit or 64-bit
+#if !defined(MU32) && !defined(MU64)
+#if UINT32_MAX == UINTPTR_MAX
+#define MU32
+#elif UINT64_MAX == UINTPTR_MAX
+#define MU64
+#else
+#error Unspecified word size for Mu
+#endif
+#endif
+
 // Definitions of the basic types used in Mu
 // Default and half-sized integer types
-typedef int8_t   intq_t;
-typedef uint8_t  uintq_t;
-typedef int16_t  inth_t;
-typedef uint16_t uinth_t;
-typedef int32_t  int_t;
-typedef uint32_t uint_t;
-#define MU_MAXINTQ  INT8_MAX
-#define MU_MAXUINTQ UINT8_MAX
-#define MU_MAXINTH  INT16_MAX
-#define MU_MAXUINTH UINT16_MAX
-#define MU_MAXINT   INT32_MAX
-#define MU_MAXUINT  UINT32_MAX
+#ifdef MU32
+typedef int8_t   mintq_t;
+typedef uint8_t  muintq_t;
+typedef int16_t  minth_t;
+typedef uint16_t muinth_t;
+typedef int32_t  mint_t;
+typedef uint32_t muint_t;
+typedef float    mfloat_t;
+#else
+typedef int16_t  mintq_t;
+typedef uint16_t muintq_t;
+typedef int32_t  minth_t;
+typedef uint32_t muinth_t;
+typedef int64_t  mint_t;
+typedef uint64_t muint_t;
+typedef double   mfloat_t;
+#endif
 
 
 // Definition of macro-like inlined functions
@@ -56,7 +72,11 @@ typedef uint32_t uint_t;
 #define mu_unreachable __builtin_unreachable()
 
 // Builtin for the next power of two
-#define mu_npw2(x) (8*sizeof(uint_t) - __builtin_clz((x)-1))
+#if defined(MU32)
+#define mu_npw2(x) (32 - __builtin_clz((x)-1))
+#else
+#define mu_npw2(x) (64 - __builtin_clzl((x)-1))
+#endif
 
 
 // Definition of Mu specific assert function

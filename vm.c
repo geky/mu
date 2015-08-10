@@ -11,23 +11,20 @@
 
 
 // Instruction access functions
-mu_inline enum op op(uint16_t ins) { return (enum op)(ins >> 12); }
-mu_inline uint_t  rd(uint16_t ins) { return 0xf & (ins >> 8); }
-mu_inline uint_t  ra(uint16_t ins) { return 0xf & (ins >> 4); }
-mu_inline uint_t  rb(uint16_t ins) { return 0xf & (ins >> 0); }
-mu_inline uint_t  i(uint16_t ins)  { return (uint8_t)ins; }
-mu_inline int_t   j(uint16_t ins)  { return (int8_t)ins; }
-mu_inline uint_t  f(uint16_t ins)  { return mu_fcount(i(ins)); }
-mu_inline uint_t  fa(uint16_t ins) { return mu_fcount(ra(ins)); }
-mu_inline uint_t  fr(uint16_t ins) { return mu_fcount(rb(ins)); }
+mu_inline enum op      op(uint16_t ins) { return (enum op)(ins >> 12); }
+mu_inline unsigned int rd(uint16_t ins) { return 0xf & (ins >> 8); }
+mu_inline unsigned int ra(uint16_t ins) { return 0xf & (ins >> 4); }
+mu_inline unsigned int rb(uint16_t ins) { return 0xf & (ins >> 0); }
+mu_inline unsigned int i(uint16_t ins)  { return (uint8_t)ins; }
+mu_inline signed int   j(uint16_t ins)  { return (int8_t)ins; }
 
 
 // Encode the specified opcode and return its size
 // Encode the specified opcode and return its size
 // Note: size of the jump opcodes currently can not change based on argument
 // TODO: change asserts to err throwing checks
-void mu_encode(void (*emit)(void *, byte_t), void *p,
-               enum op op, int_t d, int_t a, int_t b) {
+void mu_encode(void (*emit)(void *, mbyte_t), void *p,
+               enum op op, mint_t d, mint_t a, mint_t b) {
     uint16_t ins = 0;
     mu_assert(op <= 0xf);
     mu_assert(d <= 0xf);
@@ -47,16 +44,16 @@ void mu_encode(void (*emit)(void *, byte_t), void *p,
         ins |= b;
     }
 
-    emit(p, ((byte_t *)&ins)[0]);
-    emit(p, ((byte_t *)&ins)[1]);
+    emit(p, ((mbyte_t *)&ins)[0]);
+    emit(p, ((mbyte_t *)&ins)[1]);
 }
 
-int_t mu_patch(void *c, int_t nj) {
+mint_t mu_patch(void *c, mint_t nj) {
     uint16_t ins = *(uint16_t *)c;
     mu_assert(op(ins) >= OP_JFALSE && op(ins) <= OP_JUMP);
     mu_assert(nj-2 <= 0xff && nj-2 >= -0x100);
 
-    int_t pj = (j(ins) << 1)+2;
+    mint_t pj = (j(ins) << 1)+2;
     ins = (ins & 0xff00) | (0xff & ((nj-2) >> 1));
     *(uint16_t *)c = ins;
 
@@ -75,23 +72,29 @@ void mu_dis(struct code *c) {
     const uint16_t *end = pc + c->bcount/2;
     uint16_t ins;
 
-    printf("-- dis 0x%08x --\n", (uint_t)c);
+#ifdef MU32
+#define PTR "%08x"
+#else
+#define PTR "%016lx"
+#endif
+
+    printf("-- dis 0x"PTR" --\n", (muint_t)c);
     printf("regs: %u, scope: %u, args: %x\n",
            c->regs, c->scope, c->args);
 
     if (c->icount > 0) {
         printf("imms:\n");
-        for (uint_t i = 0; i < c->icount; i++) {
+        for (muint_t i = 0; i < c->icount; i++) {
             mu_t repr = mu_repr(mu_inc(imms[i]));
-            printf("%08x (%.*s)\n", (uint_t)imms[i], str_len(repr), str_bytes(repr));
+            printf(PTR" (%.*s)\n", (muint_t)imms[i], str_len(repr), str_bytes(repr));
             str_dec(repr);
         }
     }
 
     if (c->fcount > 0) {
         printf("fns:\n");
-        for (uint_t i = 0; i < c->fcount; i++) {
-            printf("%08x\n", (uint_t)fns[i]);
+        for (muint_t i = 0; i < c->fcount; i++) {
+            printf(PTR"\n", (muint_t)fns[i]);
         }
     }
 
@@ -159,7 +162,7 @@ void mu_dis(struct code *c) {
 
 
 // Execute bytecode
-frame_t mu_exec(struct code *c, mu_t scope, mu_t *frame) {
+mc_t mu_exec(struct code *c, mu_t scope, mu_t *frame) {
     // Allocate temporary variables
     register const uint16_t *pc;
     mu_t *imms;
@@ -175,7 +178,7 @@ reenter:
     {   // Setup the registers and scope
         mu_t regs[c->regs];
         regs[0] = scope;
-        memcpy(&regs[1], frame, mu_fcount(c->args)*sizeof(mu_t));
+        memcpy(&regs[1], frame, mu_fsize(c->args));
 
         // Setup other state
         imms = code_imms(c);
@@ -245,20 +248,20 @@ reenter:
                     break;
 
                 case OP_CALL:
-                    memcpy(frame, &regs[rd(ins)+1], sizeof(mu_t)*fa(ins));
+                    memcpy(frame, &regs[rd(ins)+1], mu_fsize(i(ins) >> 4));
                     mu_fcall(regs[rd(ins)], i(ins), frame);
-                    memcpy(&regs[rd(ins)], frame, sizeof(mu_t)*fr(ins));
+                    memcpy(&regs[rd(ins)], frame, mu_fsize(0xf & i(ins)));
                     break;
 
                 case OP_RET:
-                    memcpy(frame, &regs[rd(ins)], sizeof(mu_t)*fr(ins));
+                    memcpy(frame, &regs[rd(ins)], mu_fsize(i(ins)));
                     tbl_dec(scope);
                     code_dec(c);
                     return i(ins);
 
                 case OP_TCALL:
                     scratch = regs[rd(ins)];
-                    memcpy(frame, &regs[rd(ins)+1], sizeof(mu_t)*fr(ins));
+                    memcpy(frame, &regs[rd(ins)+1], mu_fsize(i(ins)));
                     tbl_dec(scope);
                     code_dec(c);
 

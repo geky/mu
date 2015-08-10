@@ -23,7 +23,7 @@
 #define ERR_START "\033[31m"
 #define ERR_END   "\033[0m"
 
-#define BUFFER_SIZE MU_MAXLEN
+#define BUFFER_SIZE (mlen_t)-1
 
 
 static mu_t scope = 0;
@@ -79,7 +79,7 @@ static void printoutput(mu_t f) {
 //    } tbl_for_end
 
     mu_t k, v;
-    for (uint_t j = 0; tbl_next(f, &j, &k, &v);) {
+    for (muint_t j = 0; tbl_next(f, &j, &k, &v);) {
         if (!mu_isnum(k)) {
             printrepr(k);
             printf(": ");
@@ -94,12 +94,12 @@ static void printoutput(mu_t f) {
     printf("\n");
 }
 
-static len_t prompt(byte_t *input) {
+static mlen_t prompt(mbyte_t *input) {
     printf("%s", PROMPT_A);
-    len_t len = 0;
+    mlen_t len = 0;
 
     while (1) {
-        byte_t c = getchar();
+        mbyte_t c = getchar();
         input[len++] = c;
 
         if (c == '\n')
@@ -109,36 +109,36 @@ static len_t prompt(byte_t *input) {
 
 
 // TODO move this scope declaration somewhere else
-static frame_t b_add(mu_t *frame) {
+static mc_t b_add(mu_t *frame) {
     assert(mu_isnum(frame[0]) && mu_isnum(frame[1]));
-    frame[0] = mdouble(num_double(frame[0]) + num_double(frame[1]));
+    frame[0] = mfloat(num_float(frame[0]) + num_float(frame[1]));
     return 1;
 }
 
-static frame_t b_mul(mu_t *frame) {
+static mc_t b_mul(mu_t *frame) {
     assert(mu_isnum(frame[0]) && mu_isnum(frame[1]));
-    frame[0] = mdouble(num_double(frame[0]) * num_double(frame[1]));
+    frame[0] = mfloat(num_float(frame[0]) * num_float(frame[1]));
     return 1;
 }
 
-static frame_t b_sub(mu_t *frame) {
+static mc_t b_sub(mu_t *frame) {
     if (!frame[1]) {
-        frame[0] = mdouble(-num_double(frame[0]));
+        frame[0] = mfloat(-num_float(frame[0]));
         return 1;
     } else {
         assert(mu_isnum(frame[0]) && mu_isnum(frame[1]));
-        frame[0] = mdouble(num_double(frame[0]) - num_double(frame[1]));
+        frame[0] = mfloat(num_float(frame[0]) - num_float(frame[1]));
         return 1;
     }
 }
 
-static frame_t b_concat(mu_t *frame) {
+static mc_t b_concat(mu_t *frame) {
     assert(mu_istbl(frame[0]) && mu_istbl(frame[1]));
     frame[0] = tbl_concat(frame[0], frame[1], frame[2]);
     return 1;
 }
 
-static frame_t b_pop(mu_t *frame) {
+static mc_t b_pop(mu_t *frame) {
     assert(mu_istbl(frame[0]));
 //    if (!frame[1]) {
 //        frame[1] = muint(tbl_len(frame[0])-1);
@@ -147,7 +147,7 @@ static frame_t b_pop(mu_t *frame) {
     return 1;
 }
 
-static frame_t b_push(mu_t *frame) {
+static mc_t b_push(mu_t *frame) {
     assert(mu_istbl(frame[0]));
     if (!frame[2]) {
         frame[2] = muint(tbl_len(frame[0]));
@@ -156,26 +156,26 @@ static frame_t b_push(mu_t *frame) {
     return 0;
 }
 
-static frame_t b_bind(mu_t *frame) {
+static mc_t b_bind(mu_t *frame) {
     mu_t f = tbl_pop(frame[0], muint(0));
     assert(mu_isfn(f));
     frame[0] = fn_bind(f, frame[0]);
     return 1;
 }
 
-static frame_t b_map(mu_t *frame) {
+static mc_t b_map(mu_t *frame) {
     assert(mu_isfn(frame[0]));
     frame[0] = fn_map(frame[0], frame[1]);
     return 1;
 }
 
-static frame_t b_filter(mu_t *frame) {
+static mc_t b_filter(mu_t *frame) {
     assert(mu_isfn(frame[0]));
     frame[0] = fn_filter(frame[0], frame[1]);
     return 1;
 }
 
-static frame_t b_reduce(mu_t *frame) {
+static mc_t b_reduce(mu_t *frame) {
     mu_t f = tbl_pop(frame[0], muint(0));
     mu_t i = tbl_pop(frame[0], muint(0));
     assert(mu_isfn(f));
@@ -183,22 +183,22 @@ static frame_t b_reduce(mu_t *frame) {
     return 0xf;
 }
 
-static frame_t b_equals(mu_t *frame) {
+static mc_t b_equals(mu_t *frame) {
     bool r = frame[0] == frame[1];
     mu_dec(frame[0]); mu_dec(frame[1]);
     frame[0] = r ? muint(1) : mnil;
     return 1;
 }
 
-static frame_t b_repr(mu_t *frame) {
+static mc_t b_repr(mu_t *frame) {
     mu_t r = mu_repr(frame[0]);
     frame[0] = r;
     return 1;
 }
 
-static frame_t b_print(mu_t *frame) {
+static mc_t b_print(mu_t *frame) {
     mu_t k, v;
-    for (uint_t i = 0; tbl_next(frame[0], &i, &k, &v);) {
+    for (muint_t i = 0; tbl_next(frame[0], &i, &k, &v);) {
         printvar(v);
     }
 
@@ -207,7 +207,7 @@ static frame_t b_print(mu_t *frame) {
     return 0;
 }
 
-static frame_t b_test(mu_t *frame) {
+static mc_t b_test(mu_t *frame) {
     frame[0] = muint(0);
     frame[1] = muint(1);
     frame[2] = muint(2);
@@ -216,20 +216,20 @@ static frame_t b_test(mu_t *frame) {
     return 4;
 }
 
-static frame_t b_iter(mu_t *frame) {
+static mc_t b_iter(mu_t *frame) {
     frame[0] = mu_iter(frame[0]);
     return 1;
 }
 
 
 static void genscope() {
-    mu_t ops = mctbl({
+    mu_t ops = tbl_extend(0, mctbl({
         { mcstr("+"), mcfn(0x2, b_add) },
         { mcstr("*"), mcfn(0x2, b_mul) },
         { mcstr("-"), mcfn(0x2, b_sub) },
         { mcstr("~"), mcfn(0x2, b_equals) },
         { mcstr("=="), mcfn(0x2, b_equals) }
-    });
+    }));
 
     mu_t tbltbl = mctbl({
         { mcstr("concat"), mcfn(0x3, b_concat) },
@@ -244,7 +244,7 @@ static void genscope() {
         { mcstr("reduce"), mcfn(0xf, b_reduce) },
     });
 
-    scope = mctbl({
+    scope = tbl_extend(0, mctbl({
         { mcstr("+"), mcfn(0x2, b_add) },
         { mcstr("-"), mcfn(0x2, b_sub) },
         { mcstr("*"), mcfn(0x2, b_mul) },
@@ -264,13 +264,13 @@ static void genscope() {
         { mcstr("filter"), tbl_lookup(fntbl, mcstr("filter")) },
         { mcstr("reduce"), tbl_lookup(fntbl, mcstr("reduce")) },
         { mcstr("iter"), mcfn(0x1, b_iter) }
-    });
+    }));
 }
 
 static int genargs(int i, int argc, const char **argv) {
     mu_t args = tbl_create(argc-i);
 
-    for (uint_t j = 0; j < argc-i; j++) {
+    for (muint_t j = 0; j < argc-i; j++) {
         tbl_insert(args, muint(j), mzstr(argv[i]));
     }
 
@@ -283,12 +283,12 @@ static int genargs(int i, int argc, const char **argv) {
 static void execute(const char *input) {
     struct code *c = parse_fn(mzstr(input));
     mu_t frame[MU_FRAME];
-    frame_t rets = mu_exec(c, tbl_create(c->scope), frame);
+    mc_t rets = mu_exec(c, tbl_create(c->scope), frame);
     mu_fto(0, rets, frame);
 }
 
 static void load_file(FILE *file) {
-    byte_t *buffer = mu_alloc(BUFFER_SIZE);
+    mbyte_t *buffer = mu_alloc(BUFFER_SIZE);
     size_t off = 0;
 
     size_t len = fread(buffer, 1, BUFFER_SIZE, file);
@@ -303,7 +303,7 @@ static void load_file(FILE *file) {
 
     mu_t s = tbl_extend(c->scope, mu_inc(scope));
     mu_t frame[MU_FRAME];
-    frame_t rets = mu_exec(c, s, frame);
+    mc_t rets = mu_exec(c, s, frame);
     mu_fto(0, rets, frame);
 }
 
@@ -321,16 +321,16 @@ static void load(const char *name) {
 }
 
 static mu_noreturn interpret() {
-    byte_t *buffer = mu_alloc(BUFFER_SIZE);
+    mbyte_t *buffer = mu_alloc(BUFFER_SIZE);
 
     while (1) {
-        len_t len = prompt(buffer);
+        mlen_t len = prompt(buffer);
         mu_t code = mnstr(buffer, len);
 
         mu_try_begin {
             mu_t frame[MU_FRAME];
             struct code *c = parse_fn(code);
-            frame_t rets = mu_exec(c, mu_inc(scope), frame);
+            mc_t rets = mu_exec(c, mu_inc(scope), frame);
             mu_fto(0xf, rets, frame);
 //
 //            mu_try_begin {
@@ -382,7 +382,7 @@ static void usage(const char *name) {
 
 static int options(int i, int argc, const char **argv) {
     while (i < argc) {
-        uint_t len = strlen(argv[i]);
+        muint_t len = strlen(argv[i]);
 
         if (argv[i][0] != '-') {
             return i;

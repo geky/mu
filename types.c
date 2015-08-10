@@ -88,8 +88,8 @@ void mu_assign(mu_t m, mu_t k, mu_t v) {
 }
 
 // Function calls performed on variables
-static frame_t no_tcall(mu_t m, frame_t fc, mu_t *f) { mu_err_undefined(); }
-static frame_t tbl_tcall(mu_t m, frame_t fc, mu_t *frame) {
+static mc_t no_tcall(mu_t m, mc_t fc, mu_t *f) { mu_err_undefined(); }
+static mc_t tbl_tcall(mu_t m, mc_t fc, mu_t *frame) {
     mu_t call_hook = tbl_lookup(m, mcstr("call"));
 
     if (call_hook)
@@ -97,8 +97,8 @@ static frame_t tbl_tcall(mu_t m, frame_t fc, mu_t *frame) {
     else
         return no_tcall(m, fc, frame);
 }
-frame_t mu_tcall(mu_t m, frame_t fc, mu_t *frame) {
-    frame_t (*const mu_tcall_table[8])(mu_t, frame_t, mu_t *) = {
+mc_t mu_tcall(mu_t m, mc_t fc, mu_t *frame) {
+    mc_t (*const mu_tcall_table[8])(mu_t, mc_t, mu_t *) = {
         no_tcall,  no_tcall,
         tbl_tcall, tbl_tcall,
         no_tcall,  fn_tcall,
@@ -108,25 +108,26 @@ frame_t mu_tcall(mu_t m, frame_t fc, mu_t *frame) {
     return mu_tcall_table[mu_type(m)](m, fc, frame);
 }
 
-void mu_fcall(mu_t m, frame_t fc, mu_t *frame) {
-    mu_fto(0xf & fc, mu_tcall(m, fc >> 4, frame), frame);
+void mu_fcall(mu_t m, mc_t fc, mu_t *frame) {
+    mc_t rets = mu_tcall(m, fc >> 4, frame);
+    mu_fto(0xf & fc, rets, frame);
 }
 
-mu_t mu_vcall(mu_t m, frame_t fc, va_list args) {
+mu_t mu_vcall(mu_t m, mc_t fc, va_list args) {
     mu_t frame[MU_FRAME];
 
-    for (uint_t i = 0; i < mu_fcount(0xf & fc); i++)
+    for (muint_t i = 0; i < mu_fcount(0xf & fc); i++)
         frame[i] = va_arg(args, mu_t);
 
     mu_fcall(m, fc, frame);
 
-    for (uint_t i = 1; i < mu_fcount(fc >> 4); i++)
+    for (muint_t i = 1; i < mu_fcount(fc >> 4); i++)
         *va_arg(args, mu_t *) = frame[i];
 
     return (fc >> 4) ? *frame : mnil;
 }
 
-mu_t mu_call(mu_t m, frame_t fc, ...) {
+mu_t mu_call(mu_t m, mc_t fc, ...) {
     va_list args;
     va_start(args, fc);
     mu_t ret = mu_vcall(m, fc, args);

@@ -11,27 +11,27 @@
 
 // Internally used conversion between mu_t and struct tbl
 mu_inline struct fn *fromfn(mu_t m) {
-    return (struct fn *)(~7 & (uint_t)m);
+    return (struct fn *)(~7 & (muint_t)m);
 }
 
 
 // C Function creating functions and macros
-mu_t mbfn(frame_t args, bfn_t *bfn) {
+mu_t mbfn(mc_t args, mbfn_t *bfn) {
     struct fn *f = ref_alloc(sizeof(struct fn));
     f->args = args;
     f->type = MU_BFN - MU_FN;
     f->closure = mnil;
     f->bfn = bfn;
-    return (mu_t)((uint_t)f + MU_BFN);
+    return (mu_t)((muint_t)f + MU_BFN);
 }
 
-mu_t msbfn(frame_t args, sbfn_t *sbfn, mu_t closure) {
+mu_t msbfn(mc_t args, msbfn_t *sbfn, mu_t closure) {
     struct fn *f = ref_alloc(sizeof(struct fn));
     f->args = args;
     f->type = MU_SBFN - MU_FN;
     f->closure = closure;
     f->sbfn = sbfn;
-    return (mu_t)((uint_t)f + MU_SBFN);
+    return (mu_t)((muint_t)f + MU_SBFN);
 }
 
 mu_t mfn(struct code *c, mu_t closure) {
@@ -40,7 +40,7 @@ mu_t mfn(struct code *c, mu_t closure) {
     f->type = MU_FN - MU_FN;
     f->closure = closure;
     f->code = c;
-    return (mu_t)((uint_t)f + MU_FN);
+    return (mu_t)((muint_t)f + MU_FN);
 }
 
 
@@ -64,10 +64,10 @@ void fn_destroy(mu_t m) {
 }
 
 void code_destroy(struct code *c) {
-    for (uint_t i = 0; i < c->icount; i++)
+    for (muint_t i = 0; i < c->icount; i++)
         mu_dec(c->data[i].imms);
 
-    for (uint_t i = 0; i < c->fcount; i++)
+    for (muint_t i = 0; i < c->fcount; i++)
         code_dec(c->data[c->icount+i].fns);
 
     ref_dealloc(c, mu_offset(struct code, data) +
@@ -78,16 +78,16 @@ void code_destroy(struct code *c) {
 
 
 // C interface for calling functions
-frame_t bfn_tcall(mu_t m, frame_t fc, mu_t *frame) {
-    bfn_t *bfn = fromfn(m)->bfn;
+mc_t bfn_tcall(mu_t m, mc_t fc, mu_t *frame) {
+    mbfn_t *bfn = fromfn(m)->bfn;
     mu_fto(fromfn(m)->args, fc, frame);
     fn_dec(m);
 
     return bfn(frame);
 }
 
-frame_t sbfn_tcall(mu_t m, frame_t fc, mu_t *frame) {
-    sbfn_t *sbfn = fromfn(m)->sbfn;
+mc_t sbfn_tcall(mu_t m, mc_t fc, mu_t *frame) {
+    msbfn_t *sbfn = fromfn(m)->sbfn;
     mu_t closure = fn_closure(m);
     mu_fto(fromfn(m)->args, fc, frame);
     fn_dec(m);
@@ -95,7 +95,7 @@ frame_t sbfn_tcall(mu_t m, frame_t fc, mu_t *frame) {
     return sbfn(closure, frame);
 }
 
-frame_t fn_tcall(mu_t m, frame_t fc, mu_t *frame) {
+mc_t fn_tcall(mu_t m, mc_t fc, mu_t *frame) {
     struct code *c = fn_code(m);
     mu_t scope = tbl_extend(c->scope, fn_closure(m));
     mu_fto(c->args, fc, frame);
@@ -105,24 +105,24 @@ frame_t fn_tcall(mu_t m, frame_t fc, mu_t *frame) {
 }
 
 
-void bfn_fcall(mu_t m, frame_t fc, mu_t *frame) {
-    frame_t rets = bfn_tcall(m, fc >> 4, frame);
+void bfn_fcall(mu_t m, mc_t fc, mu_t *frame) {
+    mc_t rets = bfn_tcall(m, fc >> 4, frame);
     mu_fto(fc & 0xf, rets, frame);
 }
 
-void sbfn_fcall(mu_t m, frame_t fc, mu_t *frame) {
-    frame_t rets = sbfn_tcall(m, fc >> 4, frame);
+void sbfn_fcall(mu_t m, mc_t fc, mu_t *frame) {
+    mc_t rets = sbfn_tcall(m, fc >> 4, frame);
     mu_fto(fc & 0xf, rets, frame);
 }
 
-void fn_fcall(mu_t m, frame_t fc, mu_t *frame) {
-    frame_t rets = fn_tcall(m, fc >> 4, frame);
+void fn_fcall(mu_t m, mc_t fc, mu_t *frame) {
+    mc_t rets = fn_tcall(m, fc >> 4, frame);
     mu_fto(fc & 0xf, rets, frame);
 }
 
 
 // Binds arguments to function
-static frame_t fn_bound(mu_t scope, mu_t *frame) {
+static mc_t fn_bound(mu_t scope, mu_t *frame) {
     mu_t f = tbl_lookup(scope, muint(0));
     mu_t args = tbl_lookup(scope, muint(1));
 
@@ -139,7 +139,7 @@ mu_t fn_bind(mu_t f, mu_t args) {
 
 
 // Functions over iterators
-static frame_t fn_map_step(mu_t scope, mu_t *frame) {
+static mc_t fn_map_step(mu_t scope, mu_t *frame) {
     mu_t f = tbl_lookup(scope, muint(0));
     mu_t i = tbl_lookup(scope, muint(1));
 
@@ -169,7 +169,7 @@ mu_t fn_map(mu_t f, mu_t m) {
     }));
 }
 
-static frame_t fn_filter_step(mu_t scope, mu_t *frame) {
+static mc_t fn_filter_step(mu_t scope, mu_t *frame) {
     mu_t f = tbl_lookup(scope, muint(0));
     mu_t i = tbl_lookup(scope, muint(1));
 
@@ -230,14 +230,14 @@ mu_t fn_reduce(mu_t f, mu_t m, mu_t inits) {
 
 // Returns a string representation of a function
 mu_t fn_repr(mu_t f) {
-    uint_t bits = (uint_t)fromfn(f);
+    muint_t bits = (muint_t)fromfn(f);
 
-    byte_t *s = mstr_create(5 + 2*sizeof(uint_t));
+    mbyte_t *s = mstr_create(5 + 2*sizeof(muint_t));
     memcpy(s, "fn 0x", 5);
 
-    for (uint_t i = 0; i < 2*sizeof(uint_t); i++) {
-        s[i+5] = mu_toascii(0xf & (bits >> (4*(sizeof(uint_t)-i))));
+    for (muint_t i = 0; i < 2*sizeof(muint_t); i++) {
+        s[i+5] = mu_toascii(0xf & (bits >> (4*(sizeof(muint_t)-i))));
     }
 
-    return mstr_intern(s, 5 + 2*sizeof(uint_t));
+    return mstr_intern(s, 5 + 2*sizeof(muint_t));
 }

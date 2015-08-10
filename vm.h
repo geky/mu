@@ -10,15 +10,15 @@
 
 
 // Encode opcode
-void mu_encode(void (*emit)(void *, byte_t), void *p,
-               enum op op, int_t d, int_t a, int_t b);
+void mu_encode(void (*emit)(void *, mbyte_t), void *p,
+               enum op op, mint_t d, mint_t a, mint_t b);
 
 // Replace jump with actual jump distance and returns previous jump value
 // Note: Currently can not change size of jump instruction
-int_t mu_patch(void *c, int_t j);
+mint_t mu_patch(void *c, mint_t j);
 
 // Execute bytecode
-frame_t mu_exec(struct code *c, mu_t scope, mu_t *frame);
+mc_t mu_exec(struct code *c, mu_t scope, mu_t *frame);
 
 
 // Disassemble bytecode for debugging and introspection
