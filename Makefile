@@ -17,7 +17,7 @@ ifdef DEBUG
 CFLAGS += -O0 -g3 -DMU_DEBUG
 CFLAGS += -fkeep-inline-functions
 else
-CFLAGS += -O2 -g3
+CFLAGS += -O2
 endif
 ifdef WORD
 CFLAGS += -m$(WORD)

@@ -71,6 +71,25 @@ mu_inline void mstr_dec(mbyte_t *s) {
 }
 
 
+// Bitwise operations
+mu_t str_not(mu_t a);
+mu_t str_and(mu_t a, mu_t b);
+mu_t str_or(mu_t a, mu_t b);
+mu_t str_xor(mu_t a, mu_t b);
+mu_t str_shl(mu_t a, mu_t b);
+mu_t str_shr(mu_t a, mu_t b);
+
+// Arithmetic operations
+mu_t str_neg(mu_t a);
+mu_t str_add(mu_t a, mu_t b);
+mu_t str_sub(mu_t a, mu_t b);
+mu_t str_mul(mu_t a, mu_t b);
+mu_t str_div(mu_t a, mu_t b);
+mu_t str_mod(mu_t a, mu_t b);
+
+// Concatenation
+mu_t str_concat(mu_t a, mu_t b);
+
 // String iteration
 mu_t str_iter(mu_t s);
 bool str_next(mu_t s, muint_t *i, mu_t *c);

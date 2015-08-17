@@ -1,7 +1,49 @@
 #include "num.h"
 
 #include "str.h"
+#include "err.h"
 #include "parse.h"
+
+
+// Number creating macros
+// Number cannot be NaNs or negative zero to garuntee bitwise equality
+mu_t mfloat(mfloat_t n) {
+    if (mu_unlikely(n != n))
+        mu_cerr(mcstr("nan_result"), mcstr("Operation resulted in NaN"));
+
+    if (n == 0)
+        n = 0;
+
+    union { mfloat_t n; muint_t u; } v = { n };
+    return (mu_t)(MU_NUM + (~7 & v.u));
+}
+
+
+// Arithmetic operations
+mu_t num_neg(mu_t a) { return mfloat(-num_float(a)); }
+mu_t num_add(mu_t a, mu_t b) { return mfloat(num_float(a) + num_float(b)); }
+mu_t num_sub(mu_t a, mu_t b) { return mfloat(num_float(a) - num_float(b)); }
+mu_t num_mul(mu_t a, mu_t b) { return mfloat(num_float(a) * num_float(b)); }
+mu_t num_div(mu_t a, mu_t b) { return mfloat(num_float(a) / num_float(b)); }
+
+mu_t num_pow(mu_t a, mu_t b) {
+    return mfloat(pow(num_float(a), num_float(b))); 
+}
+
+mu_t num_idiv(mu_t a, mu_t b) {
+    return mfloat(floor(num_float(a) / num_float(b)));
+}
+
+mu_t num_mod(mu_t a, mu_t b) {
+    mfloat_t base = num_float(b);
+    mfloat_t mod = fmod(num_float(a), base);
+
+    // Handle truncation for negative values
+    if (mod*base < 0)
+        mod += base;
+
+    return mfloat(mod);
+}
 
 
 // Max length of a string representation of a number

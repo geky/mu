@@ -377,14 +377,22 @@ static void l_num(struct lex *l) {
             base = 2; l->pos += 2;
         } else if (l->pos[1] == 'o' || l->pos[1] == 'O') {
             base = 8;  l->pos += 2;
+        } else if (l->pos[1] == 'd' || l->pos[1] == 'D') {
+            base = 10; l->pos += 2;
         } else if (l->pos[1] == 'x' || l->pos[1] == 'X') {
             base = 16; l->pos += 2;
         }
     }
 
-    while (l->pos < l->end && mu_fromascii(*l->pos) < base) {
-        res *= base;
-        res += (mfloat_t)mu_fromascii(*l->pos++);
+    while (l->pos < l->end) {
+        if (mu_fromascii(*l->pos) < base) {
+            res *= base;
+            res += (mfloat_t)mu_fromascii(*l->pos++);
+        } else if (*l->pos == '_') {
+            l->pos++;
+        } else {
+            break;
+        }
     }
 
     if (l->pos < l->end && *l->pos == '.') {
@@ -397,9 +405,10 @@ static void l_num(struct lex *l) {
         }
     }
 
-    if (l->pos < l->end && (base == 10 ?
-        (*l->pos == 'e' || *l->pos == 'E') :
-        (*l->pos == 'p' || *l->pos == 'P'))) {
+    if (l->pos < l->end && 
+        (*l->pos == 'e' || *l->pos == 'E' ||
+         *l->pos == 'p' || *l->pos == 'p')) {
+        mfloat_t exp = (*l->pos == 'e' || *l->pos == 'E') ? 10 : 2;
         mfloat_t scale = 0;
         mfloat_t sign = 1;
         l->pos++;
@@ -410,12 +419,18 @@ static void l_num(struct lex *l) {
             sign = -1; l->pos++;
         }
 
-        while (l->pos < l->end && mu_fromascii(*l->pos) < base) {
-            scale *= base;
-            scale += (mfloat_t)mu_fromascii(*l->pos++);
+        while (l->pos < l->end) {
+            if (mu_fromascii(*l->pos) < base) {
+                scale *= base;
+                scale += (mfloat_t)mu_fromascii(*l->pos++);
+            } else if (*l->pos == '_') {
+                l->pos++;
+            } else {
+                break;
+            }
         }
 
-        res *= (mfloat_t)pow((base == 10 ? 10 : 2), sign * scale);
+        res *= (mfloat_t)pow(exp, sign * scale);
     }
 
     l->val = mfloat(sign * res);
@@ -432,7 +447,25 @@ static void l_str(struct lex *l) {
 
     while (l->pos < l->end-1 && *l->pos != quote) {
         if (*l->pos == '\\') {
-            if (l->pos[1] == 'o' && l->end-l->pos < 5 &&
+            if (l->pos[1] == 'b' && l->pos < l->end-9 &&
+                (mu_fromascii(l->pos[2]) < 2 &&
+                 mu_fromascii(l->pos[3]) < 2 &&
+                 mu_fromascii(l->pos[4]) < 2 &&
+                 mu_fromascii(l->pos[5]) < 2 &&
+                 mu_fromascii(l->pos[6]) < 2 &&
+                 mu_fromascii(l->pos[7]) < 2 &&
+                 mu_fromascii(l->pos[8]) < 2 &&
+                 mu_fromascii(l->pos[9]) < 2)) {
+                mstr_insert(&s, &len, mu_fromascii(l->pos[2])*2*2*2*2*2*2*2 +  
+                                      mu_fromascii(l->pos[3])*2*2*2*2*2*2 +
+                                      mu_fromascii(l->pos[4])*2*2*2*2*2 +
+                                      mu_fromascii(l->pos[5])*2*2*2*2 +
+                                      mu_fromascii(l->pos[6])*2*2*2 +
+                                      mu_fromascii(l->pos[7])*2*2 +
+                                      mu_fromascii(l->pos[8])*2 +
+                                      mu_fromascii(l->pos[9]));
+                l->pos += 10;
+            } else if (l->pos[1] == 'o' && l->pos < l->end-4 &&
                 (mu_fromascii(l->pos[2]) < 8 &&
                  mu_fromascii(l->pos[3]) < 8 &&
                  mu_fromascii(l->pos[4]) < 8)) {
@@ -440,7 +473,7 @@ static void l_str(struct lex *l) {
                                       mu_fromascii(l->pos[3])*8 +
                                       mu_fromascii(l->pos[4]));
                 l->pos += 5;
-            } else if (l->pos[1] == 'd' && l->end-l->pos < 5 &&
+            } else if (l->pos[1] == 'd' && l->pos < l->end-4 &&
                        (mu_fromascii(l->pos[2]) < 10 &&
                         mu_fromascii(l->pos[3]) < 10 &&
                         mu_fromascii(l->pos[4]) < 10)) {
@@ -448,24 +481,18 @@ static void l_str(struct lex *l) {
                                       mu_fromascii(l->pos[3])*10 +
                                       mu_fromascii(l->pos[4]));
                 l->pos += 5;
-            } else if (l->pos[1] == 'x' && l->end-l->pos < 4 &&
-                       (mu_fromascii(l->pos[2]) >= 16 &&
-                        mu_fromascii(l->pos[3]) >= 16)) {
+            } else if (l->pos[1] == 'x' && l->pos < l->end-3 &&
+                       (mu_fromascii(l->pos[2]) < 16 &&
+                        mu_fromascii(l->pos[3]) < 16)) {
                 mstr_insert(&s, &len, mu_fromascii(l->pos[2])*16 +
                                       mu_fromascii(l->pos[3]));
                 l->pos += 4;
-            } else if (l->pos[1] == '\n') {
-                l->pos += 2;
             } else if (l->pos[1] == '\\') {
                 mstr_insert(&s, &len, '\\'); l->pos += 2;
             } else if (l->pos[1] == '\'') {
                 mstr_insert(&s, &len, '\''); l->pos += 2;
             } else if (l->pos[1] == '"') {
                 mstr_insert(&s, &len,  '"'); l->pos += 2;
-            } else if (l->pos[1] == 'a') {
-                mstr_insert(&s, &len, '\a'); l->pos += 2;
-            } else if (l->pos[1] == 'b') {
-                mstr_insert(&s, &len, '\b'); l->pos += 2;
             } else if (l->pos[1] == 'f') {
                 mstr_insert(&s, &len, '\f'); l->pos += 2;
             } else if (l->pos[1] == 'n') {

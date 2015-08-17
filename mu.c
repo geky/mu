@@ -110,31 +110,123 @@ static mlen_t prompt(mbyte_t *input) {
 
 // TODO move this scope declaration somewhere else
 static mc_t b_add(mu_t *frame) {
-    assert(mu_isnum(frame[0]) && mu_isnum(frame[1]));
-    frame[0] = mfloat(num_float(frame[0]) + num_float(frame[1]));
+    if (mu_isnum(frame[0]) && mu_isnum(frame[1])) {
+        frame[0] = num_add(frame[0], frame[1]);
+    } else if (mu_isstr(frame[0]) && mu_isstr(frame[1])) {
+        frame[0] = str_add(frame[0], frame[1]);
+    } else {
+        assert(!!!"incompatible types");
+    }
+        
     return 1;
 }
 
 static mc_t b_mul(mu_t *frame) {
-    assert(mu_isnum(frame[0]) && mu_isnum(frame[1]));
-    frame[0] = mfloat(num_float(frame[0]) * num_float(frame[1]));
+    if (mu_isnum(frame[0]) && mu_isnum(frame[1])) {
+        frame[0] = num_mul(frame[0], frame[1]);
+    } else if (mu_isstr(frame[0]) && mu_isstr(frame[1])) {
+        frame[0] = str_mul(frame[0], frame[1]);
+    } else {
+        assert(!!!"incompatible types");
+    }
+        
+    return 1;
+}
+
+static mc_t b_div(mu_t *frame) {
+    if (mu_isnum(frame[0]) && mu_isnum(frame[1])) {
+        frame[0] = num_div(frame[0], frame[1]);
+    } else if (mu_isstr(frame[0]) && mu_isstr(frame[1])) {
+        frame[0] = str_div(frame[0], frame[1]);
+    } else {
+        assert(!!!"incompatible types");
+    }
+        
+    return 1;
+}
+
+static mc_t b_idiv(mu_t *frame) {
+    if (mu_isnum(frame[0]) && mu_isnum(frame[1])) {
+        frame[0] = num_idiv(frame[0], frame[1]);
+    } else if (mu_isstr(frame[0]) && mu_isstr(frame[1])) {
+        frame[0] = str_div(frame[0], frame[1]);
+    } else {
+        assert(!!!"incompatible types");
+    }
+        
+    return 1;
+}
+
+static mc_t b_mod(mu_t *frame) {
+    if (mu_isnum(frame[0]) && mu_isnum(frame[1])) {
+        frame[0] = num_mod(frame[0], frame[1]);
+    } else if (mu_isstr(frame[0]) && mu_isstr(frame[1])) {
+        frame[0] = str_mod(frame[0], frame[1]);
+    } else {
+        assert(!!!"incompatible types");
+    }
+        
     return 1;
 }
 
 static mc_t b_sub(mu_t *frame) {
-    if (!frame[1]) {
-        frame[0] = mfloat(-num_float(frame[0]));
+    if (mu_isnum(frame[0]) && !frame[1]) {
+        frame[0] = num_neg(frame[0]);
+        return 1;
+    } else if (mu_isstr(frame[0]) && !frame[1]) {
+        frame[0] = str_neg(frame[0]);
+        return 1;
+    } else if (mu_isnum(frame[0]) && mu_isnum(frame[1])) {
+        frame[0] = num_sub(frame[0], frame[1]);
+        return 1;
+    } else if (mu_isstr(frame[0]) && mu_isstr(frame[1])) {
+        frame[0] = str_sub(frame[0], frame[1]);
         return 1;
     } else {
-        assert(mu_isnum(frame[0]) && mu_isnum(frame[1]));
-        frame[0] = mfloat(num_float(frame[0]) - num_float(frame[1]));
+        assert(!!!"incompatible types");
+    }
+}
+
+static mc_t b_xor(mu_t *frame) {
+    if (mu_isstr(frame[0]) && !frame[1]) {
+        frame[0] = str_not(frame[0]);
         return 1;
+    } else if (mu_isstr(frame[0]) && mu_isstr(frame[1])) {
+        frame[0] = str_xor(frame[0], frame[1]);
+        return 1;
+    } else {
+        assert(!!!"incompatible types");
+    }
+}
+
+static mc_t b_and(mu_t *frame) {
+    if (mu_isstr(frame[0]) && mu_isstr(frame[1])) {
+        frame[0] = str_and(frame[0], frame[1]);
+        return 1;
+    } else {
+        assert(!!!"incompatible types");
+    }
+}
+
+static mc_t b_or(mu_t *frame) {
+    if (mu_isstr(frame[0]) && mu_isstr(frame[1])) {
+        frame[0] = str_or(frame[0], frame[1]);
+        return 1;
+    } else {
+        assert(!!!"incompatible types");
     }
 }
 
 static mc_t b_concat(mu_t *frame) {
-    assert(mu_istbl(frame[0]) && mu_istbl(frame[1]));
-    frame[0] = tbl_concat(frame[0], frame[1], frame[2]);
+    if (mu_isstr(frame[0]) && mu_isstr(frame[1])) {
+        frame[0] = str_concat(frame[0], frame[1]);
+        mu_dec(frame[2]);
+    } else if (mu_istbl(frame[0]) && mu_istbl(frame[1])) {
+        frame[0] = tbl_concat(frame[0], frame[1], frame[2]);
+    } else {
+        assert(!!!"incompatible types");
+    }
+        
     return 1;
 }
 
@@ -221,14 +313,19 @@ static mc_t b_iter(mu_t *frame) {
     return 1;
 }
 
-
 static void genscope() {
     mu_t ops = tbl_extend(0, mctbl({
         { mcstr("+"), mcfn(0x2, b_add) },
         { mcstr("*"), mcfn(0x2, b_mul) },
+        { mcstr("/"), mcfn(0x2, b_div) },
+        { mcstr("//"), mcfn(0x2, b_idiv) },
+        { mcstr("%"), mcfn(0x2, b_mod) },
         { mcstr("-"), mcfn(0x2, b_sub) },
-        { mcstr("~"), mcfn(0x2, b_equals) },
-        { mcstr("=="), mcfn(0x2, b_equals) }
+        { mcstr("~"), mcfn(0x2, b_xor) },
+        { mcstr("|"), mcfn(0x2, b_or) },
+        { mcstr("&"), mcfn(0x2, b_and) },
+        { mcstr("=="), mcfn(0x2, b_equals) },
+        { mcstr("++"), mcfn(0x3, b_concat) },
     }));
 
     mu_t tbltbl = mctbl({
