@@ -230,13 +230,13 @@ mu_t fn_reduce(mu_t f, mu_t m, mu_t inits) {
 
 // Returns a string representation of a function
 mu_t fn_repr(mu_t f) {
-    muint_t bits = (muint_t)fromfn(f);
+    muint_t bits = (muint_t)f;
 
     mbyte_t *s = mstr_create(5 + 2*sizeof(muint_t));
     memcpy(s, "fn 0x", 5);
 
     for (muint_t i = 0; i < 2*sizeof(muint_t); i++) {
-        s[i+5] = mu_toascii(0xf & (bits >> (4*(sizeof(muint_t)-i))));
+        s[i+5] = mu_toascii(0xf & (bits >> 4*(2*sizeof(muint_t)-1 - i)));
     }
 
     return mstr_intern(s, 5 + 2*sizeof(muint_t));

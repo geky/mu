@@ -610,15 +610,18 @@ static void expect(struct parse *p, mtok_t tok) {
 }
 
 static bool lookahead(struct parse *p, mtok_t a, mtok_t b) {
+    if (!next(p, a))
+        return false;
+
     struct lex l = lex_inc(p->l);
     if (match(p, a) && next(p, b)) {
         lex_dec(l);
         return true;
-    } else {
-        lex_dec(p->l);
-        p->l = l;
-        return false;
     }
+
+    lex_dec(p->l);
+    p->l = l;
+    return false;
 }
 
 
@@ -812,8 +815,9 @@ static void s_expr(struct parse *p, struct frame *f, muintq_t prec) {
             f->call = false;
 
         } else if (prec > p->l.prec && match(p, T_ANY_OP)) {
+            bool call = next(p, T_EXPR);
             s_expr(p, f, p->m.prec);
-            f->call = true;
+            f->call = call;
 
         } else if (prec > p->l.prec && match(p, T_AND | T_OR)) {
             s_expr(p, f, p->m.prec);
@@ -1048,6 +1052,15 @@ static void p_subexpr(struct parse *p, struct expr *e) {
         e->state = P_DIRECT;
         return p_postexpr(p, e);
 
+    } else if (lookahead(p, T_ANY_OP, T_EXPR)) {
+        encode(p, OP_IMM, p->sp+1, imm(p, mu_inc(p->m.val)), 0, +1);
+        encode(p, OP_LOOKUP, p->sp, 0, p->sp, 0);
+        p_subexpr(p, e);
+        encode_load(p, e, 0);
+        e->state = P_CALLED;
+        e->params = 1;
+        return p_postexpr(p, e);
+
     } else if (match(p, T_FN)) {
         p_fn(p);
         e->state = P_DIRECT;
@@ -1067,20 +1080,9 @@ static void p_subexpr(struct parse *p, struct expr *e) {
         e->state = P_NIL;
         return p_postexpr(p, e);
 
-    } else if (match(p, T_SYM)) {
+    } else if (match(p, T_SYM | T_ANY_OP)) {
         encode(p, OP_IMM, p->sp+1, imm(p, mu_inc(p->m.val)), 0, +1);
         e->state = P_SCOPED;
-        return p_postexpr(p, e);
-
-    } else if (match(p, T_ANY_OP)) {
-        encode(p, OP_IMM, p->sp+1, imm(p, mcstr("ops")), 0, +1);
-        encode(p, OP_LOOKUP, p->sp, 0, p->sp, 0);
-        encode(p, OP_IMM, p->sp+1, imm(p, mu_inc(p->m.val)), 0, +1);
-        encode(p, OP_LOOKDN, p->sp-1, p->sp-1, p->sp, -1);
-        p_subexpr(p, e);
-        encode_load(p, e, 0);
-        e->state = P_CALLED;
-        e->params = 1;
         return p_postexpr(p, e);
     }
 
@@ -1144,10 +1146,8 @@ static void p_postexpr(struct parse *p, struct expr *e) {
 
     } else if (e->prec > p->l.prec && match(p, T_ANY_OP)) {
         encode_load(p, e, 1);
-        encode(p, OP_IMM, p->sp-1, imm(p, mcstr("ops")), 0, 0);
+        encode(p, OP_IMM, p->sp-1, imm(p, mu_inc(p->m.val)), 0, 0);
         encode(p, OP_LOOKUP, p->sp-1, 0, p->sp-1, 0);
-        encode(p, OP_IMM, p->sp+1, imm(p, mu_inc(p->m.val)), 0, +1);
-        encode(p, OP_LOOKDN, p->sp-2, p->sp-2, p->sp, -1);
         muintq_t prec = e->prec; e->prec = p->m.prec;
         p_subexpr(p, e);
         encode_load(p, e, 0);
@@ -1313,7 +1313,7 @@ static void p_frame(struct parse *p, struct frame *f) {
             p->sp -= 1;
         } else if (f->count > 0) {
             encode(p, OP_MOVE, p->sp+1, p->sp, 0, +1);
-            encode(p, OP_IMM, p->sp-1, imm(p, mcstr("concat")), 0, 0);
+            encode(p, OP_IMM, p->sp-1, imm(p, mcstr("++")), 0, 0);
             encode(p, OP_LOOKUP, p->sp-1, 0, p->sp-1, 0);
             p_expr(p);
             encode(p, OP_IMM, p->sp+1, imm(p, muint(f->index)), 0, +1);
@@ -1418,8 +1418,8 @@ static void p_stmt(struct parse *p) {
     if (next(p, T_LBLOCK)) {
         p_block(p);
 
-    } else if (lookahead(p, T_FN, T_ANY_SYM)) {
-        expect(p, T_ANY_SYM);
+    } else if (lookahead(p, T_FN, T_ANY_SYM | T_ANY_OP)) {
+        expect(p, T_ANY_SYM | T_ANY_OP);
         mu_t sym = mu_inc(p->m.val);
         p_fn(p);
         encode(p, OP_IMM, p->sp+1, imm(p, sym), 0, +1);

@@ -314,20 +314,6 @@ static mc_t b_iter(mu_t *frame) {
 }
 
 static void genscope() {
-    mu_t ops = tbl_extend(0, mctbl({
-        { mcstr("+"), mcfn(0x2, b_add) },
-        { mcstr("*"), mcfn(0x2, b_mul) },
-        { mcstr("/"), mcfn(0x2, b_div) },
-        { mcstr("//"), mcfn(0x2, b_idiv) },
-        { mcstr("%"), mcfn(0x2, b_mod) },
-        { mcstr("-"), mcfn(0x2, b_sub) },
-        { mcstr("~"), mcfn(0x2, b_xor) },
-        { mcstr("|"), mcfn(0x2, b_or) },
-        { mcstr("&"), mcfn(0x2, b_and) },
-        { mcstr("=="), mcfn(0x2, b_equals) },
-        { mcstr("++"), mcfn(0x3, b_concat) },
-    }));
-
     mu_t tbltbl = mctbl({
         { mcstr("concat"), mcfn(0x3, b_concat) },
         { mcstr("pop"), mcfn(0x2, b_pop) },
@@ -343,11 +329,16 @@ static void genscope() {
 
     scope = tbl_extend(0, mctbl({
         { mcstr("+"), mcfn(0x2, b_add) },
-        { mcstr("-"), mcfn(0x2, b_sub) },
         { mcstr("*"), mcfn(0x2, b_mul) },
-        { mcstr("~"), mcfn(0x2, b_equals) },
+        { mcstr("/"), mcfn(0x2, b_div) },
+        { mcstr("//"), mcfn(0x2, b_idiv) },
+        { mcstr("%"), mcfn(0x2, b_mod) },
+        { mcstr("-"), mcfn(0x2, b_sub) },
+        { mcstr("~"), mcfn(0x2, b_xor) },
+        { mcstr("|"), mcfn(0x2, b_or) },
+        { mcstr("&"), mcfn(0x2, b_and) },
         { mcstr("=="), mcfn(0x2, b_equals) },
-        { mcstr("ops"), ops },
+        { mcstr("++"), mcfn(0x3, b_concat) },
         { mcstr("repr"), mcfn(0x1, b_repr) },
         { mcstr("print"), mcfn(0xf, b_print) },
         { mcstr("test"), mcfn(0x0, b_test) },
