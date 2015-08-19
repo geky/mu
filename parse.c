@@ -110,9 +110,7 @@ static mu_const mu_t mu_syms(void) {
 typedef uint8_t mclass_t;
 enum class {
     L_NONE,
-    L_TERM, L_SEP,
-
-    L_NL, L_WS, L_COMMENT,
+    L_TERM, L_SEP, L_WS,
     L_OP, L_KW, L_STR, L_NUM,
 
     L_LBLOCK, L_RBLOCK,
@@ -123,13 +121,13 @@ enum class {
 static const mclass_t class[256] = {
 /* 00 01 02 03 */   L_NONE,     L_NONE,     L_NONE,     L_NONE,
 /* 04 05 06 \a */   L_NONE,     L_NONE,     L_NONE,     L_NONE,
-/* \b \t \n \v */   L_NONE,     L_WS,       L_NL,       L_WS,
+/* \b \t \n \v */   L_NONE,     L_WS,       L_WS,       L_WS,
 /* \f \r 0e 0f */   L_WS,       L_WS,       L_NONE,     L_NONE,
 /* 10 11 12 13 */   L_NONE,     L_NONE,     L_NONE,     L_NONE,
 /* 14 15 16 17 */   L_NONE,     L_NONE,     L_NONE,     L_NONE,
 /* 18 19 1a 1b */   L_NONE,     L_NONE,     L_NONE,     L_NONE,
 /* 1c 1d 1e 1f */   L_NONE,     L_NONE,     L_NONE,     L_NONE,
-/*     !  "  # */   L_WS,       L_OP,       L_STR,      L_COMMENT,
+/*     !  "  # */   L_WS,       L_OP,       L_STR,      L_WS,
 /*  $  %  &  ' */   L_OP,       L_OP,       L_OP,       L_STR,
 /*  (  )  *  + */   L_LPAREN,   L_RPAREN,   L_OP,       L_OP,
 /*  ,  -  .  / */   L_SEP,      L_OP,       L_OP,       L_OP,
@@ -202,9 +200,9 @@ enum state {
 
 // Lexical analysis state
 struct lex {
+    const mbyte_t *begin;
     const mbyte_t *pos;
     const mbyte_t *end;
-    mlen_t line;
 
     mtok_t tok;
     mu_t val;
@@ -213,9 +211,9 @@ struct lex {
     muintq_t indent;
     muintq_t depth;
     muintq_t block;
+    muintq_t nblock;
     muintq_t paren;
-    mintq_t nblock;
-    mintq_t nparen;
+    muintq_t nparen;
 };
 
 // Current match
@@ -252,7 +250,6 @@ struct frame {
     mlen_t index;
     muintq_t depth;
 
-    uint8_t single  : 1;
     uint8_t unpack  : 1;
     uint8_t insert  : 1;
     uint8_t tabled  : 1;
@@ -271,94 +268,59 @@ struct expr {
 
 
 //// Lexical analysis ////
-static void lex_init(struct lex *, mu_t);
-static void lex_next(struct lex *);
 
-// Helper function for skipping whitespace
-static void wskip(struct lex *l) {
+// Lexer definitions for non-trivial tokens
+static void l_indent(struct lex *l) {
+    const mbyte_t *nl = 0;
+    muintq_t nindent = 0;
     while (l->pos < l->end) {
         if (*l->pos == '#') {
             while (l->pos < l->end && *l->pos != '\n')
                 l->pos++;
-        } else if (*l->pos == '\n' && l->paren) {
-            l->line++;
-            l->pos++;
+        } else if (*l->pos == '\n') {
+            nl = l->pos++;
+            nindent = 0;
         } else if (class[*l->pos] == L_WS) {
             l->pos++;
+            nindent++;
         } else {
             break;
         }
     }
-}
-
-// Lexer definitions for non-trivial tokens
-static void l_nl(struct lex *l) {
-    const mbyte_t *npos = l->pos+1;
-
-    while (npos < l->end) {
-        if (*npos == '#') {
-            while (npos < l->end && *npos != '\n')
-                npos++;
-        } else if (*npos == '\n') {
-            l->line++;
-            l->pos = npos++;
-        } else if (class[*npos] == L_WS) {
-            npos++;
-        } else {
-            break;
-        }
-    }
-
-    int nindent = npos - (l->pos+1);
 
     if (nindent > (muintq_t)-1) {
         mu_err_parse(); // TODO better message
-    } else if (nindent > l->indent) {
-        l->tok = T_LBLOCK;
-        l->nblock = nindent - l->indent;
+    } else if (nindent != l->indent) {
+        l->tok = nindent > l->indent ? T_LBLOCK : T_RBLOCK;
+        l->nblock += nindent - l->indent;
         l->indent = nindent;
-    } else if (nindent < l->indent) {
-        l->tok = T_RBLOCK;
-        l->nblock = nindent - l->indent;
-        l->indent = nindent;
+        if (nl) l->pos = nl;
     } else {
         l->tok = T_TERM;
-        l->pos = npos;
-        l->line++;
     }
 }
 
 static void l_op(struct lex *l) {
-    const mbyte_t *start = l->pos++;
+    const mbyte_t *begin = l->pos++;
 
     while (l->pos < l->end && class[*l->pos] == L_OP)
         l->pos++;
 
-    const mbyte_t *end = l->pos;
-
-    l->val = mnstr(start, end-start);
+    l->val = mnstr(begin, l->pos-begin);
     mu_t tok = tbl_lookup(mu_syms(), mu_inc(l->val));
     l->tok = tok ? num_uint(tok) : T_OP;
-
-    wskip(l);
-    l->prec = l->pos - end;
 }
 
 static void l_kw(struct lex *l) {
-    const mbyte_t *start = l->pos++;
+    const mbyte_t *begin = l->pos++;
 
     while (l->pos < l->end && (class[*l->pos] == L_KW ||
                                class[*l->pos] == L_NUM))
         l->pos++;
 
-    const mbyte_t *end = l->pos;
-
-    l->val = mnstr(start, end-start);
+    l->val = mnstr(begin, l->pos-begin);
     mu_t tok = tbl_lookup(mu_keys(), mu_inc(l->val));
     l->tok = tok ? num_uint(tok) : T_SYM;
-
-    wskip(l);
-    l->prec = l->pos - end;
 }
 
 static void l_num(struct lex *l) {
@@ -405,7 +367,7 @@ static void l_num(struct lex *l) {
         }
     }
 
-    if (l->pos < l->end && 
+    if (l->pos < l->end &&
         (*l->pos == 'e' || *l->pos == 'E' ||
          *l->pos == 'p' || *l->pos == 'p')) {
         mfloat_t exp = (*l->pos == 'e' || *l->pos == 'E') ? 10 : 2;
@@ -456,7 +418,7 @@ static void l_str(struct lex *l) {
                  mu_fromascii(l->pos[7]) < 2 &&
                  mu_fromascii(l->pos[8]) < 2 &&
                  mu_fromascii(l->pos[9]) < 2)) {
-                mstr_insert(&s, &len, mu_fromascii(l->pos[2])*2*2*2*2*2*2*2 +  
+                mstr_insert(&s, &len, mu_fromascii(l->pos[2])*2*2*2*2*2*2*2 +
                                       mu_fromascii(l->pos[3])*2*2*2*2*2*2 +
                                       mu_fromascii(l->pos[4])*2*2*2*2*2 +
                                       mu_fromascii(l->pos[5])*2*2*2*2 +
@@ -521,54 +483,61 @@ static void l_str(struct lex *l) {
 }
 
 
-static void lex_init(struct lex *l, mu_t source) {
-    l->pos = str_bytes(source);
-    l->end = l->pos + str_len(source);
-
-    while (l->pos < l->end && class[*l->pos] == L_WS) {
-        l->pos++;
-        l->indent++;
-    }
-
-    l->block = 1 + l->indent;
-    lex_next(l);
-}
-
 static void lex_next(struct lex *l) {
-    l->block += l->nblock;
-    l->nblock = 0;
-    l->paren += l->nparen;
-    l->nparen = 0;
+    // Update previous token's state
+    l->block = l->nblock;
+    l->paren = l->nparen;
     l->val = mnil;
 
+    // Determine token
     if (l->pos >= l->end) {
+        l->block -= l->indent;
         l->tok = 0;
         return;
     }
 
     switch (class[*l->pos]) {
-        case L_NONE:    return mu_err_parse();
+        case L_NONE:    mu_err_parse();
 
-        case L_NL:      if (!l->paren) return l_nl(l);
-        case L_COMMENT:
-        case L_WS:      wskip(l);
-                        return lex_next(l);
+        case L_WS:      l_indent(l); break;
+        case L_OP:      l_op(l);     break;
+        case L_KW:      l_kw(l);     break;
+        case L_STR:     l_str(l);    break;
+        case L_NUM:     l_num(l);    break;
 
-        case L_OP:      return l_op(l);
-        case L_KW:      return l_kw(l);
-        case L_STR:     return l_str(l);
-        case L_NUM:     return l_num(l);
+        case L_TERM:    l->tok = T_TERM; l->pos++; break;
+        case L_SEP:     l->tok = T_SEP;  l->pos++; break;
 
-        case L_TERM:    l->tok = T_TERM; l->pos++; return;
-        case L_SEP:     l->tok = T_SEP;  l->pos++; return;
-
-        case L_LBLOCK:  l->tok = T_LBLOCK; l->nblock = +1; l->pos++; return;
-        case L_RBLOCK:  l->tok = T_RBLOCK; l->nblock = -1; l->pos++; return;
-        case L_LTABLE:  l->tok = T_LTABLE; l->nparen = +1; l->pos++; return;
-        case L_RTABLE:  l->tok = T_RTABLE; l->nparen = -1; l->pos++; return;
-        case L_LPAREN:  l->tok = T_LPAREN; l->nparen = +1; l->pos++; return;
-        case L_RPAREN:  l->tok = T_RPAREN; l->nparen = -1; l->pos++; return;
+        case L_LBLOCK:  l->tok = T_LBLOCK; l->nblock++; l->pos++; break;
+        case L_RBLOCK:  l->tok = T_RBLOCK; l->nblock--; l->pos++; break;
+        case L_LTABLE:  l->tok = T_LTABLE; l->nparen++; l->pos++; break;
+        case L_RTABLE:  l->tok = T_RTABLE; l->nparen--; l->pos++; break;
+        case L_LPAREN:  l->tok = T_LPAREN; l->nparen++; l->pos++; break;
+        case L_RPAREN:  l->tok = T_RPAREN; l->nparen--; l->pos++; break;
     }
+
+    // Use trailing whitespace for precedence
+    const mbyte_t *end = l->pos;
+    while (l->pos < l->end) {
+        if (*l->pos == '#') {
+            while (l->pos < l->end && *l->pos != '\n')
+                l->pos++;
+        } else if (class[*l->pos] == L_WS &&
+                   (l->nparen || *l->pos != '\n')) {
+            l->pos++;
+        } else {
+            break;
+        }
+    }
+    l->prec = l->pos - end;
+}
+
+static void lex_init(struct lex *l, mu_t source) {
+    l->begin = str_bytes(source);
+    l->pos = l->begin;
+    l->end = l->begin + str_len(source);
+
+    lex_next(l);
 }
 
 mu_inline struct lex lex_inc(struct lex l) {
@@ -881,7 +850,7 @@ static void p_frame(struct parse *p, struct frame *f);
 static void p_assign(struct parse *p, bool insert);
 static void p_return(struct parse *p);
 static void p_stmt(struct parse *p);
-static void p_block(struct parse *p);
+static void p_block(struct parse *p, bool root);
 
 static void p_fn(struct parse *p) {
     struct parse q = {
@@ -1416,7 +1385,7 @@ static void p_return(struct parse *p) {
 
 static void p_stmt(struct parse *p) {
     if (next(p, T_LBLOCK)) {
-        p_block(p);
+        p_block(p, false);
 
     } else if (lookahead(p, T_FN, T_ANY_SYM | T_ANY_OP)) {
         expect(p, T_ANY_SYM | T_ANY_OP);
@@ -1461,22 +1430,20 @@ static void p_stmt(struct parse *p) {
     }
 }
 
-static void p_block(struct parse *p) {
+static void p_block(struct parse *p, bool root) {
     muintq_t block = p->l.block;
     muintq_t paren = p->l.paren; p->l.paren = 0;
     muintq_t depth = p->l.depth; p->l.depth = -1;
 
-    while (match(p, T_LBLOCK))
-        ;
+    while (match(p, T_LBLOCK));
 
     do {
-        do {
-            p_stmt(p);
-        } while (match(p, T_TERM));
+        p_stmt(p);
+    } while ((root || p->l.block > block) &&
+             match(p, T_TERM | T_LBLOCK | T_RBLOCK));
 
-        if (p->l.block > block)
-            expect(p, T_RBLOCK);
-    } while (p->l.block > block);
+    if (p->l.block > block)
+        unexpected(p); // TODO message
 
     p->l.paren = paren;
     p->l.depth = depth;
@@ -1542,7 +1509,7 @@ struct code *parse_fn(mu_t source) {
     };
 
     lex_init(&p.l, source);
-    p_block(&p);
+    p_block(&p, true);
     if (p.l.tok)
         unexpected(&p);
 
@@ -1565,7 +1532,7 @@ struct code *parse_module(mu_t source) {
     };
 
     lex_init(&p.l, source);
-    p_block(&p);
+    p_block(&p, true);
     if (p.l.tok)
         unexpected(&p);
 
