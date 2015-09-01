@@ -5,7 +5,6 @@
 #ifndef MU_TBL_H
 #define MU_TBL_H
 #include "mu.h"
-#include "types.h"
 
 
 // Definition of Mu's table type
@@ -29,6 +28,10 @@ struct tbl {
 // Table access functions
 mu_inline mlen_t tbl_len(mu_t m) {
     return ((struct tbl *)(~7 & (muint_t)m))->len;
+}
+
+mu_inline mu_t tbl_tail(mu_t m) {
+    return ((struct tbl *)(~7 & (muint_t)m))->tail;
 }
 
 // Conversion to readonly table
@@ -58,9 +61,9 @@ mu_t mntbl(muint_t n, mu_t (*pairs)[2]);
 })
 
 
-// Table creating functions and macros
-mu_t tbl_create(muint_t size);
-mu_t tbl_extend(muint_t size, mu_t parent);
+// Table creation functions
+mu_t tbl_create(muint_t size, mu_t tail);
+mu_t tbl_fromiter(mu_t iter, mu_t tail);
 
 // Recursively looks up a key in the table
 // returns either that value or nil
@@ -75,16 +78,26 @@ void tbl_insert(mu_t t, mu_t k, mu_t v);
 void tbl_assign(mu_t t, mu_t k, mu_t v);
 
 // Performs iteration on a table
-mu_t tbl_iter(mu_t t);
 bool tbl_next(mu_t t, muint_t *i, mu_t *k, mu_t *v);
+mu_t tbl_iter(mu_t t);
+mu_t tbl_pairs(mu_t t);
 
 // Table representation
+mu_t tbl_parse(const mbyte_t **pos, const mbyte_t *end);
 mu_t tbl_repr(mu_t t);
+mu_t tbl_dump(mu_t t, mu_t depth, mu_t indent);
 
 // Array-like manipulations
+void tbl_push(mu_t t, mu_t v, mu_t i);
+mu_t tbl_pop(mu_t t, mu_t i);
 mu_t tbl_concat(mu_t a, mu_t b, mu_t offset);
-mu_t tbl_pop(mu_t a, mu_t i);
-void tbl_push(mu_t a, mu_t v, mu_t i);
+mu_t tbl_subset(mu_t t, mu_t lower, mu_t upper);
+
+// Set operations
+mu_t tbl_and(mu_t a, mu_t b);
+mu_t tbl_or(mu_t a, mu_t b);
+mu_t tbl_xor(mu_t a, mu_t b);
+mu_t tbl_diff(mu_t a, mu_t b);
 
 
 // Table reference counting

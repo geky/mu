@@ -5,8 +5,6 @@
 #ifndef MU_FN_H
 #define MU_FN_H
 #include "mu.h"
-#include "types.h"
-#include "frame.h"
 
 
 // Definition of C Function types
@@ -107,11 +105,41 @@ void fn_fcall(mu_t f, mc_t fc, mu_t *frame);
 void bfn_fcall(mu_t f, mc_t fc, mu_t *frame);
 void sbfn_fcall(mu_t f, mc_t fc, mu_t *frame);
 
+// Default function
+mu_const mu_t fn_id(void);
+
 // Function operations
 mu_t fn_bind(mu_t f, mu_t args);
-mu_t fn_map(mu_t f, mu_t m);
-mu_t fn_filter(mu_t f, mu_t m);
-mu_t fn_reduce(mu_t f, mu_t m, mu_t inits);
+mu_t fn_comp(mu_t fs);
+
+mu_t fn_map(mu_t f, mu_t iter);
+mu_t fn_filter(mu_t f, mu_t iter);
+mu_t fn_reduce(mu_t f, mu_t iter, mu_t inits);
+
+bool fn_any(mu_t f, mu_t iter);
+bool fn_all(mu_t f, mu_t iter);
+
+// Iterators and generators
+mu_t fn_range(mu_t start, mu_t stop, mu_t step);
+mu_t fn_repeat(mu_t value, mu_t times);
+mu_t fn_cycle(mu_t iter, mu_t times);
+
+// Iterator manipulation
+mu_t fn_zip(mu_t iters);
+mu_t fn_chain(mu_t iters);
+mu_t fn_tee(mu_t iter, mu_t n);
+
+mu_t fn_take(mu_t cond, mu_t iter);
+mu_t fn_drop(mu_t cond, mu_t iter);
+
+// Iterator ordering
+mu_t fn_min(mu_t iter);
+mu_t fn_max(mu_t iter);
+
+mu_t fn_reverse(mu_t iter);
+mu_t fn_sort(mu_t iter);
+
+// String representation
 mu_t fn_repr(mu_t f);
 
 

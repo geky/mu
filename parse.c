@@ -324,161 +324,12 @@ static void l_kw(struct lex *l) {
 }
 
 static void l_num(struct lex *l) {
-    mfloat_t res = 0;
-    mfloat_t base = 10;
-    mfloat_t sign = 1;
-
-    if (l->pos < l->end && *l->pos == '+') {
-        sign = +1; l->pos++;
-    } else if (l->pos < l->end && *l->pos == '-') {
-        sign = -1; l->pos++;
-    }
-
-    if (l->end-l->pos > 2 && *l->pos == '0') {
-        if (l->pos[1] == 'b' || l->pos[1] == 'B') {
-            base = 2; l->pos += 2;
-        } else if (l->pos[1] == 'o' || l->pos[1] == 'O') {
-            base = 8;  l->pos += 2;
-        } else if (l->pos[1] == 'd' || l->pos[1] == 'D') {
-            base = 10; l->pos += 2;
-        } else if (l->pos[1] == 'x' || l->pos[1] == 'X') {
-            base = 16; l->pos += 2;
-        }
-    }
-
-    while (l->pos < l->end) {
-        if (mu_fromascii(*l->pos) < base) {
-            res *= base;
-            res += (mfloat_t)mu_fromascii(*l->pos++);
-        } else if (*l->pos == '_') {
-            l->pos++;
-        } else {
-            break;
-        }
-    }
-
-    if (l->pos < l->end && *l->pos == '.') {
-        mfloat_t scale = 1;
-        l->pos++;
-
-        while (l->pos < l->end && mu_fromascii(*l->pos) < base) {
-            scale /= base;
-            res += scale * (mfloat_t)mu_fromascii(*l->pos++);
-        }
-    }
-
-    if (l->pos < l->end &&
-        (*l->pos == 'e' || *l->pos == 'E' ||
-         *l->pos == 'p' || *l->pos == 'p')) {
-        mfloat_t exp = (*l->pos == 'e' || *l->pos == 'E') ? 10 : 2;
-        mfloat_t scale = 0;
-        mfloat_t sign = 1;
-        l->pos++;
-
-        if (l->pos < l->end && *l->pos == '+') {
-            sign = +1; l->pos++;
-        } else if (l->pos < l->end && *l->pos == '-') {
-            sign = -1; l->pos++;
-        }
-
-        while (l->pos < l->end) {
-            if (mu_fromascii(*l->pos) < base) {
-                scale *= base;
-                scale += (mfloat_t)mu_fromascii(*l->pos++);
-            } else if (*l->pos == '_') {
-                l->pos++;
-            } else {
-                break;
-            }
-        }
-
-        res *= (mfloat_t)pow(exp, sign * scale);
-    }
-
-    l->val = mfloat(sign * res);
+    l->val = num_parse(&l->pos, l->end);
     l->tok = T_IMM;
 }
 
 static void l_str(struct lex *l) {
-    mbyte_t quote = *l->pos++;
-    if (class[quote] != L_STR)
-        mu_err_parse();
-
-    mbyte_t *s = mstr_create(0);
-    muint_t len = 0;
-
-    while (l->pos < l->end-1 && *l->pos != quote) {
-        if (*l->pos == '\\') {
-            if (l->pos[1] == 'b' && l->pos < l->end-9 &&
-                (mu_fromascii(l->pos[2]) < 2 &&
-                 mu_fromascii(l->pos[3]) < 2 &&
-                 mu_fromascii(l->pos[4]) < 2 &&
-                 mu_fromascii(l->pos[5]) < 2 &&
-                 mu_fromascii(l->pos[6]) < 2 &&
-                 mu_fromascii(l->pos[7]) < 2 &&
-                 mu_fromascii(l->pos[8]) < 2 &&
-                 mu_fromascii(l->pos[9]) < 2)) {
-                mstr_insert(&s, &len, mu_fromascii(l->pos[2])*2*2*2*2*2*2*2 +
-                                      mu_fromascii(l->pos[3])*2*2*2*2*2*2 +
-                                      mu_fromascii(l->pos[4])*2*2*2*2*2 +
-                                      mu_fromascii(l->pos[5])*2*2*2*2 +
-                                      mu_fromascii(l->pos[6])*2*2*2 +
-                                      mu_fromascii(l->pos[7])*2*2 +
-                                      mu_fromascii(l->pos[8])*2 +
-                                      mu_fromascii(l->pos[9]));
-                l->pos += 10;
-            } else if (l->pos[1] == 'o' && l->pos < l->end-4 &&
-                (mu_fromascii(l->pos[2]) < 8 &&
-                 mu_fromascii(l->pos[3]) < 8 &&
-                 mu_fromascii(l->pos[4]) < 8)) {
-                mstr_insert(&s, &len, mu_fromascii(l->pos[2])*8*8 +
-                                      mu_fromascii(l->pos[3])*8 +
-                                      mu_fromascii(l->pos[4]));
-                l->pos += 5;
-            } else if (l->pos[1] == 'd' && l->pos < l->end-4 &&
-                       (mu_fromascii(l->pos[2]) < 10 &&
-                        mu_fromascii(l->pos[3]) < 10 &&
-                        mu_fromascii(l->pos[4]) < 10)) {
-                mstr_insert(&s, &len, mu_fromascii(l->pos[2])*10*10 +
-                                      mu_fromascii(l->pos[3])*10 +
-                                      mu_fromascii(l->pos[4]));
-                l->pos += 5;
-            } else if (l->pos[1] == 'x' && l->pos < l->end-3 &&
-                       (mu_fromascii(l->pos[2]) < 16 &&
-                        mu_fromascii(l->pos[3]) < 16)) {
-                mstr_insert(&s, &len, mu_fromascii(l->pos[2])*16 +
-                                      mu_fromascii(l->pos[3]));
-                l->pos += 4;
-            } else if (l->pos[1] == '\\') {
-                mstr_insert(&s, &len, '\\'); l->pos += 2;
-            } else if (l->pos[1] == '\'') {
-                mstr_insert(&s, &len, '\''); l->pos += 2;
-            } else if (l->pos[1] == '"') {
-                mstr_insert(&s, &len,  '"'); l->pos += 2;
-            } else if (l->pos[1] == 'f') {
-                mstr_insert(&s, &len, '\f'); l->pos += 2;
-            } else if (l->pos[1] == 'n') {
-                mstr_insert(&s, &len, '\n'); l->pos += 2;
-            } else if (l->pos[1] == 'r') {
-                mstr_insert(&s, &len, '\r'); l->pos += 2;
-            } else if (l->pos[1] == 't') {
-                mstr_insert(&s, &len, '\t'); l->pos += 2;
-            } else if (l->pos[1] == 'v') {
-                mstr_insert(&s, &len, '\v'); l->pos += 2;
-            } else if (l->pos[1] == '0') {
-                mstr_insert(&s, &len, '\0'); l->pos += 2;
-            } else {
-                mstr_insert(&s, &len, '\\'); l->pos += 1;
-            }
-        } else {
-            mstr_insert(&s, &len, *l->pos++);
-        }
-    }
-
-    if (quote != *l->pos++)
-        mu_err_parse();
-
-    l->val = mstr_intern(s, len);
+    l->val = str_parse(&l->pos, l->end);
     l->tok = T_IMM;
 }
 
@@ -496,14 +347,15 @@ static void lex_next(struct lex *l) {
         return;
     }
 
-    switch (class[*l->pos]) {
+    mclass_t lclass = class[*l->pos];
+    switch (lclass) {
         case L_NONE:    mu_err_parse();
 
-        case L_WS:      l_indent(l); break;
-        case L_OP:      l_op(l);     break;
-        case L_KW:      l_kw(l);     break;
-        case L_STR:     l_str(l);    break;
-        case L_NUM:     l_num(l);    break;
+        case L_WS:                   l_indent(l); break;
+        case L_OP:      l->prec = 0; l_op(l);     break;
+        case L_KW:      l->prec = 1; l_kw(l);     break;
+        case L_STR:                  l_str(l);    break;
+        case L_NUM:                  l_num(l);    break;
 
         case L_TERM:    l->tok = T_TERM; l->pos++; break;
         case L_SEP:     l->tok = T_SEP;  l->pos++; break;
@@ -529,13 +381,13 @@ static void lex_next(struct lex *l) {
             break;
         }
     }
-    l->prec = l->pos - end;
+    l->prec += 2*(l->pos - end);
 }
 
-static void lex_init(struct lex *l, mu_t source) {
-    l->begin = str_bytes(source);
-    l->pos = l->begin;
-    l->end = l->begin + str_len(source);
+static void lex_init(struct lex *l, const mbyte_t *pos, const mbyte_t *end) {
+    l->begin = pos;
+    l->pos = pos;
+    l->end = end;
 
     lex_next(l);
 }
@@ -857,8 +709,8 @@ static void p_fn(struct parse *p) {
         .bcode = mstr_create(0),
         .bcount = 0,
 
-        .imms = tbl_create(0),
-        .fns = tbl_create(0),
+        .imms = tbl_create(0,0),
+        .fns = tbl_create(0,0),
         .bchain = -1,
         .cchain = -1,
 
@@ -1008,7 +860,9 @@ static void p_expr(struct parse *p) {
 
 static void p_subexpr(struct parse *p, struct expr *e) {
     if (match(p, T_LPAREN)) {
+        muintq_t prec = e->prec; e->prec = -1;
         p_subexpr(p, e);
+        e->prec = prec;
         expect(p, T_RPAREN);
         return p_postexpr(p, e);
 
@@ -1024,7 +878,9 @@ static void p_subexpr(struct parse *p, struct expr *e) {
     } else if (lookahead(p, T_ANY_OP, T_EXPR)) {
         encode(p, OP_IMM, p->sp+1, imm(p, mu_inc(p->m.val)), 0, +1);
         encode(p, OP_LOOKUP, p->sp, 0, p->sp, 0);
+        muintq_t prec = e->prec; e->prec = p->m.prec;
         p_subexpr(p, e);
+        e->prec = prec;
         encode_load(p, e, 0);
         e->state = P_CALLED;
         e->params = 1;
@@ -1127,29 +983,27 @@ static void p_postexpr(struct parse *p, struct expr *e) {
 
     } else if (e->prec > p->l.prec && match(p, T_AND)) {
         encode_load(p, e, 0);
-        mlen_t before = p->bcount;
+        mlen_t offset = p->bcount;
         encode(p, OP_JFALSE, p->sp, 0, 0, 0);
-        mlen_t after = p->bcount;
         encode(p, OP_DROP, p->sp, 0, 0, -1);
         muintq_t prec = e->prec; e->prec = p->m.prec;
         p_subexpr(p, e);
         encode_load(p, e, 0);
         e->prec = prec;
-        patch(p, before, p->bcount - after);
+        patch(p, offset, p->bcount - offset);
         e->state = P_DIRECT;
         return p_postexpr(p, e);
 
     } else if (e->prec > p->l.prec && match(p, T_OR)) {
         encode_load(p, e, 0);
-        mlen_t before = p->bcount;
+        mlen_t offset = p->bcount;
         encode(p, OP_JTRUE, p->sp, 0, 0, 0);
-        mlen_t after = p->bcount;
         encode(p, OP_DROP, p->sp, 0, 0, -1);
         muintq_t prec = e->prec; e->prec = p->m.prec;
         p_subexpr(p, e);
         encode_load(p, e, 0);
         e->prec = prec;
-        patch(p, before, p->bcount - after);
+        patch(p, offset, p->bcount - offset);
         e->state = P_DIRECT;
         return p_postexpr(p, e);
     }
@@ -1452,55 +1306,92 @@ static void p_block(struct parse *p, bool root) {
 
 //// Parsing functions ////
 
-mu_t parse_num(mu_t source) {
-    struct lex l;
-    lex_init(&l, source);
+mu_t mu_parse(mu_t source) {
+    if (!mu_isstr(source))
+        mu_err_undefined();
 
-    l_num(&l);
-    if (l.pos != l.end)
+    const mbyte_t *pos = str_bytes(source);
+    const mbyte_t *end = pos + str_len(source);
+
+    mu_t v = mu_nparse(&pos, end);
+
+    if (pos != end)
         mu_err_parse();
 
-    return l.val;
-}
-
-mu_t parse_str(mu_t source) {
-    struct lex l;
-    lex_init(&l, source);
-
-    l_str(&l);
-    if (l.pos != l.end)
-        mu_err_parse();
-
-    return l.val;
-}
-
-struct code *parse_expr(mu_t source) {
-    struct parse p = {
-        .bcode = mstr_create(0),
-        .imms = tbl_create(0),
-        .fns = tbl_create(0),
-        .bchain = -1,
-        .cchain = -1,
-
-        .regs = 1,
-        .scope = 4,
-    };
-
-    lex_init(&p.l, source);
-    p_return(&p);
-    if (p.l.tok)
-        unexpected(&p);
-
-    lex_dec(p.l);
     str_dec(source);
-    return compile(&p);
+    return v;
 }
 
-struct code *parse_fn(mu_t source) {
+mu_t mu_nparse(const mbyte_t **ppos, const mbyte_t *end) {
+    const mbyte_t *pos = *ppos;
+    mu_t val;
+    bool sym = false;
+
+    while (pos < end) {
+        if (*pos == '#') {
+            while (pos < end && *pos != '\n')
+                pos++;
+        } else if (class[*pos] == L_WS) {
+            pos++;
+        } else {
+            break;
+        }
+    }
+
+    switch (class[*pos]) {
+        case L_OP:
+        case L_NUM:     val = num_parse(&pos, end); break;
+        case L_STR:     val = str_parse(&pos, end); break;
+        case L_LTABLE:  val = tbl_parse(&pos, end); break;
+
+        case L_KW: {
+            const mbyte_t *start = pos++;
+            while (pos < end && (class[*pos] == L_KW ||
+                                 class[*pos] == L_NUM))
+                pos++;
+
+            val = mnstr(start, pos-start);
+            sym = true;
+        } break;
+
+        default:    mu_err_parse();
+    }
+
+    while (pos < end) {
+        if (*pos == '#') {
+            while (pos < end && *pos != '\n')
+                pos++;
+        } else if (class[*pos] == L_WS) {
+            pos++;
+        } else {
+            break;
+        }
+    }
+
+    if (sym && *pos != ':')
+        mu_err_undefined();
+
+    *ppos = pos;
+    return val;
+}
+
+struct code *mu_compile(mu_t source) {
+    if (!mu_isstr(source))
+        mu_err_undefined();
+
+    const mbyte_t *pos = str_bytes(source);
+    const mbyte_t *end = pos + str_len(source);
+
+    struct code *c = mu_ncompile(pos, end);
+    str_dec(source);
+    return c;
+}
+
+struct code *mu_ncompile(const mbyte_t *pos, const mbyte_t *end) {
     struct parse p = {
         .bcode = mstr_create(0),
-        .imms = tbl_create(0),
-        .fns = tbl_create(0),
+        .imms = tbl_create(0,0),
+        .fns = tbl_create(0,0),
         .bchain = -1,
         .cchain = -1,
 
@@ -1508,38 +1399,12 @@ struct code *parse_fn(mu_t source) {
         .scope = 4,
     };
 
-    lex_init(&p.l, source);
+    lex_init(&p.l, pos, end);
     p_block(&p, true);
     if (p.l.tok)
         unexpected(&p);
 
     encode(&p, OP_RET, 0, 0, 0, 0);
     lex_dec(p.l);
-    str_dec(source);
     return compile(&p);
 }
-
-struct code *parse_module(mu_t source) {
-    struct parse p = {
-        .bcode = mstr_create(0),
-        .imms = tbl_create(0),
-        .fns = tbl_create(0),
-        .bchain = -1,
-        .cchain = -1,
-
-        .regs = 1,
-        .scope = 4,
-    };
-
-    lex_init(&p.l, source);
-    p_block(&p, true);
-    if (p.l.tok)
-        unexpected(&p);
-
-    encode(&p, OP_DUP, 0, 0, 0, 0);
-    encode(&p, OP_RET, 0, 1, 0, 0);
-    lex_dec(p.l);
-    str_dec(source);
-    return compile(&p);
-}
-

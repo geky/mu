@@ -5,18 +5,16 @@
 #ifndef MU_PARSE_H
 #define MU_PARSE_H
 #include "mu.h"
-#include "types.h"
 #include "fn.h"
 
 
 // Parse literals without side-effects
-mu_t parse_num(mu_t s);
-mu_t parse_str(mu_t s);
+mu_t mu_parse(mu_t m);
+mu_t mu_nparse(const mbyte_t **pos, const mbyte_t *end);
 
-// Parse Mu code objects
-struct code *parse_expr(mu_t s);
-struct code *parse_fn(mu_t s);
-struct code *parse_module(mu_t s);
+// Compile Mu source code into code objects
+struct code *mu_compile(mu_t s);
+struct code *mu_ncompile(const mbyte_t *pos, const mbyte_t *end);
 
 
 // Conversion to/from ascii

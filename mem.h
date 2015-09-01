@@ -4,7 +4,7 @@
 
 #ifndef MU_MEM_H
 #define MU_MEM_H
-#include "mu.h"
+#include "config.h"
 
 
 // Reference type as word type aligned to 8 bytes

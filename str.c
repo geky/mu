@@ -181,7 +181,7 @@ void mstr_insert(mbyte_t **b, muint_t *i, mbyte_t c) {
 
 void mstr_concat(mbyte_t **b, muint_t *i, mu_t c) {
     mstr_ncat(b, i, str_bytes(c), str_len(c));
-    mu_dec(c);
+    str_dec(c);
 }
 
 void mstr_zcat(mbyte_t **b, muint_t *i, const char *c) {
@@ -212,6 +212,59 @@ void mstr_ncat(mbyte_t **b, muint_t *i, const mbyte_t *c, muint_t len) {
 
     memcpy(&(*b)[*i], c, len);
     *i += len;
+}
+
+
+// Conversion operations
+mu_t str_fromnum(mu_t n, mu_t mlen) {
+    if (!mlen) {
+        if (num_cmp(mlen, muint(0)) < 0)
+            mlen = num_mul(n, mint(-2));
+        else
+            mlen = num_add(n, muint(1));
+
+        mlen = num_ceil(num_log(mlen, muint(256))); // TODO use floor?
+    }
+
+    muint_t len = num_uint(mlen);
+    if (mlen != muint(len))
+        mu_err_undefined();
+
+    mbyte_t *be = mstr_create(len) + len-1;
+
+    for (muint_t i = 0; i < len; i++) {
+        be[-i] = (mbyte_t)num_uint(num_mod(n, muint(256)));
+        n = num_div(n, muint(256));
+    }
+
+    return mstr_intern(be-(len-1), len);
+}
+
+mu_t str_fromstr(mu_t m, mu_t mlen) {
+    if (!mlen || num_cmp(muint(str_len(m)), mlen) == 0)
+        return m;
+    else if (num_cmp(muint(str_len(m)), mlen) > 0)
+        return str_subset(m, num_sub(muint(str_len(m)), mlen), minf);
+    else
+        return str_pad(m, num_neg(mlen), mcstr("\0"));
+}
+
+mu_t str_fromiter(mu_t iter) {
+    return str_join(iter, mcstr(""));
+}
+    
+
+// Comparison operation
+mint_t str_cmp(mu_t a, mu_t b) {
+    if (a == b)
+        return 0;
+
+    muint_t alen = str_len(a);
+    muint_t blen = str_len(b);
+    mint_t cmp = memcmp(str_bytes(a), str_bytes(b), 
+                        alen < blen ? alen : blen);
+
+    return cmp != 0 ? cmp : alen - blen;
 }
 
 
@@ -480,18 +533,18 @@ static mu_t str_divmod(mu_t a, mu_t b, mu_t *mod) {
 
 mu_t str_div(mu_t a, mu_t b) {
     mu_t mod, div = str_divmod(a, b, &mod);
-    mu_dec(mod);
+    str_dec(mod);
     return div;
 }
 
 mu_t str_mod(mu_t a, mu_t b) {
     mu_t mod, div = str_divmod(a, b, &mod);
-    mu_dec(div);
+    str_dec(div);
     return mod;
 }
 
 
-// Concatenation
+// String operations
 mu_t str_concat(mu_t a, mu_t b) {
     mlen_t alen = str_len(a);
     mlen_t blen = str_len(b);
@@ -500,20 +553,245 @@ mu_t str_concat(mu_t a, mu_t b) {
     memcpy(d, str_bytes(a), alen);
     memcpy(d+alen, str_bytes(b), blen);
 
+    str_dec(a);
+    str_dec(b);
     return mstr_intern(d, alen + blen);
 }
 
+mu_t str_subset(mu_t s, mu_t lower, mu_t upper) {
+    mlen_t len = str_len(s);
+    muint_t a;
+    muint_t b;
+
+    if (num_cmp(lower, muint(len)) >= 0)
+        a = len;
+    else if (num_cmp(lower, muint(0)) <= 0)
+        a = 0;
+    else
+        a = num_uint(lower);
+
+    if (num_cmp(upper, muint(len)) >= 0)
+        b = len;
+    else if (num_cmp(upper, muint(0)) <= 0)
+        b = 0;
+    else
+        b = num_uint(upper);
+
+    if (a > b)
+        a = b;
+
+    mu_t d = mnstr(str_bytes(s) + a, b - a);
+
+    str_dec(s);
+    return d;
+}
+
+mu_t str_find(mu_t a, mu_t s) {
+    const mbyte_t *ab = str_bytes(a);
+    mlen_t alen = str_len(a);
+    const mbyte_t *sb = str_bytes(s);
+    mlen_t slen = str_len(s);
+
+    for (muint_t i = 0; i+slen <= alen; i++) {
+        if (memcmp(&ab[i], sb, slen) == 0) {
+            str_dec(a);
+            str_dec(s);
+            return mint(i);
+        }
+    }
+
+    str_dec(a);
+    str_dec(s);
+    return mnil;
+}
+
+mu_t str_replace(mu_t a, mu_t s, mu_t r, mu_t mmax) {
+    const mbyte_t *ab = str_bytes(a);
+    mlen_t alen = str_len(a);
+    const mbyte_t *sb = str_bytes(s);
+    mlen_t slen = str_len(s);
+
+    muint_t count = 0;
+    muint_t max;
+
+    if (num_cmp(mmax, muint(alen+1)) >= 0)
+        max = alen+1;
+    else if (num_cmp(mmax, muint(0)) <= 0)
+        max = 0;
+    else
+        max = num_uint(mmax);
+
+    mbyte_t *db = mstr_create(alen);
+    muint_t dlen = 0;
+    muint_t i = 0;
+
+    while (i+slen <= alen && count < max) {
+        bool match = memcmp(&ab[i], sb, slen) == 0;
+
+        if (match) {
+            mstr_concat(&db, &dlen, str_inc(r));
+            count++;
+            i += slen;
+        }
+
+        if (!match || slen == 0) {
+            if (i >= alen)
+                break;
+
+            mstr_insert(&db, &dlen, ab[i]);
+            i += 1;
+        }
+    }
+
+    mstr_ncat(&db, &dlen, &ab[i], alen-i);
+
+    str_dec(a);
+    str_dec(s);
+    str_dec(r);
+    return mstr_intern(db, dlen);
+}
+
+static mc_t str_split_step(mu_t scope, mu_t *frame) {
+    mu_t a = tbl_lookup(scope, muint(0));
+    const mbyte_t *ab = str_bytes(a);
+    mlen_t alen = str_len(a);
+    muint_t i = num_uint(tbl_lookup(scope, muint(2)));
+
+    if (i > alen) {
+        str_dec(a);
+        return 0;
+    }
+
+    mu_t s = tbl_lookup(scope, muint(1));
+    const mbyte_t *sb = str_bytes(s);
+    mlen_t slen = str_len(s);
+
+    muint_t j = i;
+    for (; j < alen; j++) {
+        if (j+slen <= alen && memcmp(&ab[j], sb, slen) == 0)
+            break;
+    }
+
+    frame[0] = mnstr(ab+i, j-i);
+    tbl_insert(scope, muint(2), muint(j+slen));
+    str_dec(a);
+    str_dec(s);
+    return 1;
+}
+
+mu_t str_split(mu_t s, mu_t delim) {
+    if (str_len(delim) == 0)
+        return str_iter(s);
+
+    return msbfn(0x0, str_split_step, mtbl({
+        { muint(0), s },
+        { muint(1), delim },
+        { muint(2), muint(0) },
+    }));
+}
+
+mu_t str_join(mu_t i, mu_t delim) {
+    mu_t frame[MU_FRAME];
+    mbyte_t *b = mstr_create(0);
+    muint_t len = 0;
+    bool first = true;
+
+    while (true) {
+        mu_fcall(mu_inc(i), 0x01, frame);
+
+        if (!frame[0]) {
+            fn_dec(i);
+            str_dec(delim);
+            return mstr_intern(b, len);
+        } else if (!mu_isstr(frame[0])) {
+            mu_err_undefined();
+        }
+
+        if (first) {
+            first = false;
+        } else {
+            mstr_concat(&b, &len, str_inc(delim));
+        }
+
+        mstr_concat(&b, &len, frame[0]);
+    }
+}
+
+mu_t str_pad(mu_t s, mu_t mlen, mu_t pad) {
+    if (num_cmp(num_abs(mlen), muint((mlen_t)-1)) > 0)
+        mu_err_len();
+    else if (str_len(pad) == 0)
+        mu_cerr(mcstr("invalid arg"), 
+                mcstr("empty string passed as padding"));
+
+    bool left;
+    muint_t len;
+
+    if (num_cmp(mlen, muint(0)) < 0) {
+        left = false;
+        len = num_uint(num_neg(mlen));
+    } else {
+        left = true;
+        len = num_uint(mlen);
+    }
+
+    if (str_len(s) >= len) {
+        str_dec(pad);
+        return s;
+    }
+
+    mbyte_t *db = mstr_create(len);
+    muint_t dlen = 0;
+    muint_t count = (len - str_len(s)) / str_len(pad);
+
+    if (left)
+        mstr_concat(&db, &dlen, s);
+
+    for (muint_t i = 0; i < count; i++)
+        mstr_concat(&db, &dlen, str_inc(pad));
+    
+    if (!left)
+        mstr_concat(&db, &dlen, s);
+
+    mu_dec(pad);
+    return mstr_intern(db, dlen);
+}
+
+mu_t str_strip(mu_t s, mu_t dir, mu_t pad) {
+    if (str_len(pad) == 0)
+        mu_cerr(mcstr("invalid arg"), 
+                mcstr("empty string passed as padding"));
+
+    const mbyte_t *pos = str_bytes(s);
+    const mbyte_t *end = pos + str_len(s);
+
+    const mbyte_t *pb = str_bytes(pad);
+    mlen_t plen = str_len(pad);
+
+    if (num_cmp(dir, muint(0)) <= 0) {
+        while (end-pos >= plen && memcmp(pos, pb, plen) == 0)
+            pos += plen;
+    }
+            
+    if (num_cmp(dir, muint(0)) >= 0) {
+        while (end-pos >= plen && memcmp(end-plen, pb, plen) == 0)
+            end -= plen;
+    }
+
+    mu_t d = mnstr(pos, end-pos);
+    str_dec(s);
+    str_dec(pad);
+    return d;
+}
 
 // String iteration
 bool str_next(mu_t s, muint_t *ip, mu_t *cp) {
     muint_t i = *ip;
 
-    if (i >= str_len(s)) {
-        *cp = mnil;
+    if (i >= str_len(s))
         return false;
-    }
 
-    *cp = mnstr(&str_bytes(s)[i], 1);
+    if (cp) *cp = mnstr(&str_bytes(s)[i], 1);
     *ip = i + 1;
     return true;
 }
@@ -522,9 +800,10 @@ mc_t str_step(mu_t scope, mu_t *frame) {
     mu_t s = tbl_lookup(scope, muint(0));
     muint_t i = num_uint(tbl_lookup(scope, muint(1)));
 
-    str_next(s, &i, &frame[0]);
+    bool next = str_next(s, &i, &frame[0]);
+    str_dec(s);
     tbl_insert(scope, muint(1), muint(i));
-    return 1;
+    return next ? 1 : 0;
 }
 
 mu_t str_iter(mu_t s) {
@@ -535,11 +814,97 @@ mu_t str_iter(mu_t s) {
 }
 
 
+// String representation
+mu_t str_parse(const mbyte_t **ppos, const mbyte_t *end) {
+    const mbyte_t *pos = *ppos;
+
+    mbyte_t quote = *pos++;
+    if (quote != '\'' && quote != '"')
+        mu_err_parse();
+
+    mbyte_t *s = mstr_create(0);
+    muint_t len = 0;
+
+    while (pos < end-1 && *pos != quote) {
+        if (*pos == '\\') {
+            if (pos[1] == 'b' && pos < end-9 &&
+                (mu_fromascii(pos[2]) < 2 &&
+                 mu_fromascii(pos[3]) < 2 &&
+                 mu_fromascii(pos[4]) < 2 &&
+                 mu_fromascii(pos[5]) < 2 &&
+                 mu_fromascii(pos[6]) < 2 &&
+                 mu_fromascii(pos[7]) < 2 &&
+                 mu_fromascii(pos[8]) < 2 &&
+                 mu_fromascii(pos[9]) < 2)) {
+                mstr_insert(&s, &len, mu_fromascii(pos[2])*2*2*2*2*2*2*2 +
+                                      mu_fromascii(pos[3])*2*2*2*2*2*2 +
+                                      mu_fromascii(pos[4])*2*2*2*2*2 +
+                                      mu_fromascii(pos[5])*2*2*2*2 +
+                                      mu_fromascii(pos[6])*2*2*2 +
+                                      mu_fromascii(pos[7])*2*2 +
+                                      mu_fromascii(pos[8])*2 +
+                                      mu_fromascii(pos[9]));
+                pos += 10;
+            } else if (pos[1] == 'o' && pos < end-4 &&
+                (mu_fromascii(pos[2]) < 8 &&
+                 mu_fromascii(pos[3]) < 8 &&
+                 mu_fromascii(pos[4]) < 8)) {
+                mstr_insert(&s, &len, mu_fromascii(pos[2])*8*8 +
+                                      mu_fromascii(pos[3])*8 +
+                                      mu_fromascii(pos[4]));
+                pos += 5;
+            } else if (pos[1] == 'd' && pos < end-4 &&
+                       (mu_fromascii(pos[2]) < 10 &&
+                        mu_fromascii(pos[3]) < 10 &&
+                        mu_fromascii(pos[4]) < 10)) {
+                mstr_insert(&s, &len, mu_fromascii(pos[2])*10*10 +
+                                      mu_fromascii(pos[3])*10 +
+                                      mu_fromascii(pos[4]));
+                pos += 5;
+            } else if (pos[1] == 'x' && pos < end-3 &&
+                       (mu_fromascii(pos[2]) < 16 &&
+                        mu_fromascii(pos[3]) < 16)) {
+                mstr_insert(&s, &len, mu_fromascii(pos[2])*16 +
+                                      mu_fromascii(pos[3]));
+                pos += 4;
+            } else if (pos[1] == '\\') {
+                mstr_insert(&s, &len, '\\'); pos += 2;
+            } else if (pos[1] == '\'') {
+                mstr_insert(&s, &len, '\''); pos += 2;
+            } else if (pos[1] == '"') {
+                mstr_insert(&s, &len,  '"'); pos += 2;
+            } else if (pos[1] == 'f') {
+                mstr_insert(&s, &len, '\f'); pos += 2;
+            } else if (pos[1] == 'n') {
+                mstr_insert(&s, &len, '\n'); pos += 2;
+            } else if (pos[1] == 'r') {
+                mstr_insert(&s, &len, '\r'); pos += 2;
+            } else if (pos[1] == 't') {
+                mstr_insert(&s, &len, '\t'); pos += 2;
+            } else if (pos[1] == 'v') {
+                mstr_insert(&s, &len, '\v'); pos += 2;
+            } else if (pos[1] == '0') {
+                mstr_insert(&s, &len, '\0'); pos += 2;
+            } else {
+                mstr_insert(&s, &len, '\\'); pos += 1;
+            }
+        } else {
+            mstr_insert(&s, &len, *pos++);
+        }
+    }
+
+    if (quote != *pos++)
+        mu_err_parse();
+
+    *ppos = pos;
+    return mstr_intern(s, len);
+}
+
 // Returns a string representation of a string
 mu_t str_repr(mu_t m) {
     const mbyte_t *pos = str_bytes(m);
     const mbyte_t *end = pos + str_len(m);
-    mbyte_t *s = mstr_create(2);
+    mbyte_t *s = mstr_create(2 + str_len(m));
     muint_t len = 0;
 
     mstr_insert(&s, &len, '\'');
@@ -563,7 +928,34 @@ mu_t str_repr(mu_t m) {
         }
     }
 
-    mu_dec(m);
+    str_dec(m);
     mstr_insert(&s, &len, '\'');
     return mstr_intern(s, len);
 }
+
+static mu_t str_base(mu_t m, char b, muint_t size, muint_t mask, muint_t shift) {
+    const mbyte_t *s = str_bytes(m);
+    mlen_t len = str_len(m);
+
+    mbyte_t *d = mstr_create(2 + (2+size)*len);
+    d[0] = '\'';
+
+    for (muint_t i = 0; i < len; i++) {
+        mbyte_t c = s[i];
+        d[1 + (2+size)*i+0] = '\\';
+        d[1 + (2+size)*i+1] = b;
+
+        for (muint_t j = 0; j < size; j++) {
+            d[1 + (2+size)*i+2 + (size-1-j)] = mu_toascii(c & mask);
+            c >>= shift;
+        }
+    }
+
+    d[1 + (2+size)*len] = '\'';
+    str_dec(m);
+    return mstr_intern(d, 2 + (2+size)*len);
+}
+
+mu_t str_bin(mu_t s) { return str_base(s, 'b', 8,   1, 1); }
+mu_t str_oct(mu_t s) { return str_base(s, 'o', 3,   7, 3); }
+mu_t str_hex(mu_t s) { return str_base(s, 'x', 2, 0xf, 4); }

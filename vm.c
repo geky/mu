@@ -1,7 +1,7 @@
 #include "vm.h"
 
 #include "parse.h"
-#include "types.h"
+#include "mu.h"
 #include "num.h"
 #include "str.h"
 #include "fn.h"
@@ -172,7 +172,9 @@ mc_t mu_exec(struct code *c, mu_t scope, mu_t *frame) {
 
 reenter:
     // TODO Just here for debugging
+#ifdef MU_DEBUG
     mu_dis(c);
+#endif
     //
 
     {   // Setup the registers and scope
@@ -199,7 +201,7 @@ reenter:
                     break;
 
                 case OP_TBL:
-                    regs[rd(ins)] = tbl_create(i(ins));
+                    regs[rd(ins)] = tbl_create(i(ins), 0);
                     break;
 
                 case OP_MOVE:
@@ -270,7 +272,7 @@ reenter:
                     // to get a tail call emitted.
                     if (mu_type(scratch) == MU_FN) {
                         c = fn_code(scratch);
-                        scope = tbl_extend(c->scope, fn_closure(scratch));
+                        scope = tbl_create(c->scope, fn_closure(scratch));
                         mu_fto(c->args, i(ins), frame);
                         fn_dec(scratch);
                         goto reenter;

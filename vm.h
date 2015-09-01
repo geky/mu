@@ -4,7 +4,7 @@
 
 #ifndef MU_VM_H
 #define MU_VM_H
-#include "types.h"
+#include "mu.h"
 #include "fn.h"
 #include "ops.h"
 

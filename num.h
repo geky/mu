@@ -5,15 +5,16 @@
 #ifndef MU_NUM_H
 #define MU_NUM_H
 #include "mu.h"
-#include "types.h"
 #include "err.h"
 #include "str.h"
 #include <math.h>
 
 
 // Number constants
-#define minf mfloat(INFINITY)
-#define mninf mfloat(-INFINITY)
+#define minf    mfloat(INFINITY)
+#define mninf   mfloat(-INFINITY)
+#define mexp    mfloat(2.71828182845904523536)
+#define mpi     mfloat(3.14159265358979323846)
 
 
 // Number creating macros
@@ -39,18 +40,43 @@ mu_inline mint_t  num_int(mu_t m)  { return (mint_t)num_float(m); }
 mu_inline muint_t num_uint(mu_t m) { return (muint_t)num_float(m); }
 
 
+// Conversion operations
+mu_t num_fromstr(mu_t m);
+
+// Comparison operation
+mint_t num_cmp(mu_t a, mu_t b);
+
 // Arithmetic operations
-mu_t num_neg(mu_t a);
-mu_t num_add(mu_t a, mu_t b);
-mu_t num_sub(mu_t a, mu_t b);
-mu_t num_mul(mu_t a, mu_t b);
-mu_t num_div(mu_t a, mu_t b);
-mu_t num_idiv(mu_t a, mu_t b);
-mu_t num_mod(mu_t a, mu_t b);
-mu_t num_pow(mu_t a, mu_t b);
+mu_t num_neg(mu_t);
+mu_t num_add(mu_t, mu_t);
+mu_t num_sub(mu_t, mu_t);
+mu_t num_mul(mu_t, mu_t);
+mu_t num_div(mu_t, mu_t);
+
+mu_t num_abs(mu_t);
+mu_t num_floor(mu_t);
+mu_t num_ceil(mu_t);
+mu_t num_idiv(mu_t, mu_t);
+mu_t num_mod(mu_t, mu_t);
+
+mu_t num_pow(mu_t, mu_t);
+mu_t num_log(mu_t, mu_t);
+
+mu_t num_cos(mu_t);
+mu_t num_acos(mu_t);
+mu_t num_sin(mu_t);
+mu_t num_asin(mu_t);
+mu_t num_tan(mu_t);
+mu_t num_atan(mu_t);
+mu_t num_atan2(mu_t, mu_t);
 
 // Number representation
+mu_t num_parse(const mbyte_t **pos, const mbyte_t *end);
 mu_t num_repr(mu_t n);
+
+mu_t num_bin(mu_t n);
+mu_t num_oct(mu_t n);
+mu_t num_hex(mu_t n);
 
 
 #endif

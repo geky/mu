@@ -5,7 +5,6 @@
 #ifndef MU_STR_H
 #define MU_STR_H
 #include "mu.h"
-#include "types.h"
 #include <string.h>
 
 
@@ -59,7 +58,6 @@ void mstr_concat(mbyte_t **s, muint_t *i, mu_t c);
 void mstr_ncat(mbyte_t **s, muint_t *i, const mbyte_t *c, muint_t len);
 void mstr_zcat(mbyte_t **s, muint_t *i, const char *c);
 
-
 // Reference counting
 mu_inline mbyte_t *mstr_inc(mbyte_t *s) {
     ref_inc(s - mu_offset(struct str, data)); return s;
@@ -71,13 +69,13 @@ mu_inline void mstr_dec(mbyte_t *s) {
 }
 
 
-// Bitwise operations
-mu_t str_not(mu_t a);
-mu_t str_and(mu_t a, mu_t b);
-mu_t str_or(mu_t a, mu_t b);
-mu_t str_xor(mu_t a, mu_t b);
-mu_t str_shl(mu_t a, mu_t b);
-mu_t str_shr(mu_t a, mu_t b);
+// Conversion operations
+mu_t str_fromnum(mu_t m, mu_t len);
+mu_t str_fromstr(mu_t m, mu_t len);
+mu_t str_fromiter(mu_t iter);
+
+// Comparison operation
+mint_t str_cmp(mu_t a, mu_t b);
 
 // Arithmetic operations
 mu_t str_neg(mu_t a);
@@ -87,16 +85,38 @@ mu_t str_mul(mu_t a, mu_t b);
 mu_t str_div(mu_t a, mu_t b);
 mu_t str_mod(mu_t a, mu_t b);
 
-// Concatenation
+// Bitwise operations
+mu_t str_not(mu_t a);
+mu_t str_and(mu_t a, mu_t b);
+mu_t str_or(mu_t a, mu_t b);
+mu_t str_xor(mu_t a, mu_t b);
+mu_t str_shl(mu_t a, mu_t b);
+mu_t str_shr(mu_t a, mu_t b);
+
+// String operations
 mu_t str_concat(mu_t a, mu_t b);
+mu_t str_subset(mu_t s, mu_t lower, mu_t upper);
+
+mu_t str_find(mu_t s, mu_t sub);
+mu_t str_replace(mu_t s, mu_t sub, mu_t rep, mu_t max);
+
+mu_t str_split(mu_t s, mu_t delim);
+mu_t str_join(mu_t iter, mu_t delim);
+
+mu_t str_pad(mu_t s, mu_t len, mu_t pad);
+mu_t str_strip(mu_t s, mu_t dir, mu_t pad);
 
 // String iteration
-mu_t str_iter(mu_t s);
 bool str_next(mu_t s, muint_t *i, mu_t *c);
+mu_t str_iter(mu_t s);
 
 // String representation
+mu_t str_parse(const mbyte_t **pos, const mbyte_t *end);
 mu_t str_repr(mu_t s);
 
+mu_t str_bin(mu_t s);
+mu_t str_oct(mu_t s);
+mu_t str_hex(mu_t s);
 
 // Reference counting
 mu_inline mu_t str_inc(mu_t m) {
