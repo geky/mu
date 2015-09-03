@@ -122,19 +122,16 @@ mu_t mu_num(mu_t m) {
     }
 }
 
-mu_t mu_str(mu_t m, mu_t len) {
-    if (len && !mu_isnum(len))
-        mu_err_undefined();
-
+mu_t mu_str(mu_t m) {
     switch (mu_type(m)) {
-        case MU_NIL:    return str_fromstr(mcstr(""), len);
-        case MU_NUM:    return str_fromnum(m, len);
-        case MU_STR:    return str_fromstr(m, len);
+        case MU_NIL:    return mcstr("");
+        case MU_NUM:    return str_fromnum(m);
+        case MU_STR:    return m;
         case MU_TBL:    
         case MU_RTBL:   
         case MU_FN:
         case MU_BFN:
-        case MU_SBFN:   return str_fromstr(str_fromiter(mu_iter(m)), len);
+        case MU_SBFN:   return str_fromiter(mu_iter(m));
         default:        mu_err_undefined();
     }
 }
@@ -209,7 +206,6 @@ mint_t mu_cmp(mu_t a, mu_t b) {
 mu_t mu_pos(mu_t a) {
     switch (mu_type(a)) {
         case MU_NUM:    return a;
-        case MU_STR:    return a;
         default:        mu_err_undefined();
     }
 }
@@ -217,7 +213,6 @@ mu_t mu_pos(mu_t a) {
 mu_t mu_neg(mu_t a) {
     switch (mu_type(a)) {
         case MU_NUM:    return num_neg(a);
-        case MU_STR:    return str_neg(a);
         default:        mu_err_undefined();
     }
 }
@@ -229,7 +224,6 @@ mu_t mu_add(mu_t a, mu_t b) {
 
     switch (mu_type(a)) {
         case MU_NUM:    return num_add(a, b);
-        case MU_STR:    return str_add(a, b);
         default:        mu_err_undefined();
     }
 }
@@ -241,7 +235,6 @@ mu_t mu_sub(mu_t a, mu_t b) {
 
     switch (mu_type(a)) {
         case MU_NUM:    return num_sub(a, b);
-        case MU_STR:    return str_sub(a, b);
         default:        mu_err_undefined();
     }
 }
@@ -253,7 +246,6 @@ mu_t mu_mul(mu_t a, mu_t b) {
 
     switch (mu_type(a)) {
         case MU_NUM:    return num_mul(a, b);
-        case MU_STR:    return str_mul(a, b);
         default:        mu_err_undefined();
     }
 }
@@ -265,7 +257,6 @@ mu_t mu_div(mu_t a, mu_t b) {
 
     switch (mu_type(a)) {
         case MU_NUM:    return num_div(a, b);
-        case MU_STR:    return str_div(a, b);
         default:        mu_err_undefined();
     }
 }
@@ -298,7 +289,6 @@ mu_t mu_idiv(mu_t a, mu_t b) {
 
     switch (mu_type(a)) {
         case MU_NUM:    return num_idiv(a, b);
-        case MU_STR:    return str_div(a, b);
         default:        mu_err_undefined();
     }
 }
@@ -310,7 +300,6 @@ mu_t mu_mod(mu_t a, mu_t b) {
 
     switch (mu_type(a)) {
         case MU_NUM:    return num_mod(a, b);
-        case MU_STR:    return str_mod(a, b);
         default:        mu_err_undefined();
     }
 }
@@ -395,7 +384,7 @@ mu_t mu_atan2(mu_t a, mu_t b) {
 // Bitwise/Set operations
 mu_t mu_not(mu_t a) {
     switch (mu_type(a)) {
-        case MU_STR:    return str_not(a);
+        case MU_NUM:    return num_not(a);
         default:        mu_err_undefined();
     }
 }
@@ -406,7 +395,7 @@ mu_t mu_and(mu_t a, mu_t b) {
                 mcstr("incompatible arguments"));
 
     switch (mu_type(a)) {
-        case MU_STR:    return str_and(a, b);
+        case MU_NUM:    return num_and(a, b);
         case MU_TBL:
         case MU_RTBL:   return tbl_and(a, b);
         default:        mu_err_undefined();
@@ -419,7 +408,7 @@ mu_t mu_or(mu_t a, mu_t b) {
                 mcstr("incompatible arguments"));
 
     switch (mu_type(a)) {
-        case MU_STR:    return str_or(a, b);
+        case MU_NUM:    return num_or(a, b);
         case MU_TBL:
         case MU_RTBL:   return tbl_or(a, b);
         default:        mu_err_undefined();
@@ -432,7 +421,7 @@ mu_t mu_xor(mu_t a, mu_t b) {
                 mcstr("incompatible arguments"));
 
     switch (mu_type(a)) {
-        case MU_STR:    return str_xor(a, b);
+        case MU_NUM:    return num_xor(a, b);
         case MU_TBL:
         case MU_RTBL:   return tbl_xor(a, b);
         default:        mu_err_undefined();
@@ -445,7 +434,7 @@ mu_t mu_diff(mu_t a, mu_t b) {
                 mcstr("incompatible arguments"));
 
     switch (mu_type(a)) {
-        case MU_STR:    return str_and(a, str_not(b));
+        case MU_NUM:    return num_xor(a, num_not(b));
         case MU_TBL:
         case MU_RTBL:   return tbl_diff(a, b);
         default:        mu_err_undefined();
@@ -457,7 +446,7 @@ mu_t mu_shl(mu_t a, mu_t b) {
         mu_err_undefined();
 
     switch (mu_type(a)) {
-        case MU_STR:    return str_shl(a, b);
+        case MU_NUM:    return num_shl(a, b);
         default:        mu_err_undefined();
     }
 }
@@ -467,7 +456,7 @@ mu_t mu_shr(mu_t a, mu_t b) {
         mu_err_undefined();
 
     switch (mu_type(a)) {
-        case MU_STR:    return str_shr(a, b);
+        case MU_NUM:    return num_shr(a, b);
         default:        mu_err_undefined();
     }
 }
@@ -819,6 +808,23 @@ mu_t mu_sort(mu_t iter) {
     return fn_sort(mu_iter(iter));
 }
 
+// Random number generation
+mu_t mu_seed(mu_t m) {
+    if (!m)
+        mu_err_undefined();
+
+    mu_dec(m);
+    return num_seed(m);
+}
+
+mu_t mu_random(void) {
+    mu_t frame[MU_FRAME];
+    mu_t gen = tbl_lookup(mu_builtins(), mcstr("random"));
+
+    mu_fcall(gen, 0x01, frame);
+    return frame[0];
+}
+
 
 // Builtin table bindings
 
@@ -829,7 +835,7 @@ static mc_t mb_num(mu_t *frame) {
 }
 
 static mc_t mb_str(mu_t *frame) {
-    frame[0] = mu_str(frame[0], frame[1]);
+    frame[0] = mu_str(frame[0]);
     return 1;
 }
 
@@ -1275,9 +1281,14 @@ static mc_t mb_sort(mu_t *frame) {
     return 1;
 }
 
+static mc_t mb_seed(mu_t *frame) {
+    frame[0] = mu_seed(frame[0]);
+    return 1;
+}
+
 // Types
 static mu_const mu_t mu_num_type(void) { return mcfn(0x1, mb_num); }
-static mu_const mu_t mu_str_type(void) { return mcfn(0x2, mb_str); }
+static mu_const mu_t mu_str_type(void) { return mcfn(0x1, mb_str); }
 static mu_const mu_t mu_tbl_type(void) { return mcfn(0x2, mb_tbl); }
 static mu_const mu_t mu_fn_type(void)  { return mcfn(0x1, mb_fn); }
 
@@ -1397,5 +1408,9 @@ mu_const mu_t mu_builtins(void) {
 
         { mcstr("reverse"), mcfn(0x1, mb_reverse) },
         { mcstr("sort"),    mcfn(0x1, mb_sort) },
+
+        // Random number generation
+        { mcstr("seed"),    mcfn(0x1, mb_seed) },
+        { mcstr("random"),  mu_seed(muint(0)) },
     });
 }

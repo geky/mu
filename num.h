@@ -70,6 +70,18 @@ mu_t num_tan(mu_t);
 mu_t num_atan(mu_t);
 mu_t num_atan2(mu_t, mu_t);
 
+// Bitwise operations
+mu_t num_not(mu_t);
+mu_t num_and(mu_t, mu_t);
+mu_t num_or(mu_t, mu_t);
+mu_t num_xor(mu_t, mu_t);
+
+mu_t num_shl(mu_t, mu_t);
+mu_t num_shr(mu_t, mu_t);
+
+// Random number generation
+mu_t num_seed(mu_t);
+
 // Number representation
 mu_t num_parse(const mbyte_t **pos, const mbyte_t *end);
 mu_t num_repr(mu_t n);

@@ -99,7 +99,7 @@ mu_const mu_t mu_builtins(void);
 
 // Type casts
 mu_t mu_num(mu_t m);
-mu_t mu_str(mu_t m, mu_t len);
+mu_t mu_str(mu_t m);
 mu_t mu_tbl(mu_t m, mu_t tail);
 mu_t mu_fn(mu_t m);
 
@@ -220,6 +220,10 @@ mu_t mu_max(mu_t iter);
 
 mu_t mu_reverse(mu_t iter);
 mu_t mu_sort(mu_t iter);
+
+// Random number generation
+mu_t mu_seed(mu_t m);
+mu_t mu_random(void);
 
 
 #endif

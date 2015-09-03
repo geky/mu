@@ -1,6 +1,7 @@
 #include "num.h"
 
 #include "str.h"
+#include "tbl.h"
 #include "err.h"
 #include "parse.h"
 
@@ -86,17 +87,82 @@ mu_t num_atan2(mu_t a, mu_t b) {
 }
 
 
-// Conversion from string representing bytes
+// Bitwise operations
+mu_t num_not(mu_t a) {
+    return muint((muinth_t)(~num_uint(a)));
+}
+
+mu_t num_and(mu_t a, mu_t b) {
+    return muint((muinth_t)(num_uint(a) & num_uint(b)));
+}
+
+mu_t num_or(mu_t a, mu_t b) {
+    return muint((muinth_t)(num_uint(a) | num_uint(b)));
+}
+
+mu_t num_xor(mu_t a, mu_t b) {
+    return muint((muinth_t)(num_uint(a) ^ num_uint(b)));
+}
+
+
+mu_t num_shl(mu_t a, mu_t b) {
+    return muint((muint_t)(num_uint(a) << num_uint(b)));
+}
+
+mu_t num_shr(mu_t a, mu_t b) {
+    return muint((muint_t)(num_uint(a) >> num_uint(b)));
+}
+
+
+// Random number generation
+// Based on xorshift128+ with wordsize as seed/output
+#ifdef MU64
+#define XORSHIFT1 23
+#define XORSHIFT2 17
+#define XORSHIFT3 26
+#else
+#define XORSHIFT1 15
+#define XORSHIFT2 18
+#define XORSHIFT3 11
+#endif
+
+static mc_t num_random(mu_t scope, mu_t *frame) {
+    muint_t x = (num_uint(tbl_lookup(scope, muint(0))) << sizeof(muinth_t)) |
+                 num_uint(tbl_lookup(scope, muint(1)));
+    muint_t y = (num_uint(tbl_lookup(scope, muint(2))) << sizeof(muinth_t)) |
+                 num_uint(tbl_lookup(scope, muint(3)));
+
+    x ^= x << XORSHIFT1;
+    x ^= x >> XORSHIFT2;
+    x ^= y ^ (y >> XORSHIFT3);
+
+    tbl_insert(scope, muint(0), muint(y >> sizeof(muinth_t)));
+    tbl_insert(scope, muint(1), muint(y & (muinth_t)-1));
+    tbl_insert(scope, muint(2), muint(x >> sizeof(muinth_t)));
+    tbl_insert(scope, muint(3), muint(x & (muinth_t)-1));
+
+    frame[0] = num_div(muint(x + y), num_add(muint((muint_t)-1), muint(1)));
+    return 1;
+}
+
+mu_t num_seed(mu_t m) {
+    muint_t x = (muint_t)m;
+
+    return msbfn(0x0, num_random, mtbl({
+        { muint(0), muint(x >> sizeof(muinth_t)) },
+        { muint(1), muint(x & (muinth_t)-1) },
+        { muint(2), muint(x & (muinth_t)-1) },
+        { muint(3), muint(x >> sizeof(muinth_t)) },
+    }));
+}
+
+
+// Conversion from single character
 mu_t num_fromstr(mu_t m) {
-    const mbyte_t *b = str_bytes(m);
-    mlen_t len = str_len(m);
-    mu_t n = muint(0);
+    if (str_len(m) != 1)
+        mu_cerr(mcstr("invalid argument"), mcstr("argument not of size 1"));
 
-    for (muint_t i = 0; i < len; i++) {
-        n = num_mul(n, muint(256));
-        n = num_add(n, muint(b[i]));
-    }
-
+    mu_t n = muint(str_bytes(m)[0]);
     str_dec(m);
     return n;
 }

@@ -997,8 +997,7 @@ static void p_postexpr(struct parse *p, struct expr *e) {
     } else if (e->prec > p->l.prec && match(p, T_OR)) {
         encode_load(p, e, 0);
         mlen_t offset = p->bcount;
-        encode(p, OP_JTRUE, p->sp, 0, 0, 0);
-        encode(p, OP_DROP, p->sp, 0, 0, -1);
+        encode(p, OP_JTRUE, p->sp, 0, 0, -1);
         muintq_t prec = e->prec; e->prec = p->m.prec;
         p_subexpr(p, e);
         encode_load(p, e, 0);

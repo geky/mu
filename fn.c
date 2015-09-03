@@ -717,12 +717,12 @@ mu_t fn_sort(mu_t iter) {
 
 // String representation
 mu_t fn_repr(mu_t t) {
-    mbyte_t *s = mstr_create(7 + 2*sizeof(muint_t));
-    memcpy(s, "fn(0x", 6);
+    mbyte_t *s = mstr_create(6 + 2*sizeof(muint_t));
+    memcpy(s, "fn(0x", 5);
 
     for (muint_t i = 0; i < 2*sizeof(muint_t); i++)
-        s[i+6] = mu_toascii(0xf & ((muint_t)t >> 4*(2*sizeof(muint_t)-1 - i)));
+        s[i+5] = mu_toascii(0xf & ((muint_t)t >> 4*(2*sizeof(muint_t)-1 - i)));
 
-    s[6 + 2*sizeof(muint_t)] = ')';
-    return mstr_intern(s, 7 + 2*sizeof(muint_t));
+    s[5 + 2*sizeof(muint_t)] = ')';
+    return mstr_intern(s, 6 + 2*sizeof(muint_t));
 }
