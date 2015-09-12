@@ -76,7 +76,8 @@ enum tok {
 
 
 // Internal tables for keywords/symbols
-static mu_const mu_t mu_keys(void) {
+#define MU_KEYS mu_keys()
+static mu_pure mu_t mu_keys(void) {
     return mctbl({
         { mcstr("let"),      muint(T_LET)    },
         { mcstr("else"),     muint(T_ELSE)   },
@@ -95,7 +96,8 @@ static mu_const mu_t mu_keys(void) {
     });
 }
 
-static mu_const mu_t mu_syms(void) {
+#define MU_OPS mu_ops()
+static mu_pure mu_t mu_ops(void) {
     return mctbl({
         { mcstr("="),  muint(T_ASSIGN) },
         { mcstr(":"),  muint(T_PAIR)   },
@@ -307,7 +309,7 @@ static void l_op(struct lex *l) {
         l->pos++;
 
     l->val = mnstr(begin, l->pos-begin);
-    mu_t tok = tbl_lookup(mu_syms(), mu_inc(l->val));
+    mu_t tok = tbl_lookup(MU_OPS, mu_inc(l->val));
     l->tok = tok ? num_uint(tok) : T_OP;
 }
 
@@ -319,7 +321,7 @@ static void l_kw(struct lex *l) {
         l->pos++;
 
     l->val = mnstr(begin, l->pos-begin);
-    mu_t tok = tbl_lookup(mu_keys(), mu_inc(l->val));
+    mu_t tok = tbl_lookup(MU_KEYS, mu_inc(l->val));
     l->tok = tok ? num_uint(tok) : T_SYM;
 }
 
@@ -480,7 +482,8 @@ static void patch_all(struct parse *p, mint_t chain, mint_t offset) {
 }
 
 // Storing immediates/code objects
-static mu_const mu_t imm_nil(void) {
+#define IMM_NIL imm_nil()
+static mu_pure mu_t imm_nil(void) {
     static mu_t nil = 0;
 
     if (!nil)
@@ -491,7 +494,7 @@ static mu_const mu_t imm_nil(void) {
 
 static muint_t imm(struct parse *p, mu_t m) {
     if (!m)
-        m = imm_nil();
+        m = IMM_NIL;
 
     mu_t mindex = tbl_lookup(p->imms, mu_inc(m));
 
@@ -507,7 +510,7 @@ static muint_t imm(struct parse *p, mu_t m) {
 
 static muint_t fn(struct parse *p, struct code *code) {
     muint_t index = tbl_len(p->fns);
-    tbl_insert(p->fns, muint(index), mfn(code, 0));
+    tbl_insert(p->fns, muint(index), mcode(code, 0));
     return index;
 }
 
@@ -577,11 +580,11 @@ static struct code *compile(struct parse *p) {
 
     mu_t k, v;
     for (muint_t i = 0; tbl_next(p->imms, &i, &k, &v);)
-        imms[num_uint(v)] = (k == imm_nil()) ? mnil : k;
+        imms[num_uint(v)] = (k == IMM_NIL) ? mnil : k;
 
     // TODO make this just an mstr array
     for (muint_t i = 0; tbl_next(p->fns, &i, &k, &v);) {
-        fns[num_uint(k)] = fn_code(v);
+        fns[num_uint(k)] = code_inc(fn_code(v));
         mu_dec(v);
     }
 
@@ -709,8 +712,8 @@ static void p_fn(struct parse *p) {
         .bcode = mstr_create(0),
         .bcount = 0,
 
-        .imms = tbl_create(0,0),
-        .fns = tbl_create(0,0),
+        .imms = tbl_create(0),
+        .fns = tbl_create(0),
         .bchain = -1,
         .cchain = -1,
 
@@ -1389,8 +1392,8 @@ struct code *mu_compile(mu_t source) {
 struct code *mu_ncompile(const mbyte_t *pos, const mbyte_t *end) {
     struct parse p = {
         .bcode = mstr_create(0),
-        .imms = tbl_create(0,0),
-        .fns = tbl_create(0,0),
+        .imms = tbl_create(0),
+        .fns = tbl_create(0),
         .bchain = -1,
         .cchain = -1,
 

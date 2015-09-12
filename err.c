@@ -44,7 +44,7 @@ mu_noreturn mu_err(mu_t err) {
 }
 
 mu_noreturn mu_cerr(mu_t type, mu_t reason) {
-    mu_t err = tbl_create(2, 0);
+    mu_t err = tbl_create(2);
     tbl_insert(err, mcstr("type"), type);
     tbl_insert(err, mcstr("reason"), reason);
     mu_err(err);

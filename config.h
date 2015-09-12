@@ -17,7 +17,7 @@
 #elif UINT64_MAX == UINTPTR_MAX
 #define MU64
 #else
-#error Unspecified word size for Mu
+#error "Unspecified word size for Mu"
 #endif
 #endif
 
@@ -54,9 +54,8 @@ typedef double   mfloat_t;
 // Definition of thread local variables
 #define mu_thread __thread
 
-// Definition of const functions
-// TODO replace most of these with seperate const allocations
-#define mu_const __attribute__((const))
+// Definition of pure functions
+#define mu_pure __attribute__((const))
 
 // Builtin for a potentially unused variable
 #define mu_unused __attribute__((unused))

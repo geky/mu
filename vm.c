@@ -35,7 +35,7 @@ void mu_encode(void (*emit)(void *, mbyte_t), void *p,
         mu_assert(a <= 0xff);
         ins |= a;
     } else if (op >= OP_JFALSE && op <= OP_JUMP) {
-        mu_assert(a-2 <= 0xff && a-2 >= -0x100);
+//        mu_assert(a-2 <= 0xff && a-2 >= -0x100); TODO
         ins |= 0xff & ((a-2)>>1);
     } else {
         mu_assert(a <= 0xf);
@@ -51,7 +51,7 @@ void mu_encode(void (*emit)(void *, mbyte_t), void *p,
 mint_t mu_patch(void *c, mint_t nj) {
     uint16_t ins = *(uint16_t *)c;
     mu_assert(op(ins) >= OP_JFALSE && op(ins) <= OP_JUMP);
-    mu_assert(nj-2 <= 0xff && nj-2 >= -0x100);
+    //mu_assert(nj-2 <= 0xff && nj-2 >= -0x100); TODO
 
     mint_t pj = (j(ins) << 1)+2;
     ins = (ins & 0xff00) | (0xff & ((nj-2) >> 1));
@@ -197,11 +197,11 @@ reenter:
                     break;
 
                 case OP_FN:
-                    regs[rd(ins)] = mfn(code_inc(fns[i(ins)]), mu_inc(regs[0]));
+                    regs[rd(ins)] = mcode(code_inc(fns[i(ins)]), mu_inc(regs[0]));
                     break;
 
                 case OP_TBL:
-                    regs[rd(ins)] = tbl_create(i(ins), 0);
+                    regs[rd(ins)] = tbl_create(i(ins));
                     break;
 
                 case OP_MOVE:
@@ -271,8 +271,8 @@ reenter:
                     // is another mu function. Otherwise, we just try our hardest
                     // to get a tail call emitted.
                     if (mu_type(scratch) == MU_FN) {
-                        c = fn_code(scratch);
-                        scope = tbl_create(c->scope, fn_closure(scratch));
+                        c = code_inc(fn_code(scratch));
+                        scope = tbl_extend(c->scope, mu_inc(fn_closure(scratch)));
                         mu_fto(c->args, i(ins), frame);
                         fn_dec(scratch);
                         goto reenter;

@@ -28,7 +28,7 @@ enum mtype {
     MU_RTBL = 3, // readonly table
     MU_FN   = 5, // function
     MU_BFN  = 6, // builtin function
-    MU_SBFN = 7, // scoped builtin function
+    MU_SFN  = 7, // scoped builtin function
 };
 
 // Declaration of mu type
@@ -47,9 +47,11 @@ mu_inline mref_t mu_ref(mu_t m) { return *(mref_t *)(~7 & (muint_t)m); }
 mu_inline bool mu_isnil(mu_t m) { return !m; }
 mu_inline bool mu_isnum(mu_t m) { return mu_type(m) == MU_NUM; }
 mu_inline bool mu_isstr(mu_t m) { return mu_type(m) == MU_STR; }
-mu_inline bool mu_istbl(mu_t m) { return (6 & mu_type(m)) == MU_TBL; }
+mu_inline bool mu_istbl(mu_t m) { return (6 & (muint_t)m) == MU_TBL; }
 mu_inline bool mu_isfn(mu_t m)  { return mu_type(m) >= MU_FN;  }
-mu_inline bool mu_isref(mu_t m) { return 6 & (muint_t)m; }
+
+mu_inline bool mu_isref(mu_t m)   { return 6 & (muint_t)m; }
+mu_inline bool mu_isconst(mu_t m) { return mu_type(m) != MU_TBL; }
 
 // Reference counting
 mu_inline mu_t mu_inc(mu_t m) {
@@ -95,7 +97,19 @@ mu_inline muint_t mu_fsize(mc_t fc) {
 
 // Standard functions are provided as C functions as well as
 // Mu functions in readonly builtins table
-mu_const mu_t mu_builtins(void);
+#define MU_BUILTINS mu_builtins()
+mu_pure mu_t mu_builtins(void);
+
+// Types
+#define MU_NUM_TYPE mu_num_type()
+#define MU_STR_TYPE mu_str_type()
+#define MU_TBL_TYPE mu_tbl_type()
+#define MU_FN_TYPE  mu_fn_type()
+mu_pure mu_t mu_num_type(void);
+mu_pure mu_t mu_str_type(void);
+mu_pure mu_t mu_tbl_type(void);
+mu_pure mu_t mu_fn_type(void);
+
 
 // Type casts
 mu_t mu_num(mu_t m);
@@ -125,23 +139,21 @@ mu_t mu_add(mu_t a, mu_t b);
 mu_t mu_sub(mu_t a, mu_t b);
 mu_t mu_mul(mu_t a, mu_t b);
 mu_t mu_div(mu_t a, mu_t b);
+mu_t mu_idiv(mu_t a, mu_t b);
+mu_t mu_mod(mu_t a, mu_t b);
+mu_t mu_pow(mu_t a, mu_t b);
+mu_t mu_log(mu_t a, mu_t b);
 
 mu_t mu_abs(mu_t a);
 mu_t mu_floor(mu_t a);
 mu_t mu_ceil(mu_t a);
-mu_t mu_idiv(mu_t a, mu_t b);
-mu_t mu_mod(mu_t a, mu_t b);
-
-mu_t mu_pow(mu_t a, mu_t b);
-mu_t mu_log(mu_t a, mu_t b);
 
 mu_t mu_cos(mu_t a);
 mu_t mu_acos(mu_t a);
 mu_t mu_sin(mu_t a);
 mu_t mu_asin(mu_t a);
 mu_t mu_tan(mu_t a);
-mu_t mu_atan(mu_t a);
-mu_t mu_atan2(mu_t a, mu_t b);
+mu_t mu_atan(mu_t a, mu_t b);
 
 // Bitwise/Set operations
 mu_t mu_not(mu_t a);
@@ -176,7 +188,7 @@ mu_t mu_strip(mu_t m, mu_t dir, mu_t pad);
 // Data structure operations
 mlen_t mu_len(mu_t m);
 mu_t mu_tail(mu_t m);
-mu_t mu_ro(mu_t m);
+mu_t mu_const(mu_t m);
 
 void mu_push(mu_t m, mu_t v, mu_t i);
 mu_t mu_pop(mu_t m, mu_t i);
@@ -224,6 +236,7 @@ mu_t mu_sort(mu_t iter);
 // Random number generation
 mu_t mu_seed(mu_t m);
 mu_t mu_random(void);
+
 
 
 #endif

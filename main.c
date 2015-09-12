@@ -22,7 +22,7 @@
 #define ERR_START "\033[31m"
 #define ERR_END   "\033[0m"
 
-#define BUFFER_SIZE 256
+#define BUFFER_SIZE 1<<15
 
 
 static mu_t scope = 0;
@@ -42,7 +42,7 @@ static void printvar(mu_t v) {
 }
 
 static void printrepr(mu_t v) {
-    printvar(mu_dump(v, muint(1), mnil));
+    printvar(mu_dump(v, MU_INF, 0));
 }
 
 static void printerr(mu_t err) {
@@ -128,14 +128,14 @@ static mc_t b_error(mu_t *frame) {
 }
 
 static void genscope() {
-    scope = tbl_create(0, mu_builtins());
-
-    tbl_insert(scope, mcstr("print"), mcfn(0xf, b_print));
-    tbl_insert(scope, mcstr("error"), mcfn(0x2, b_error));
+    scope = mxmtbl(MU_BUILTINS, {
+        { mcstr("print"), mcfn(0xf, b_print) },
+        { mcstr("error"), mcfn(0x2, b_error) }
+    });
 }
 
 static int genargs(int i, int argc, const char **argv) {
-    mu_t args = tbl_create(argc-i, 0);
+    mu_t args = tbl_create(argc-i);
 
     for (muint_t j = 0; j < argc-i; j++) {
         tbl_insert(args, muint(j), mzstr(argv[i]));
@@ -150,7 +150,7 @@ static int genargs(int i, int argc, const char **argv) {
 static void execute(const char *input) {
     struct code *c = mu_compile(mzstr(input));
     mu_t frame[MU_FRAME];
-    mc_t rets = mu_exec(c, tbl_create(c->scope, 0), frame);
+    mc_t rets = mu_exec(c, tbl_create(c->scope), frame);
     mu_fto(0, rets, frame);
 }
 
@@ -168,7 +168,7 @@ static void load_file(FILE *file) {
     struct code *c = mu_compile(mnstr(buffer+off, len-off));
     mu_dealloc(buffer, BUFFER_SIZE);
 
-    mu_t s = tbl_create(c->scope, mu_inc(scope));
+    mu_t s = tbl_extend(c->scope, mu_inc(scope));
     mu_t frame[MU_FRAME];
     mc_t rets = mu_exec(c, s, frame);
     mu_fto(0, rets, frame);

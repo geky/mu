@@ -9,12 +9,11 @@ endif
 
 
 " Keywords in Mu
-syn keyword muControl   if else while for
+syn keyword muControl   if else while for and or
 syn keyword muControl   break continue return
-syn keyword muDefine    let fn type
-syn keyword muType      num str tbl
-syn keyword muIdent     args op
-syn keyword muIdent     nil inf true false
+syn keyword muDefine    let fn
+syn keyword muType      num str tbl fn_
+syn keyword muIdent     nil _ inf e pi true false
 
 " Comments
 syn match muComment "#.*$"
