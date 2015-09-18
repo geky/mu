@@ -579,12 +579,12 @@ static struct code *compile(struct parse *p) {
     mbyte_t *bcode = (mbyte_t *)code_bcode(code);
 
     mu_t k, v;
-    for (muint_t i = 0; tbl_next(p->imms, &i, &k, &v);)
+    for (muint_t i = 0; tbl_next(p->imms, &i, &k, &v);) {
         imms[num_uint(v)] = (k == IMM_NIL) ? mnil : k;
+    }
 
-    // TODO make this just an mstr array
     for (muint_t i = 0; tbl_next(p->fns, &i, &k, &v);) {
-        fns[num_uint(k)] = code_inc(fn_code(v));
+        fns[num_uint(k)] = fn_code(v);
         mu_dec(v);
     }
 
@@ -718,7 +718,7 @@ static void p_fn(struct parse *p) {
         .cchain = -1,
 
         .regs = 1,
-        .scope = 4, // TODO
+        .scope = MU_MINALLOC / sizeof(muint_t),
 
         .l = p->l,
     };
@@ -1398,7 +1398,7 @@ struct code *mu_ncompile(const mbyte_t *pos, const mbyte_t *end) {
         .cchain = -1,
 
         .regs = 1,
-        .scope = 4,
+        .scope = MU_MINALLOC / sizeof(muint_t),
     };
 
     lex_init(&p.l, pos, end);

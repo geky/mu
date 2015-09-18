@@ -87,16 +87,6 @@ mu_inline mu_t mzstr(const char *s) {
 })
 
 
-// String access functions
-mu_inline mlen_t str_len(mu_t m) {
-    return ((struct str *)((muint_t)m - MU_STR))->len;
-}
-
-mu_inline const mbyte_t *str_bytes(mu_t m) {
-    return ((struct str *)((muint_t)m - MU_STR))->data;
-}
-
-
 // Reference counting
 mu_inline mbyte_t *mstr_inc(mbyte_t *s) {
     ref_inc(s - mu_offset(struct str, data));
@@ -120,6 +110,16 @@ mu_inline void str_dec(mu_t m) {
     extern void str_destroy(mu_t);
     if (ref_dec(m))
         str_destroy(m);
+}
+
+
+// String access functions
+mu_inline mlen_t str_len(mu_t m) {
+    return ((struct str *)((muint_t)m - MU_STR))->len;
+}
+
+mu_inline const mbyte_t *str_bytes(mu_t m) {
+    return ((struct str *)((muint_t)m - MU_STR))->data;
 }
 
 

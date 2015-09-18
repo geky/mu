@@ -71,28 +71,24 @@ void code_destroy(struct code *c) {
 
 // C interface for calling functions
 mc_t bfn_tcall(mu_t f, mc_t fc, mu_t *frame) {
-    mbfn_t *bfn = fn(f)->bfn;
     mu_fto(fn(f)->args, fc, frame);
+    mbfn_t *bfn = fn(f)->bfn;
     fn_dec(f);
-
     return bfn(frame);
 }
 
 mc_t sfn_tcall(mu_t f, mc_t fc, mu_t *frame) {
-    msfn_t *sfn = fn(f)->sfn;
     mu_fto(fn(f)->args, fc, frame);
-
-    mc_t rc = sfn(fn(f)->closure, frame);
+    mc_t rc = fn(f)->sfn(fn(f)->closure, frame);
     fn_dec(f);
     return rc;
 }
 
 mc_t mfn_tcall(mu_t f, mc_t fc, mu_t *frame) {
-    struct code *c = code_inc(fn_code(f));
-    mu_t scope = tbl_extend(c->scope, mu_inc(fn_closure(f)));
+    struct code *c = fn_code(f);
     mu_fto(c->args, fc, frame);
+    mu_t scope = tbl_extend(c->scope, fn_closure(f));
     fn_dec(f);
-
     return mu_exec(c, scope, frame);
 }
 
@@ -108,7 +104,7 @@ mc_t fn_tcall(mu_t f, mc_t fc, mu_t *frame) {
 }
 
 void fn_fcall(mu_t f, mc_t fc, mu_t *frame) {
-    mc_t rets = fn_tcall(f, fc >> 4, frame);
+    mc_t rets = fn_tcall(mu_inc(f), fc >> 4, frame);
     mu_fto(fc & 0xf, rets, frame);
 }
 
@@ -116,7 +112,7 @@ void fn_fcall(mu_t f, mc_t fc, mu_t *frame) {
 // Iteration
 bool fn_next(mu_t f, mc_t fc, mu_t *frame) {
     mu_assert(mu_isfn(f));
-    fn_fcall(fn_inc(f), fc ? fc : 1, frame);
+    fn_fcall(f, fc ? fc : 1, frame);
 
     if (fc != 0xf) {
         if (frame[0]) {
@@ -185,7 +181,7 @@ static mc_t fn_map_step(mu_t scope, mu_t *frame) {
     mu_t i = tbl_lookup(scope, muint(1));
 
     while (fn_next(i, 0xf, frame)) {
-        fn_fcall(fn_inc(f), 0xff, frame);
+        fn_fcall(f, 0xff, frame);
         mu_t m = tbl_lookup(frame[0], muint(0));
         if (m) {
             mu_dec(m);
@@ -212,7 +208,7 @@ static mc_t fn_filter_step(mu_t scope, mu_t *frame) {
 
     while (fn_next(i, 0xf, frame)) {
         mu_t m = tbl_inc(frame[0]);
-        fn_fcall(fn_inc(f), 0xf1, frame);
+        fn_fcall(f, 0xf1, frame);
         if (frame[0]) {
             mu_dec(frame[0]);
             frame[0] = m;
@@ -240,13 +236,13 @@ mu_t fn_reduce(mu_t f, mu_t iter, mu_t acc) {
 
     if (!acc || tbl_len(acc) == 0) {
         mu_dec(acc);
-        fn_fcall(fn_inc(iter), 0x0f, frame);
+        fn_fcall(iter, 0x0f, frame);
         acc = frame[0];
     }
 
     while (fn_next(iter, 0xf, frame)) {
         frame[0] = tbl_concat(acc, frame[0], mnil);
-        fn_fcall(fn_inc(f), 0xff, frame);
+        fn_fcall(f, 0xff, frame);
         acc = frame[0];
     }
 
@@ -260,7 +256,7 @@ bool fn_any(mu_t f, mu_t iter) {
     mu_t frame[MU_FRAME];
 
     while (fn_next(iter, 0xf, frame)) {
-        fn_fcall(fn_inc(f), 0xf1, frame);
+        fn_fcall(f, 0xf1, frame);
         if (frame[0]) {
             mu_dec(frame[0]);
             return true;
@@ -277,7 +273,7 @@ bool fn_all(mu_t f, mu_t iter) {
     mu_t frame[MU_FRAME];
 
     while (fn_next(iter, 0xf, frame)) {
-        fn_fcall(fn_inc(f), 0xf1, frame);
+        fn_fcall(f, 0xf1, frame);
         if (frame[0])
             mu_dec(frame[0]);
         else
@@ -356,11 +352,13 @@ static mc_t fn_zip_step(mu_t scope, mu_t *frame) {
 
     for (muint_t i = 0; tbl_next(iters, &i, 0, &iter);) {
         fn_fcall(iter, 0x0f, frame);
+        fn_dec(iter);
 
         mu_t m = tbl_lookup(frame[0], muint(0));
         if (!m) {
             mu_dec(acc);
             mu_dec(frame[0]);
+            tbl_dec(iters);
             return 0;
         }
         mu_dec(m);
@@ -368,6 +366,7 @@ static mc_t fn_zip_step(mu_t scope, mu_t *frame) {
         acc = tbl_concat(acc, frame[0], mnil);
     }
 
+    tbl_dec(iters);
     frame[0] = acc;
     return 0xf;
 }
@@ -382,6 +381,7 @@ static mc_t fn_chain_step(mu_t scope, mu_t *frame) {
 
     if (iter) {
         fn_fcall(iter, 0x0f, frame);
+        fn_dec(iter);
 
         mu_t m = tbl_lookup(frame[0], muint(0));
         if (m) {
@@ -393,6 +393,7 @@ static mc_t fn_chain_step(mu_t scope, mu_t *frame) {
 
     mu_t iters = tbl_lookup(scope, muint(0));
     fn_fcall(iters, 0x01, frame);
+    fn_dec(iters);
     if (frame[0]) {
         tbl_insert(scope, muint(1), mu_iter(frame[0]));
         return fn_chain_step(scope, frame);
@@ -419,6 +420,7 @@ static mc_t fn_take_count_step(mu_t scope, mu_t *frame) {
 static mc_t fn_take_while_step(mu_t scope, mu_t *frame) {
     mu_t iter = tbl_lookup(scope, muint(0));
     fn_fcall(iter, 0x0f, frame);
+    fn_dec(iter);
 
     mu_t m = tbl_lookup(frame[0], muint(0));
     if (!m) {
@@ -430,6 +432,7 @@ static mc_t fn_take_while_step(mu_t scope, mu_t *frame) {
     m = mu_inc(frame[0]);
     mu_t cond = tbl_lookup(scope, muint(1));
     fn_fcall(cond, 0xf1, frame);
+    fn_dec(cond);
     if (!frame[0]) {
         tbl_dec(m);
         return 0;
@@ -455,7 +458,7 @@ static mc_t fn_drop_count_step(mu_t scope, mu_t *frame) {
 
     if (i) {
         while (num_cmp(i, muint(0)) > 0) {
-            fn_fcall(mu_inc(iter), 0x01, frame);
+            fn_fcall(iter, 0x01, frame);
             if (!frame[0]) {
                 mu_dec(iter);
                 return 0;
@@ -477,7 +480,7 @@ static mc_t fn_drop_while_step(mu_t scope, mu_t *frame) {
     if (cond) {
         while (fn_next(iter, 0xf, frame)) {
             mu_t m = tbl_inc(frame[0]);
-            fn_fcall(fn_inc(cond), 0xf1, frame);
+            fn_fcall(cond, 0xf1, frame);
             if (!frame[0]) {
                 fn_dec(iter);
                 fn_dec(cond);
@@ -511,7 +514,7 @@ mu_t fn_min(mu_t iter) {
     mu_assert(mu_isfn(iter));
     mu_t frame[MU_FRAME];
 
-    fn_fcall(fn_inc(iter), 0x0f, frame);
+    fn_fcall(iter, 0x0f, frame);
     mu_t min_frame = frame[0];
     mu_t min = tbl_lookup(min_frame, muint(0));
     if (!min)
@@ -540,7 +543,7 @@ mu_t fn_max(mu_t iter) {
     mu_assert(mu_isfn(iter));
     mu_t frame[MU_FRAME];
 
-    fn_fcall(fn_inc(iter), 0x0f, frame);
+    fn_fcall(iter, 0x0f, frame);
     mu_t max_frame = frame[0];
     mu_t max = tbl_lookup(max_frame, muint(0));
     if (!max)

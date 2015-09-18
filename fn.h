@@ -83,6 +83,18 @@ struct code {
     } data[];
 };
 
+// Code reference counting
+mu_inline struct code *code_inc(struct code *c) {
+    ref_inc(c);
+    return c;
+}
+
+mu_inline void code_dec(struct code *c) {
+    extern void code_destroy(struct code *);
+    if (ref_dec(c))
+        code_destroy(c);
+}
+
 // Code access functions
 mu_inline mu_t *code_imms(struct code *c) {
     return &c->data[0].imms;
@@ -138,28 +150,7 @@ mu_inline mu_t msfn(mc_t args, msfn_t *sfn, mu_t closure) {
 })
 
 
-// Function access
-mu_inline struct code *fn_code(mu_t m) {
-    return ((struct fn *)((muint_t)m - MU_FN))->code;
-}
-
-mu_inline mu_t fn_closure(mu_t m) {
-    return ((struct fn *)((muint_t)m - MU_FN))->closure;
-}
-
-
 // Function reference counting
-mu_inline struct code *code_inc(struct code *c) {
-    ref_inc(c);
-    return c;
-}
-
-mu_inline void code_dec(struct code *c) {
-    extern void code_destroy(struct code *);
-    if (ref_dec(c))
-        code_destroy(c);
-}
-
 mu_inline mu_t fn_inc(mu_t f) {
     mu_assert(mu_isfn(f));
     ref_inc(f);
@@ -169,6 +160,16 @@ mu_inline mu_t fn_inc(mu_t f) {
 mu_inline void fn_dec(mu_t f) {
     mu_assert(mu_isfn(f));
     return mu_dec(f);
+}
+
+
+// Function access
+mu_inline struct code *fn_code(mu_t m) {
+    return code_inc(((struct fn *)((muint_t)m - MU_FN))->code);
+}
+
+mu_inline mu_t fn_closure(mu_t m) {
+    return mu_inc(((struct fn *)((muint_t)m - MU_FN))->closure);
 }
 
 

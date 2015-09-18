@@ -172,7 +172,6 @@ mu_t mu_dump(mu_t m, mu_t depth, mu_t indent);
 
 mu_t mu_bin(mu_t m);
 mu_t mu_oct(mu_t m);
-mu_t mu_deci(mu_t m);
 mu_t mu_hex(mu_t m);
 
 // String operations
@@ -186,12 +185,15 @@ mu_t mu_pad(mu_t m, mu_t len, mu_t pad);
 mu_t mu_strip(mu_t m, mu_t dir, mu_t pad);
 
 // Data structure operations
+// do not consume their target
 mlen_t mu_len(mu_t m);
 mu_t mu_tail(mu_t m);
-mu_t mu_const(mu_t m);
 
 void mu_push(mu_t m, mu_t v, mu_t i);
 mu_t mu_pop(mu_t m, mu_t i);
+
+// consume their target
+mu_t mu_const(mu_t m);
 
 mu_t mu_concat(mu_t a, mu_t b, mu_t offset);
 mu_t mu_subset(mu_t a, mu_t lower, mu_t upper);

@@ -171,12 +171,6 @@ mc_t mu_exec(struct code *c, mu_t scope, mu_t *frame) {
     register mu_t scratch;
 
 reenter:
-    // TODO Just here for debugging
-#ifdef MU_DEBUG
-    mu_dis(c);
-#endif
-    //
-
     {   // Setup the registers and scope
         mu_t regs[c->regs];
         regs[0] = scope;
@@ -252,6 +246,7 @@ reenter:
                 case OP_CALL:
                     memcpy(frame, &regs[rd(ins)+1], mu_fsize(i(ins) >> 4));
                     mu_fcall(regs[rd(ins)], i(ins), frame);
+                    mu_dec(regs[rd(ins)]);
                     memcpy(&regs[rd(ins)], frame, mu_fsize(0xf & i(ins)));
                     break;
 
@@ -271,9 +266,9 @@ reenter:
                     // is another mu function. Otherwise, we just try our hardest
                     // to get a tail call emitted.
                     if (mu_type(scratch) == MU_FN) {
-                        c = code_inc(fn_code(scratch));
-                        scope = tbl_extend(c->scope, mu_inc(fn_closure(scratch)));
+                        c = fn_code(scratch);
                         mu_fto(c->args, i(ins), frame);
+                        scope = tbl_extend(c->scope, fn_closure(scratch));
                         fn_dec(scratch);
                         goto reenter;
                     } else {

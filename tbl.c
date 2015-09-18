@@ -91,19 +91,6 @@ void tbl_destroy(mu_t t) {
 }
 
 
-// Tests for existance in table
-bool tbl_contains(mu_t t, mu_t k) {
-    mu_assert(mu_istbl(t));
-    mu_t m = tbl_lookup(t, k);
-
-    if (m) {
-        mu_dec(m);
-        return true;
-    } else {
-        return false;
-    }
-}
-
 // Recursively looks up a key in the table
 // returns either that value or nil
 mu_t tbl_lookup(mu_t t, mu_t k) {
@@ -117,7 +104,7 @@ mu_t tbl_lookup(mu_t t, mu_t k) {
         if (tbl(t)->linear) {
             muint_t i = num_uint(k) & mask;
 
-            if (k == muint(i))
+            if (k == muint(i) && tbl(t)->array[i])
                 return mu_inc(tbl(t)->array[i]);
 
         } else {
@@ -328,10 +315,10 @@ void tbl_assign(mu_t head, mu_t k, mu_t v) {
         }
     }
 
-    if (!v)
-        mu_dec(k);
-    else
+    if (v)
         tbl_insert(head, k, v);
+    else
+        mu_dec(k);
 }
 
 
@@ -361,7 +348,7 @@ static mc_t tbl_iter_step(mu_t scope, mu_t *frame) {
     muint_t i = num_uint(tbl_lookup(scope, muint(1)));
 
     bool next = tbl_next(t, &i, 0, &frame[0]);
-    mu_dec(t);
+    tbl_dec(t);
     tbl_insert(scope, muint(1), muint(i));
     return next ? 1 : 0;
 }
@@ -376,7 +363,7 @@ static mc_t tbl_pairs_step(mu_t scope, mu_t *frame) {
     muint_t i = num_uint(tbl_lookup(scope, muint(1)));
 
     bool next = tbl_next(t, &i, &frame[0], &frame[1]);
-    mu_dec(t);
+    tbl_dec(t);
     tbl_insert(scope, muint(1), muint(i));
     return next ? 2 : 0;
 }

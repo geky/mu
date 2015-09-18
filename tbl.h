@@ -140,21 +140,6 @@ mu_inline mu_t mzlist(mu_t *list) {
 })
 
 
-// Conversion to readonly table
-mu_inline mu_t tbl_const(mu_t t) {
-    return (mu_t)((MU_RTBL^MU_TBL) | (muint_t)t);
-}
-
-// Table access functions
-mu_inline mlen_t tbl_len(mu_t m) {
-    return ((struct tbl *)(~7 & (muint_t)m))->len;
-}
-
-mu_inline mu_t tbl_tail(mu_t m) {
-    return ((struct tbl *)(~7 & (muint_t)m))->tail;
-}
-
-
 // Table reference counting
 mu_inline mu_t tbl_inc(mu_t m) {
     mu_assert(mu_istbl(m));
@@ -167,6 +152,21 @@ mu_inline void tbl_dec(mu_t m) {
     extern void tbl_destroy(mu_t);
     if (ref_dec(m))
         tbl_destroy(m);
+}
+
+
+// Conversion to readonly table
+mu_inline mu_t tbl_const(mu_t t) {
+    return (mu_t)((MU_RTBL^MU_TBL) | (muint_t)t);
+}
+
+// Table access functions
+mu_inline mlen_t tbl_len(mu_t m) {
+    return ((struct tbl *)(~7 & (muint_t)m))->len;
+}
+
+mu_inline mu_t tbl_tail(mu_t m) {
+    return tbl_inc(((struct tbl *)(~7 & (muint_t)m))->tail);
 }
 
 

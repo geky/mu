@@ -87,7 +87,7 @@ mc_t mu_tcall(mu_t m, mc_t fc, mu_t *frame) {
 }
 
 void mu_fcall(mu_t m, mc_t fc, mu_t *frame) {
-    mc_t rets = mu_tcall(m, fc >> 4, frame);
+    mc_t rets = mu_tcall(mu_inc(m), fc >> 4, frame);
     mu_fto(0xf & fc, rets, frame);
 }
 
@@ -171,7 +171,7 @@ mu_t mu_fn(mu_t m) {
 
 
 // Comparison operations
-// does not consume!
+// does not consume
 bool mu_is(mu_t a, mu_t type) {
     switch (mu_type(a)) {
         case MU_NIL:    return !type;
@@ -515,13 +515,6 @@ mu_t mu_tail(mu_t m) {
     }
 }
 
-mu_t mu_const(mu_t m) { // TODO This one does consume, should note these
-    switch (mu_type(m)) {
-        case MU_TBL:    return tbl_const(m);
-        default:        return m;
-    }
-}
-
 void mu_push(mu_t m, mu_t v, mu_t i) {
     if (i && !mu_isnum(i))
         mu_err_undefined();
@@ -543,6 +536,14 @@ mu_t mu_pop(mu_t m, mu_t i) {
         default:        mu_err_undefined();
     }
 }
+
+mu_t mu_const(mu_t m) {
+    switch (mu_type(m)) {
+        case MU_TBL:    return tbl_const(m);
+        default:        return m;
+    }
+}
+
 
 mu_t mu_concat(mu_t a, mu_t b, mu_t offset) {
     if (mu_type(a) != mu_type(b))
@@ -748,8 +749,11 @@ mu_t mu_seed(mu_t m) {
 }
 
 mu_t mu_random(void) {
+    mu_t frame[MU_FRAME];
     mu_t gen = tbl_lookup(MU_BUILTINS, mcstr("random"));
-    return mu_call(gen, 0x01);
+    mu_fcall(gen, 0x01, frame);
+    mu_dec(gen);
+    return frame[0];
 }
 
 
