@@ -5,9 +5,6 @@
 #include "str.h"
 #include "tbl.h"
 #include "fn.h"
-#include "err.h"
-#include <stdio.h>
-#include <string.h>
 
 
 //// Definitions ////
@@ -62,6 +59,10 @@ enum tok {
     (T_SYM | T_LET | T_FN | T_TYPE | T_IF | \
      T_WHILE | T_FOR | T_ELSE | T_AND | T_OR | \
      T_CONT | T_BREAK | T_RETURN | T_NIL)
+
+#define T_ANY_VAL \
+    (T_ANY_SYM | T_ANY_OP | T_IMM | \
+     T_ASSIGN | T_PAIR | T_ARROW | T_DOT)
 
 #define T_EXPR \
     (T_LPAREN | T_LTABLE | T_FN | T_TYPE | T_IF | \
@@ -269,6 +270,95 @@ struct expr {
 };
 
 
+//// Error handling ////
+
+// Common errors
+static mu_noreturn mu_error_parse(struct lex *l, mu_t message) {
+    const mbyte_t *p = l->begin;
+    muint_t lines = 1;
+    muint_t nlines = 1;
+
+    while (p < l->pos) {
+        if (*p == '#') {
+            while (p < l->end && *p != '\n')
+                p++;
+        } else if (*p == '\n') {
+            nlines++;
+            p++;
+        } else if (class[*p] == L_WS) {
+            p++;
+        } else {
+            lines = nlines;
+            p++;
+        }
+    }
+
+    if (lines == 1)
+        mu_error(message);
+    else
+        mu_error(mmlist({
+            message,
+            mcstr(" on line "),
+            mu_repr(muint(lines))}));
+}
+
+static mu_noreturn mu_error_character(struct lex *l) {
+    mbyte_t *s = mstr_create(0);
+    muint_t len = 0;
+    mstr_zcat(&s, &len, "unexpected ");
+    mstr_concat(&s, &len, mu_repr(mnstr(l->pos, 1)));
+
+    mu_error_parse(l, mstr_intern(s, len));
+}
+
+static mu_noreturn mu_error_token(struct lex *l) {
+    mbyte_t *s = mstr_create(0);
+    muint_t len = 0;
+    mstr_zcat(&s, &len, "unexpected ");
+
+    if (l->tok & T_ANY_VAL) {
+        mstr_concat(&s, &len, mu_repr(mu_inc(l->val)));
+    } else if (l->tok & T_TERM) {
+        mstr_zcat(&s, &len, "terminator");
+    } else if (l->tok & T_SEP) {
+        mstr_zcat(&s, &len, "','");
+    } else if (l->tok & T_LPAREN) {
+        mstr_zcat(&s, &len, "'('");
+    } else if (l->tok & T_RPAREN) {
+        mstr_zcat(&s, &len, "')'");
+    } else if (l->tok & T_LTABLE) {
+        mstr_zcat(&s, &len, "'['");
+    } else if (l->tok & T_RTABLE) {
+        mstr_zcat(&s, &len, "']'");
+    } else if (l->tok & T_LBLOCK) {
+        mstr_zcat(&s, &len, "'{'");
+    } else if (l->tok & T_RBLOCK) {
+        mstr_zcat(&s, &len, "'}'");
+    } else {
+        mstr_zcat(&s, &len, "end");
+    }
+
+    mu_error_parse(l, mstr_intern(s, len));
+}
+
+static mu_noreturn mu_error_assignment(struct lex *l) {
+    mu_error_parse(l, mcstr("invalid assignment"));
+}
+
+static mu_noreturn mu_error_expression(mbyte_t c) {
+    mbyte_t *s = mstr_create(0);
+    muint_t len = 0;
+    mstr_zcat(&s, &len, "unexpected ");
+    mstr_concat(&s, &len, mu_repr(mnstr(&c, 1)));
+    mstr_zcat(&s, &len, " in expression");
+
+    mu_error(mstr_intern(s, len));
+}
+
+extern mu_noreturn mu_error_args(const char *name, mc_t count, mu_t *args);
+#define mu_error_arg1(name, ...) mu_error_args(name, 1, (mu_t[1]){__VA_ARGS__})
+
+
 //// Lexical analysis ////
 
 // Lexer definitions for non-trivial tokens
@@ -290,9 +380,7 @@ static void l_indent(struct lex *l) {
         }
     }
 
-    if (nindent > (muintq_t)-1) {
-        mu_err_parse(); // TODO better message
-    } else if (nindent != l->indent) {
+    if (nindent != l->indent) {
         l->tok = nindent > l->indent ? T_LBLOCK : T_RBLOCK;
         l->nblock += nindent - l->indent;
         l->indent = nindent;
@@ -351,7 +439,7 @@ static void lex_next(struct lex *l) {
 
     mclass_t lclass = class[*l->pos];
     switch (lclass) {
-        case L_NONE:    mu_err_parse();
+        case L_NONE:    mu_error_character(l);
 
         case L_WS:                   l_indent(l); break;
         case L_OP:      l->prec = 0; l_op(l);     break;
@@ -383,6 +471,7 @@ static void lex_next(struct lex *l) {
             break;
         }
     }
+
     l->prec += 2*(l->pos - end);
 }
 
@@ -405,10 +494,8 @@ mu_inline void lex_dec(struct lex l) {
 
 
 //// Lexing shortcuts ////
-
-// TODO make all these expects better messages
 static mu_noreturn unexpected(struct parse *p) {
-    mu_err_parse();
+    mu_error_token(&p->l);
 }
 
 static bool next(struct parse *p, mtok_t tok) {
@@ -429,7 +516,7 @@ static bool match(struct parse *p, mtok_t tok) {
 
 static void expect(struct parse *p, mtok_t tok) {
     if (!match(p, tok))
-        mu_err_parse();
+        unexpected(p);
 }
 
 static bool lookahead(struct parse *p, mtok_t a, mtok_t b) {
@@ -554,14 +641,14 @@ static void encode_store(struct parse *p, struct expr *e,
                p->sp-offset-2, p->sp-1, p->sp, 0);
         encode(p, OP_DROP, p->sp-1, 0, 0, -2);
     } else {
-        mu_err_parse(); // TODO better message
+        mu_error_assignment(&p->l);
     }
 }
 
 // Completing a parse and generating the final code object
 static struct code *compile(struct parse *p) {
     struct code *code = ref_alloc(
-        sizeof(struct code) +
+        mu_offset(struct code, data) +
         sizeof(mu_t)*tbl_len(p->imms) +
         sizeof(struct code *)*tbl_len(p->fns) +
         p->bcount);
@@ -767,7 +854,7 @@ static void p_if(struct parse *p, bool expr) {
     } else if (!expr) {
         patch(p, cond_offset, p->bcount - cond_offset);
     } else {
-        mu_err_parse(); // TODO better message
+        unexpected(p);
     }
 }
 
@@ -803,7 +890,7 @@ static void p_for(struct parse *p) {
 
     expect(p, T_ASSIGN);
     if (f.count == 0 && !f.tabled)
-        mu_err_parse(); // TODO better message
+        mu_error_assignment(&p->l);
 
     encode(p, OP_IMM, p->sp+1, imm(p, mcstr("iter")), 0, +1);
     encode(p, OP_LOOKUP, p->sp, 0, p->sp, 0);
@@ -1172,7 +1259,7 @@ static void p_frame(struct parse *p, struct frame *f) {
         expect(p, T_RPAREN);
 
     if (next(p, T_EXPR))
-        unexpected(p); // TODO better message
+        unexpected(p);
 
     p->l.depth = f->depth;
 }
@@ -1188,7 +1275,7 @@ static void p_assign(struct parse *p, bool insert) {
 
         if ((fr.count == 0 && !fr.tabled) ||
             (fl.count == 0 && !fl.tabled)) {
-            mu_err_parse(); // TODO better message
+            mu_error_assignment(&p->l);
         } else {
             fr.tabled = fr.tabled || fl.tabled;
             fr.target = fl.count;
@@ -1211,12 +1298,13 @@ static void p_assign(struct parse *p, bool insert) {
         fl.target = 0;
         p_frame(p, &fl);
     } else {
-        mu_err_parse(); // TODO better message
+        unexpected(p);
     }
 }
 
 static void p_return(struct parse *p) {
     // Remove any leftover iterators
+    muintq_t sp = p->sp;
     while (p->sp != 0)
         encode(p, OP_DROP, p->sp, 0, 0, -1);
 
@@ -1237,6 +1325,8 @@ static void p_return(struct parse *p) {
                f.tabled ? 0xf : f.count, 0,
                -(f.tabled ? 1 : f.count));
     }
+
+    p->sp = sp;
 }
 
 static void p_stmt(struct parse *p) {
@@ -1261,7 +1351,7 @@ static void p_stmt(struct parse *p) {
 
     } else if (match(p, T_BREAK)) {
         if (p->bchain == (mlen_t)-1)
-            mu_err_parse(); // TODO message
+            mu_error_parse(&p->l, mcstr("break outside of loop"));
 
         mlen_t offset = p->bcount;
         encode(p, OP_JUMP, 0, p->bchain ? p->bchain-p->bcount : 0, 0, 0);
@@ -1269,7 +1359,7 @@ static void p_stmt(struct parse *p) {
 
     } else if (match(p, T_CONT)) {
         if (p->cchain == (mlen_t)-1)
-            mu_err_parse(); // TODO message
+            mu_error_parse(&p->l, mcstr("continue outside of loop"));
 
         mlen_t offset = p->bcount;
         encode(p, OP_JUMP, 0, p->cchain ? p->cchain-p->bcount : 0, 0, 0);
@@ -1299,7 +1389,7 @@ static void p_block(struct parse *p, bool root) {
              match(p, T_TERM | T_LBLOCK | T_RBLOCK));
 
     if (p->l.block > block)
-        unexpected(p); // TODO message
+        expect(p, T_RBLOCK);
 
     p->l.paren = paren;
     p->l.depth = depth;
@@ -1307,18 +1397,17 @@ static void p_block(struct parse *p, bool root) {
 
 
 //// Parsing functions ////
-
 mu_t mu_parse(mu_t source) {
     if (!mu_isstr(source))
-        mu_err_undefined();
+        mu_error_arg1("parse", source);
 
     const mbyte_t *pos = str_bytes(source);
     const mbyte_t *end = pos + str_len(source);
 
     mu_t v = mu_nparse(&pos, end);
 
-    if (pos != end)
-        mu_err_parse();
+    if (pos < end)
+        mu_error_expression(*pos);
 
     str_dec(source);
     return v;
@@ -1356,7 +1445,7 @@ mu_t mu_nparse(const mbyte_t **ppos, const mbyte_t *end) {
             sym = true;
         } break;
 
-        default:    mu_err_parse();
+        default:        mu_error_expression(*pos);
     }
 
     while (pos < end) {
@@ -1371,7 +1460,7 @@ mu_t mu_nparse(const mbyte_t **ppos, const mbyte_t *end) {
     }
 
     if (sym && *pos != ':')
-        mu_err_undefined();
+        mu_error_expression(str_bytes(val)[0]);
 
     *ppos = pos;
     return val;
@@ -1379,7 +1468,7 @@ mu_t mu_nparse(const mbyte_t **ppos, const mbyte_t *end) {
 
 struct code *mu_compile(mu_t source) {
     if (!mu_isstr(source))
-        mu_err_undefined();
+        mu_error_arg1("compile", source);
 
     const mbyte_t *pos = str_bytes(source);
     const mbyte_t *end = pos + str_len(source);

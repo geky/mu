@@ -3,9 +3,7 @@
 #include "num.h"
 #include "str.h"
 #include "fn.h"
-#include "err.h"
 #include "parse.h"
-#include <string.h>
 
 
 // Table access
@@ -15,6 +13,22 @@ mu_inline const struct tbl *tbl(mu_t t) {
 
 mu_inline struct tbl *wtbl(mu_t t) {
     return (struct tbl *)((muint_t)t - MU_TBL);
+}
+
+
+// Common errors
+static mu_noreturn mu_error_readonly(mu_t t) {
+    mu_error(mmlist({
+        mcstr("unable to modify read-only table "), 
+        mu_repr(t)}));
+}
+
+static mu_noreturn mu_error_length(void) {
+    mu_error(mcstr("exceeded max length in table"));
+}
+
+static mu_noreturn mu_error_unterminated(void) {
+    mu_error(mcstr("unterminated table literal"));
 }
 
 
@@ -128,7 +142,9 @@ mu_t tbl_lookup(mu_t t, mu_t k) {
 
 // Modify table info according to placement/replacement
 static void tbl_place(mu_t t, mu_t *dp, mu_t v) {
-    mu_check_len((muint_t)wtbl(t)->len + 1);
+    if ((muint_t)wtbl(t)->len + 1 > (mlen_t)-1)
+        mu_error_length();
+
     wtbl(t)->len += 1;
     *dp = v;
 }
@@ -137,7 +153,9 @@ static void tbl_replace(mu_t t, mu_t *dp, mu_t v) {
     mu_t d = *dp;
 
     if (v && !d) {
-        mu_check_len((muint_t)wtbl(t)->len + 1);
+        if ((muint_t)wtbl(t)->len + 1 > (mlen_t)-1)
+            mu_error_length();
+
         wtbl(t)->len += 1;
         wtbl(t)->nils -= 1;
     } else if (!v && d) {
@@ -240,7 +258,7 @@ void tbl_insert(mu_t t, mu_t k, mu_t v) {
     mu_assert(mu_istbl(t));
 
     if (mu_isconst(t)) {
-        mu_err_readonly();
+        mu_error_readonly(t);
     } else if (!k) {
         mu_dec(v);
         return;
@@ -376,11 +394,8 @@ mu_t tbl_pairs(mu_t t) {
 
 // Table creating functions
 mu_t tbl_fromnum(mu_t n) {
-    muint_t i = num_uint(n);
-    if (muint(i) != n)
-        mu_err_undefined();
-
-    return tbl_create(i);
+    mu_assert(mu_isnum(n));
+    return tbl_create(num_uint(n));
 }
 
 mu_t tbl_fromntbl(muint_t n, mu_t (*pairs)[2]) {
@@ -441,7 +456,7 @@ void tbl_push(mu_t t, mu_t v, mu_t i) {
     mu_assert(mu_istbl(t) && (!i || mu_isnum(i)));
 
     if (mu_isconst(t))
-        mu_err_readonly();
+        mu_error_readonly(t);
 
     if (!i)
         i = muint(tbl_len(t));
@@ -487,7 +502,7 @@ mu_t tbl_pop(mu_t t, mu_t i) {
     mu_assert(mu_istbl(t) && (!i || mu_isnum(i)));
 
     if (mu_isconst(t))
-        mu_err_readonly();
+        mu_error_readonly(t);
 
     if (!i)
         i = muint(tbl_len(t)-1);
@@ -691,7 +706,7 @@ mu_t tbl_parse(const mbyte_t **ppos, const mbyte_t *end) {
     const mbyte_t *pos = *ppos;
 
     if (pos == end || *pos++ != '[')
-        mu_err_parse();
+        mu_error_unterminated();
 
     mu_t t = tbl_create(0);
     mu_t i = muint(0);
@@ -715,22 +730,10 @@ mu_t tbl_parse(const mbyte_t **ppos, const mbyte_t *end) {
     }
 
     if (pos == end || *pos++ != ']')
-        mu_err_parse();
+        mu_error_unterminated();
 
     *ppos = pos;
     return t;    
-}
-
-mu_t tbl_repr(mu_t t) {
-    mu_assert(mu_istbl(t));
-    mbyte_t *s = mstr_create(7 + 2*sizeof(muint_t));
-    memcpy(s, "tbl(0x", 6);
-
-    for (muint_t i = 0; i < 2*sizeof(muint_t); i++)
-        s[i+6] = mu_toascii(0xf & ((muint_t)t >> 4*(2*sizeof(muint_t)-1 - i)));
-
-    s[6 + 2*sizeof(muint_t)] = ')';
-    return mstr_intern(s, 7 + 2*sizeof(muint_t));
 }
 
 static void tbl_dump_nested(mu_t t, mbyte_t **s, muint_t *slen, 
@@ -790,7 +793,7 @@ mu_t tbl_dump(mu_t t, mu_t depth, mu_t indent) {
                           && (!indent || mu_isnum(indent)));
 
     if (!depth || num_cmp(depth, muint(0)) <= 0)
-        return tbl_repr(t);
+        return mu_addr(t);
 
     mbyte_t *s = mstr_create(0);
     muint_t slen = 0;

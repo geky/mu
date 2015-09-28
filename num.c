@@ -2,7 +2,7 @@
 
 #include "str.h"
 #include "tbl.h"
-#include "err.h"
+#include "fn.h"
 #include "parse.h"
 
 
@@ -24,7 +24,7 @@ mu_inline mu_t mnum(mfloat_t n) {
 // Number cannot be NaNs or negative zero to garuntee bitwise equality
 mu_t num_fromfloat(mfloat_t n) {
     if (n != n)
-        mu_cerr(mcstr("nan_result"), mcstr("Operation resulted in NaN"));
+        mu_error(mcstr("operation resulted in nan"));
 
     if (n == 0)
         n = 0;
@@ -238,11 +238,7 @@ mu_t num_seed(mu_t m) {
 
 // Conversion from single character
 mu_t num_fromstr(mu_t m) {
-    mu_assert(mu_isstr(m));
-
-    if (str_len(m) != 1)
-        mu_cerr(mcstr("invalid argument"), mcstr("argument not of size 1"));
-
+    mu_assert(mu_isstr(m) && str_len(m) == 1);
     mu_t n = muint(str_bytes(m)[0]);
     str_dec(m);
     return n;

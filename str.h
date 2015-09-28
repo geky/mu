@@ -5,7 +5,6 @@
 #ifndef MU_STR_H
 #define MU_STR_H
 #include "mu.h"
-#include <string.h>
 
 
 // Functions for handling temporary mutable strings
@@ -73,17 +72,20 @@ mu_inline mu_t mzstr(const char *s) {
     return str_fromzstr(s);
 }
 
-#define mcstr(s) ({                             \
-    static mu_t _m = 0;                         \
-    static const struct {                       \
-        mref_t ref; mlen_t len;                 \
-        mbyte_t data[(sizeof s)-1];             \
-    } _c = {0, (sizeof s)-1, {s}};              \
-                                                \
-    if (!_m)                                    \
-        _m = mstr_intern((mbyte_t *)_c.data,    \
-                         (sizeof s)-1);         \
-    _m;                                         \
+#define mcstr(s) ({                                             \
+    static mu_t _m = 0;                                         \
+    static const struct {                                       \
+        mref_t ref; mlen_t len;                                 \
+        mbyte_t data[(sizeof s)-1];                             \
+    } _c = {0, (sizeof s)-1, {s}};                              \
+                                                                \
+    if (!_m) {                                                  \
+        _m = mstr_intern((mbyte_t *)_c.data, (sizeof s)-1);     \
+        if (((struct str *)((muint_t)_m - MU_STR))->ref != 0)   \
+            ((struct str *)((muint_t)_m - MU_STR))->ref = 0;    \
+    }                                                           \
+                                                                \
+    _m;                                                         \
 })
 
 

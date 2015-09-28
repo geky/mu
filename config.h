@@ -41,6 +41,17 @@ typedef uint64_t muint_t;
 typedef double   mfloat_t;
 #endif
 
+// Smallest addressable unit
+typedef unsigned char mbyte_t;
+
+// Length type for strings/tables
+typedef muinth_t mlen_t;
+
+
+// Flags for Mu options
+#define MU_MALLOC
+//#define MU_DEBUG
+
 
 // Definition of macro-like inlined functions
 #define mu_inline static inline __attribute__((always_inline))
@@ -48,14 +59,14 @@ typedef double   mfloat_t;
 // Definition of non-returning functions
 #define mu_noreturn __attribute__((noreturn)) void
 
+// Definition of pure functions
+#define mu_pure __attribute__((const))
+
 // Definition of alignment for Mu types
 #define mu_aligned __attribute__((aligned(8)))
 
-// Definition of thread local variables
+// Builtin for thread specific variable
 #define mu_thread __thread
-
-// Definition of pure functions
-#define mu_pure __attribute__((const))
 
 // Builtin for a potentially unused variable
 #define mu_unused __attribute__((unused))
@@ -71,12 +82,11 @@ typedef double   mfloat_t;
 #define mu_unreachable __builtin_unreachable()
 
 // Builtin for the next power of two
-#if defined(MU32)
+#ifdef MU32
 #define mu_npw2(x) (32 - __builtin_clz((x)-1))
 #else
 #define mu_npw2(x) (64 - __builtin_clzl((x)-1))
 #endif
-
 
 // Definition of Mu specific assert function
 #ifdef MU_DEBUG

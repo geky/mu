@@ -1,13 +1,11 @@
 #include "vm.h"
 
-#include "parse.h"
 #include "mu.h"
+#include "parse.h"
 #include "num.h"
 #include "str.h"
-#include "fn.h"
 #include "tbl.h"
-#include "err.h"
-#include <string.h>
+#include "fn.h"
 
 
 // Instruction access functions
@@ -18,28 +16,39 @@ mu_inline unsigned int rb(uint16_t ins) { return 0xf & (ins >> 0); }
 mu_inline unsigned int i(uint16_t ins)  { return (uint8_t)ins; }
 mu_inline signed int   j(uint16_t ins)  { return (int8_t)ins; }
 
+// Bytecode errors
+static mu_noreturn mu_error_bytecode(void) {
+    mu_error(mcstr("exceeded bytecode limits"));
+}
+
 
 // Encode the specified opcode and return its size
 // Encode the specified opcode and return its size
 // Note: size of the jump opcodes currently can not change based on argument
-// TODO: change asserts to err throwing checks
 void mu_encode(void (*emit)(void *, mbyte_t), void *p,
                enum op op, mint_t d, mint_t a, mint_t b) {
+    if (op > 0xf || d > 0xf)
+        mu_error_bytecode();
+
     uint16_t ins = 0;
-    mu_assert(op <= 0xf);
-    mu_assert(d <= 0xf);
     ins |= op << 12;
     ins |= d << 8;
 
     if (op >= OP_RET && op <= OP_DROP) {
-        mu_assert(a <= 0xff);
+        if (a > 0xff)
+            mu_error_bytecode();
+
         ins |= a;
     } else if (op >= OP_JFALSE && op <= OP_JUMP) {
-//        mu_assert(a-2 <= 0xff && a-2 >= -0x100); TODO
-        ins |= 0xff & ((a-2)>>1);
+        a = (a-2) >> 1;
+        if (a > 0xff || a < -0x100)
+            mu_error_bytecode();
+
+        ins |= 0xff & a;
     } else {
-        mu_assert(a <= 0xf);
-        mu_assert(b <= 0xf);
+        if (a > 0xf || b > 0xf)
+            mu_error_bytecode();
+
         ins |= a << 4;
         ins |= b;
     }
@@ -51,10 +60,13 @@ void mu_encode(void (*emit)(void *, mbyte_t), void *p,
 mint_t mu_patch(void *c, mint_t nj) {
     uint16_t ins = *(uint16_t *)c;
     mu_assert(op(ins) >= OP_JFALSE && op(ins) <= OP_JUMP);
-    //mu_assert(nj-2 <= 0xff && nj-2 >= -0x100); TODO
 
-    mint_t pj = (j(ins) << 1)+2;
-    ins = (ins & 0xff00) | (0xff & ((nj-2) >> 1));
+    nj = (nj-2) >> 1;
+    if (nj > 0x7f || nj < -0x80)
+        mu_error_bytecode();
+
+    mint_t pj = (j(ins)<<1) + 2;
+    ins = (0xff00 & ins) | (0xff & nj);
     *(uint16_t *)c = ins;
 
     return pj;
@@ -174,7 +186,7 @@ reenter:
     {   // Setup the registers and scope
         mu_t regs[c->regs];
         regs[0] = scope;
-        memcpy(&regs[1], frame, mu_fsize(c->args));
+        mu_fcopy(c->args, &regs[1], frame);
 
         // Setup other state
         imms = code_imms(c);
@@ -244,21 +256,21 @@ reenter:
                     break;
 
                 case OP_CALL:
-                    memcpy(frame, &regs[rd(ins)+1], mu_fsize(i(ins) >> 4));
+                    mu_fcopy(i(ins) >> 4, frame, &regs[rd(ins)+1]);
                     mu_fcall(regs[rd(ins)], i(ins), frame);
                     mu_dec(regs[rd(ins)]);
-                    memcpy(&regs[rd(ins)], frame, mu_fsize(0xf & i(ins)));
+                    mu_fcopy(0xf & i(ins), &regs[rd(ins)], frame);
                     break;
 
                 case OP_RET:
-                    memcpy(frame, &regs[rd(ins)], mu_fsize(i(ins)));
+                    mu_fcopy(i(ins), frame, &regs[rd(ins)]);
                     tbl_dec(scope);
                     code_dec(c);
                     return i(ins);
 
                 case OP_TCALL:
                     scratch = regs[rd(ins)];
-                    memcpy(frame, &regs[rd(ins)+1], mu_fsize(i(ins)));
+                    mu_fcopy(i(ins), frame, &regs[rd(ins)+1]);
                     tbl_dec(scope);
                     code_dec(c);
 
@@ -267,17 +279,13 @@ reenter:
                     // to get a tail call emitted.
                     if (mu_type(scratch) == MU_FN) {
                         c = fn_code(scratch);
-                        mu_fto(c->args, i(ins), frame);
+                        mu_fconvert(c->args, i(ins), frame);
                         scope = tbl_extend(c->scope, fn_closure(scratch));
                         fn_dec(scratch);
                         goto reenter;
                     } else {
                         return mu_tcall(scratch, i(ins), frame);
                     }
-
-                default:
-                    mu_cerr(mcstr("invalid opcode"),
-                            mcstr("invalid opcode"));
             }
         }
     }

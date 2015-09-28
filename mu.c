@@ -1,15 +1,73 @@
 #include "mu.h"
 
+#include "sys.h"
 #include "num.h"
 #include "str.h"
 #include "tbl.h"
 #include "fn.h"
-#include "err.h"
 #include "parse.h"
 
 
+// Common errors
+mu_noreturn mu_error_args(const char *name, mc_t count, mu_t *args) {
+    mbyte_t *message = mstr_create(0);
+    muint_t len = 0;
+    mstr_zcat(&message, &len, "invalid argument in ");
+    mstr_zcat(&message, &len, name);
+    mstr_zcat(&message, &len, "(");
+
+    for (muint_t i = 0; i < count; i++) {
+        mstr_concat(&message, &len, mu_repr(args[i]));
+
+        if (i != count-1)
+            mstr_zcat(&message, &len, ", ");
+        else
+            mstr_zcat(&message, &len, ")");
+    }
+
+    mu_error(mstr_intern(message, len));
+}
+
+#define mu_error_arg1(name, ...) mu_error_args(name, 1, (mu_t[1]){__VA_ARGS__})
+#define mu_error_arg2(name, ...) mu_error_args(name, 2, (mu_t[2]){__VA_ARGS__})
+#define mu_error_arg3(name, ...) mu_error_args(name, 3, (mu_t[3]){__VA_ARGS__})
+#define mu_error_arg4(name, ...) mu_error_args(name, 4, (mu_t[4]){__VA_ARGS__})
+
+static mu_noreturn mu_error_ops(const char *name, mc_t count, mu_t *args) {
+    mbyte_t *message = mstr_create(0);
+    muint_t len = 0;
+    mstr_zcat(&message, &len, "unsupported operation ");
+
+    if (count == 1) {
+        mstr_zcat(&message, &len, name);
+        mstr_concat(&message, &len, mu_repr(args[0]));
+    } else {
+        mstr_concat(&message, &len, mu_repr(args[0]));
+        mstr_zcat(&message, &len, " ");
+        mstr_zcat(&message, &len, name);
+        mstr_zcat(&message, &len, " ");
+        mstr_concat(&message, &len, mu_repr(args[1]));
+    }
+
+    mu_error(mstr_intern(message, len));
+}
+
+#define mu_error_op1(name, ...) mu_error_ops(name, 1, (mu_t[1]){__VA_ARGS__})
+#define mu_error_op2(name, ...) mu_error_ops(name, 2, (mu_t[2]){__VA_ARGS__})
+
+static mu_noreturn mu_error_convert(const char *name, mu_t m) {
+    mbyte_t *message = mstr_create(0);
+    muint_t len = 0;
+    mstr_zcat(&message, &len, "unable to convert ");
+    mstr_concat(&message, &len, mu_repr(m));
+    mstr_zcat(&message, &len, " to ");
+    mstr_zcat(&message, &len, name);
+    mu_error(mstr_intern(message, len));
+}
+
+
 // Conversion between different frame types
-void mu_fto(mc_t dc, mc_t sc, mu_t *frame) {
+void mu_fconvert(mc_t dc, mc_t sc, mu_t *frame) {
     if (dc != 0xf && sc != 0xf) {
         for (muint_t i = dc; i < sc; i++)
             mu_dec(frame[i]);
@@ -52,7 +110,11 @@ mu_t mu_lookup(mu_t m, mu_t k) {
     switch (mu_type(m)) {
         case MU_TBL:
         case MU_RTBL:   return tbl_lookup(m, k);
-        default:        mu_err_undefined();
+        default:        mu_error(mmlist({
+                            mcstr("unable to lookup "),
+                            mu_repr(k),
+                            mcstr(" in "),
+                            mu_repr(m)}));
     }
 }
 
@@ -60,7 +122,13 @@ void mu_insert(mu_t m, mu_t k, mu_t v) {
     switch (mu_type(m)) {
         case MU_TBL:
         case MU_RTBL:   return tbl_insert(m, k, v);
-        default:        mu_err_undefined();
+        default:        mu_error(mmlist({
+                            mcstr("unable to insert "),
+                            mu_repr(v),
+                            mcstr(" to "),
+                            mu_repr(k),
+                            mcstr(" in "),
+                            mu_repr(m)}));
     }
 }
 
@@ -68,7 +136,13 @@ void mu_assign(mu_t m, mu_t k, mu_t v) {
     switch (mu_type(m)) {
         case MU_TBL:
         case MU_RTBL:   return tbl_assign(m, k, v);
-        default:        mu_err_undefined();
+        default:        mu_error(mmlist({
+                            mcstr("unable to assign "),
+                            mu_repr(v),
+                            mcstr(" to "),
+                            mu_repr(k),
+                            mcstr(" in "),
+                            mu_repr(m)}));
     }
 }
 
@@ -82,13 +156,15 @@ mc_t mu_tcall(mu_t m, mc_t fc, mu_t *frame) {
         case MU_FN:     return mfn_tcall(m, fc, frame);
         case MU_BFN:    return bfn_tcall(m, fc, frame);
         case MU_SFN:    return sfn_tcall(m, fc, frame);
-        default:        mu_err_undefined();
+        default:        mu_error(mmlist({
+                            mcstr("unable to call "),
+                            mu_repr(m)}));
     }
 }
 
 void mu_fcall(mu_t m, mc_t fc, mu_t *frame) {
     mc_t rets = mu_tcall(mu_inc(m), fc >> 4, frame);
-    mu_fto(0xf & fc, rets, frame);
+    mu_fconvert(0xf & fc, rets, frame);
 }
 
 mu_t mu_vcall(mu_t m, mc_t fc, va_list args) {
@@ -119,28 +195,36 @@ mu_t mu_num(mu_t m) {
     switch (mu_type(m)) {
         case MU_NIL:    return muint(0);
         case MU_NUM:    return m;
-        case MU_STR:    return num_fromstr(m);
-        default:        mu_err_undefined();
+        case MU_STR:    if (str_len(m) == 1)
+                            return num_fromstr(m);
+                        break;
+        default:        break;
     }
+
+    mu_error_convert("num", m);
 }
 
 mu_t mu_str(mu_t m) {
     switch (mu_type(m)) {
         case MU_NIL:    return mcstr("");
-        case MU_NUM:    return str_fromnum(m);
+        case MU_NUM:    if (m == muint((mbyte_t)num_uint(m)))
+                            return str_fromnum(m);
+                        break;
         case MU_STR:    return m;
-        case MU_TBL:    
-        case MU_RTBL:   
+        case MU_TBL:
+        case MU_RTBL:
         case MU_FN:
         case MU_BFN:
         case MU_SFN:    return str_fromiter(mu_iter(m));
-        default:        mu_err_undefined();
+        default:        mu_unreachable;
     }
+
+    mu_error_convert("str", m);
 }
 
 mu_t mu_tbl(mu_t m, mu_t tail) {
     if (tail && !mu_istbl(tail))
-        mu_err_undefined();
+        mu_error_arg2("tbl", m, tail);
 
     mu_t t;
     switch (mu_type(m)) {
@@ -165,8 +249,10 @@ mu_t mu_fn(mu_t m) {
         case MU_FN:
         case MU_BFN:
         case MU_SFN:    return m;
-        default:        mu_err_undefined();
+        default:        break;
     }
+
+    mu_error_convert("str", m);
 }
 
 
@@ -187,15 +273,19 @@ bool mu_is(mu_t a, mu_t type) {
 }    
 
 mint_t mu_cmp(mu_t a, mu_t b) {
-    if (mu_type(a) != mu_type(b))
-        mu_cerr(mcstr("incompatible types"),
-                mcstr("incompatible arguments"));
-
-    switch (mu_type(a)) {
-        case MU_NUM:    return num_cmp(a, b);
-        case MU_STR:    return str_cmp(a, b);
-        default:        mu_err_undefined();
+    if (mu_type(a) == mu_type(b)) {
+        switch (mu_type(a)) {
+            case MU_NUM:    return num_cmp(a, b);
+            case MU_STR:    return str_cmp(a, b);
+            default:        break;
+        }
     }
+
+    mu_error(mmlist({
+        mcstr("unable to compare "),
+        mu_repr(a),
+        mcstr(" and "),
+        mu_repr(b)}));
 }
 
 
@@ -203,170 +293,170 @@ mint_t mu_cmp(mu_t a, mu_t b) {
 mu_t mu_pos(mu_t a) {
     switch (mu_type(a)) {
         case MU_NUM:    return a;
-        default:        mu_err_undefined();
+        default:        mu_error_op1("+", a);
     }
 }
 
 mu_t mu_neg(mu_t a) {
     switch (mu_type(a)) {
         case MU_NUM:    return num_neg(a);
-        default:        mu_err_undefined();
+        default:        mu_error_op1("-", a);
     }
 }
 
 mu_t mu_add(mu_t a, mu_t b) {
-    if (mu_type(a) != mu_type(b))
-        mu_cerr(mcstr("incompatible types"),
-                mcstr("incompatible arguments"));
-
-    switch (mu_type(a)) {
-        case MU_NUM:    return num_add(a, b);
-        default:        mu_err_undefined();
+    if (mu_type(a) == mu_type(b)) {
+        switch (mu_type(a)) {
+            case MU_NUM:    return num_add(a, b);
+            default:        break;
+        }
     }
+
+    mu_error_op2("+", a, b);
 }
 
 mu_t mu_sub(mu_t a, mu_t b) {
-    if (mu_type(a) != mu_type(b))
-        mu_cerr(mcstr("incompatible types"),
-                mcstr("incompatible arguments"));
-
-    switch (mu_type(a)) {
-        case MU_NUM:    return num_sub(a, b);
-        default:        mu_err_undefined();
+    if (mu_type(a) == mu_type(b)) {
+        switch (mu_type(a)) {
+            case MU_NUM:    return num_sub(a, b);
+            default:        break;
+        }
     }
+
+    mu_error_op2("-", a, b);
 }
 
 mu_t mu_mul(mu_t a, mu_t b) {
-    if (mu_type(a) != mu_type(b))
-        mu_cerr(mcstr("incompatible types"),
-                mcstr("incompatible arguments"));
-
-    switch (mu_type(a)) {
-        case MU_NUM:    return num_mul(a, b);
-        default:        mu_err_undefined();
+    if (mu_type(a) == mu_type(b)) {
+        switch (mu_type(a)) {
+            case MU_NUM:    return num_mul(a, b);
+            default:        break;
+        }
     }
+
+    mu_error_op2("*", a, b);
 }
 
 mu_t mu_div(mu_t a, mu_t b) {
-    if (mu_type(a) != mu_type(b))
-        mu_cerr(mcstr("incompatible types"),
-                mcstr("incompatible arguments"));
-
-    switch (mu_type(a)) {
-        case MU_NUM:    return num_div(a, b);
-        default:        mu_err_undefined();
+    if (mu_type(a) == mu_type(b)) {
+        switch (mu_type(a)) {
+            case MU_NUM:    return num_div(a, b);
+            default:        break;
+        }
     }
+
+    mu_error_op2("/", a, b);
 }
 
 mu_t mu_abs(mu_t a) {
     switch (mu_type(a)) {
         case MU_NUM:    return num_abs(a);
-        default:        mu_err_undefined();
+        default:        mu_error_arg1("abs", a);
     }
 }
 
 mu_t mu_floor(mu_t a) {
     switch (mu_type(a)) {
         case MU_NUM:    return num_floor(a);
-        default:        mu_err_undefined();
+        default:        mu_error_arg1("floor", a);
     }
 }
 
 mu_t mu_ceil(mu_t a) {
     switch (mu_type(a)) {
         case MU_NUM:    return num_ceil(a);
-        default:        mu_err_undefined();
+        default:        mu_error_arg1("ceil", a);
     }
 }
 
 mu_t mu_idiv(mu_t a, mu_t b) {
-    if (mu_type(a) != mu_type(b))
-        mu_cerr(mcstr("incompatible types"),
-                mcstr("incompatible arguments"));
-
-    switch (mu_type(a)) {
-        case MU_NUM:    return num_idiv(a, b);
-        default:        mu_err_undefined();
+    if (mu_type(a) == mu_type(b)) {
+        switch (mu_type(a)) {
+            case MU_NUM:    return num_idiv(a, b);
+            default:        break;
+        }
     }
+
+    mu_error_op2("//", a, b);
 }
 
 mu_t mu_mod(mu_t a, mu_t b) {
-    if (mu_type(a) != mu_type(b))
-        mu_cerr(mcstr("incompatible types"),
-                mcstr("incompatible arguments"));
-
-    switch (mu_type(a)) {
-        case MU_NUM:    return num_mod(a, b);
-        default:        mu_err_undefined();
+    if (mu_type(a) == mu_type(b)) {
+        switch (mu_type(a)) {
+            case MU_NUM:    return num_mod(a, b);
+            default:        break;
+        }
     }
+
+    mu_error_op2("%", a, b);
 }
 
 mu_t mu_pow(mu_t a, mu_t b) {
-    if (mu_type(a) != mu_type(b))
-        mu_cerr(mcstr("incompatible types"),
-                mcstr("incompatible arguments"));
-
-    switch (mu_type(a)) {
-        case MU_NUM:    return num_pow(a, b);
-        default:        mu_err_undefined();
+    if (mu_type(a) == mu_type(b)) {
+        switch (mu_type(a)) {
+            case MU_NUM:    return num_pow(a, b);
+            default:        break;
+        }
     }
+
+    mu_error_op2("^", a, b);
 }
 
 mu_t mu_log(mu_t a, mu_t b) {
-    if (b && mu_type(a) != mu_type(b))
-        mu_cerr(mcstr("incompatible types"),
-                mcstr("incompatible arguments"));
-
-    switch (mu_type(a)) {
-        case MU_NUM:    return num_log(a, b);
-        default:        mu_err_undefined();
+    if (!b || mu_type(a) == mu_type(b)) {
+        switch (mu_type(a)) {
+            case MU_NUM:    return num_pow(a, b);
+            default:        break;
+        }
     }
+
+    mu_error_arg2("log", a, b);
 }
 
 mu_t mu_cos(mu_t a) {
     switch (mu_type(a)) {
         case MU_NUM:    return num_cos(a);
-        default:        mu_err_undefined();
+        default:        mu_error_arg1("cos", a);
     }
 }
 
 mu_t mu_acos(mu_t a) {
     switch (mu_type(a)) {
         case MU_NUM:    return num_acos(a);
-        default:        mu_err_undefined();
+        default:        mu_error_arg1("acos", a);
     }
 }
 
 mu_t mu_sin(mu_t a) {
     switch (mu_type(a)) {
         case MU_NUM:    return num_sin(a);
-        default:        mu_err_undefined();
+        default:        mu_error_arg1("sin", a);
     }
 }
 
 mu_t mu_asin(mu_t a) {
     switch (mu_type(a)) {
         case MU_NUM:    return num_asin(a);
-        default:        mu_err_undefined();
+        default:        mu_error_arg1("asin", a);
     }
 }
 
 mu_t mu_tan(mu_t a) {
     switch (mu_type(a)) {
         case MU_NUM:    return num_tan(a);
-        default:        mu_err_undefined();
+        default:        mu_error_arg1("tan", a);
     }
 }
 
 mu_t mu_atan(mu_t a, mu_t b) {
-    if (b && mu_type(a) != mu_type(b))
-        mu_cerr(mcstr("incompatible types"),
-                mcstr("incompatible arguments"));
-
-    switch (mu_type(a)) {
-        case MU_NUM:    return num_atan(a, b);
-        default:        mu_err_undefined();
+    if (!b || mu_type(a) == mu_type(b)) {
+        switch (mu_type(a)) {
+            case MU_NUM:    return num_atan(a, b);
+            default:        break;
+        }
     }
+
+    mu_error_arg2("atan", a, b);
 }
 
 
@@ -374,90 +464,119 @@ mu_t mu_atan(mu_t a, mu_t b) {
 mu_t mu_not(mu_t a) {
     switch (mu_type(a)) {
         case MU_NUM:    return num_not(a);
-        default:        mu_err_undefined();
+        default:        mu_error_op1("~", a);
     }
 }
 
 mu_t mu_and(mu_t a, mu_t b) {
-    if (mu_type(a) != mu_type(b))
-        mu_cerr(mcstr("incompatible types"),
-                mcstr("incompatible arguments"));
-
-    switch (mu_type(a)) {
-        case MU_NUM:    return num_and(a, b);
-        case MU_TBL:
-        case MU_RTBL:   return tbl_and(a, b);
-        default:        mu_err_undefined();
+    if (mu_type(a) == mu_type(b)) {
+        switch (mu_type(a)) {
+            case MU_NUM:    return num_and(a, b);
+            case MU_TBL:
+            case MU_RTBL:   return tbl_and(a, b);
+            default:        break;
+        }
     }
+
+    mu_error_op2("&", a, b);
 }
 
 mu_t mu_or(mu_t a, mu_t b) {
-    if (mu_type(a) != mu_type(b))
-        mu_cerr(mcstr("incompatible types"),
-                mcstr("incompatible arguments"));
-
-    switch (mu_type(a)) {
-        case MU_NUM:    return num_or(a, b);
-        case MU_TBL:
-        case MU_RTBL:   return tbl_or(a, b);
-        default:        mu_err_undefined();
+    if (mu_type(a) == mu_type(b)) {
+        switch (mu_type(a)) {
+            case MU_NUM:    return num_or(a, b);
+            case MU_TBL:
+            case MU_RTBL:   return tbl_or(a, b);
+            default:        break;
+        }
     }
+
+    mu_error_op2("|", a, b);
 }
 
 mu_t mu_xor(mu_t a, mu_t b) {
-    if (mu_type(a) != mu_type(b))
-        mu_cerr(mcstr("incompatible types"),
-                mcstr("incompatible arguments"));
-
-    switch (mu_type(a)) {
-        case MU_NUM:    return num_xor(a, b);
-        case MU_TBL:
-        case MU_RTBL:   return tbl_xor(a, b);
-        default:        mu_err_undefined();
+    if (mu_type(a) == mu_type(b)) {
+        switch (mu_type(a)) {
+            case MU_NUM:    return num_xor(a, b);
+            case MU_TBL:
+            case MU_RTBL:   return tbl_xor(a, b);
+            default:        break;
+        }
     }
+
+    mu_error_op2("~", a, b);
 }
 
 mu_t mu_diff(mu_t a, mu_t b) {
-    if (mu_type(a) != mu_type(b))
-        mu_cerr(mcstr("incompatible types"),
-                mcstr("incompatible arguments"));
-
-    switch (mu_type(a)) {
-        case MU_NUM:    return num_xor(a, num_not(b));
-        case MU_TBL:
-        case MU_RTBL:   return tbl_diff(a, b);
-        default:        mu_err_undefined();
+    if (mu_type(a) == mu_type(b)) {
+        switch (mu_type(a)) {
+            case MU_NUM:    return num_xor(a, num_not(b));
+            case MU_TBL:
+            case MU_RTBL:   return tbl_diff(a, b);
+            default:        break;
+        }
     }
+
+    mu_error_op2("&~", a, b);
 }
 
 mu_t mu_shl(mu_t a, mu_t b) {
-    if (!mu_isnum(b))
-        mu_err_undefined();
-
-    switch (mu_type(a)) {
-        case MU_NUM:    return num_shl(a, b);
-        default:        mu_err_undefined();
+    if (mu_type(a) == mu_type(b)) {
+        switch (mu_type(a)) {
+            case MU_NUM:    return num_shl(a, b);
+            default:        break; 
+        }
     }
+
+    mu_error_op2("<<", a, b);
 }
 
 mu_t mu_shr(mu_t a, mu_t b) {
-    if (!mu_isnum(b))
-        mu_err_undefined();
-
-    switch (mu_type(a)) {
-        case MU_NUM:    return num_shr(a, b);
-        default:        mu_err_undefined();
+    if (mu_type(a) == mu_type(b)) {
+        switch (mu_type(a)) {
+            case MU_NUM:    return num_shr(a, b);
+            default:        break;
+        }
     }
+
+    mu_error_op2(">>", a, b);
 }
 
 // String representation
+mu_t mu_addr(mu_t m) {
+    mbyte_t *s = mstr_create(8 + 2*sizeof(muint_t));
+    muint_t len = 0;
+    mstr_insert(&s, &len, '<');
+
+    switch (mu_type(m)) {
+        case MU_NIL:    mstr_zcat(&s, &len, "nil");     break;
+        case MU_NUM:    mstr_zcat(&s, &len, "num");     break;
+        case MU_STR:    mstr_zcat(&s, &len, "str");     break;
+        case MU_TBL:
+        case MU_RTBL:   mstr_zcat(&s, &len, "tbl");     break;
+        case MU_FN:
+        case MU_BFN:
+        case MU_SFN:    mstr_zcat(&s, &len, "fn");      break;
+        default:        mu_unreachable;
+    }
+
+    mstr_zcat(&s, &len, " 0x");
+
+    for (muint_t i = 0; i < 2*sizeof(muint_t); i++)
+        mstr_insert(&s, &len,
+            mu_toascii(0xf & ((muint_t)m >> 4*(2*sizeof(muint_t)-1 - i))));
+
+    mstr_insert(&s, &len, '>');
+    return mstr_intern(s, len);
+}
+
 mu_t mu_repr(mu_t m) {
     return mu_dump(m, mnil, mnil);
 }
 
 mu_t mu_dump(mu_t m, mu_t indent, mu_t depth) {
     if ((indent && !mu_isnum(indent)) || (depth && !mu_isnum(depth)))
-        mu_err_undefined();
+        mu_error_arg3("repr", m, indent, depth);
 
     switch (mu_type(m)) {
         case MU_NIL:    return mcstr("nil");
@@ -467,7 +586,7 @@ mu_t mu_dump(mu_t m, mu_t indent, mu_t depth) {
         case MU_RTBL:   return tbl_dump(m, indent, depth);
         case MU_FN:
         case MU_BFN:
-        case MU_SFN:    return fn_repr(m);
+        case MU_SFN:    return mu_addr(m);
         default:        mu_unreachable;
     }
 }
@@ -476,7 +595,7 @@ mu_t mu_bin(mu_t m) {
     switch (mu_type(m)) {
         case MU_NUM:    return num_bin(m);
         case MU_STR:    return str_bin(m);
-        default:        mu_err_undefined();
+        default:        mu_error_arg1("bin", m);
     }
 }
 
@@ -484,7 +603,7 @@ mu_t mu_oct(mu_t m) {
     switch (mu_type(m)) {
         case MU_NUM:    return num_oct(m);
         case MU_STR:    return str_oct(m);
-        default:        mu_err_undefined();
+        default:        mu_error_arg1("oct", m);
     }
 }
 
@@ -492,7 +611,7 @@ mu_t mu_hex(mu_t m) {
     switch (mu_type(m)) {
         case MU_NUM:    return num_hex(m);
         case MU_STR:    return str_hex(m);
-        default:        mu_err_undefined();
+        default:        mu_error_arg1("hex", m);
     }
 }
 
@@ -503,7 +622,7 @@ mlen_t mu_len(mu_t m) {
         case MU_STR:    return str_len(m);
         case MU_TBL:    
         case MU_RTBL:   return tbl_len(m);
-        default:        mu_err_undefined();
+        default:        mu_error_arg1("len", m);
     }
 }
 
@@ -511,30 +630,32 @@ mu_t mu_tail(mu_t m) {
     switch (mu_type(m)) {
         case MU_TBL:
         case MU_RTBL:   return tbl_tail(m);
-        default:        mu_err_undefined();
+        default:        mu_error_arg1("tail", m);
     }
 }
 
 void mu_push(mu_t m, mu_t v, mu_t i) {
-    if (i && !mu_isnum(i))
-        mu_err_undefined();
-
-    switch (mu_type(m)) {
-        case MU_TBL:
-        case MU_RTBL:   return tbl_push(m, v, i);
-        default:        mu_err_undefined();
+    if (!i || mu_isnum(i)) {
+        switch (mu_type(m)) {
+            case MU_TBL:
+            case MU_RTBL:   return tbl_push(m, v, i);
+            default:        break;
+        }
     }
+
+    mu_error_arg3("push", m, v, i);
 }
 
 mu_t mu_pop(mu_t m, mu_t i) {
-    if (i && !mu_isnum(i))
-        mu_err_undefined();
-
-    switch (mu_type(m)) {
-        case MU_TBL:
-        case MU_RTBL:   return tbl_pop(m, i);
-        default:        mu_err_undefined();
+    if (!i || mu_isnum(i)) {
+        switch (mu_type(m)) {
+            case MU_TBL:
+            case MU_RTBL:   return tbl_pop(m, i);
+            default:        break;
+        }
     }
+
+    mu_error_arg2("pop", m, i);
 }
 
 mu_t mu_const(mu_t m) {
@@ -546,97 +667,102 @@ mu_t mu_const(mu_t m) {
 
 
 mu_t mu_concat(mu_t a, mu_t b, mu_t offset) {
-    if (mu_type(a) != mu_type(b))
-        mu_cerr(mcstr("incompatible types"),
-                mcstr("incompatible arguments"));
-
     if (offset && !mu_isnum(offset))
-        mu_err_undefined();
+        mu_error_arg3("concat", a, b, offset);
 
-    switch (mu_type(a)) {
-        case MU_STR:    return str_concat(a, b);
-        case MU_TBL:
-        case MU_RTBL:   return tbl_concat(a, b, offset);
-        default:        mu_err_undefined();
+    if (mu_type(a) == mu_type(b)) {
+        switch (mu_type(a)) {
+            case MU_STR:    return str_concat(a, b);
+            case MU_TBL:
+            case MU_RTBL:   return tbl_concat(a, b, offset);
+            default:        break;
+        }
     }
+
+    mu_error_op2("++", a, b);
 }
 
 mu_t mu_subset(mu_t m, mu_t lower, mu_t upper) {
-    if (!mu_isnum(lower) || (upper && !mu_isnum(upper)))
-        mu_err_undefined();
-
-    switch (mu_type(m)) {
-        case MU_STR:    return str_subset(m, lower, upper);
-        case MU_TBL:    
-        case MU_RTBL:   return tbl_subset(m, lower, upper);
-        default:        mu_err_undefined();
+    if (mu_isnum(lower) && (!upper || mu_isnum(upper))) {
+        switch (mu_type(m)) {
+            case MU_STR:    return str_subset(m, lower, upper);
+            case MU_TBL:    
+            case MU_RTBL:   return tbl_subset(m, lower, upper);
+            default:        break;
+        }
     }
+
+    mu_error_arg3("sub", m, lower, upper);
 }
 
 // String operations
 mu_t mu_find(mu_t m, mu_t sub) {
-    if (!mu_isstr(sub))
-        mu_err_undefined();
-
-    switch (mu_type(m)) {
-        case MU_STR:    return str_find(m, sub);
-        default:        mu_err_undefined();
+    if (mu_isstr(sub)) {
+        switch (mu_type(m)) {
+            case MU_STR:    return str_find(m, sub);
+            default:        break;
+        }
     }
+
+    mu_error_arg2("find", m, sub);
 }
 
 mu_t mu_replace(mu_t m, mu_t sub, mu_t rep, mu_t max) {
-    if (!mu_isstr(sub) || !mu_isstr(rep) ||
-        (max && !mu_isnum(max)))
-        mu_err_undefined();
-
-    switch (mu_type(m)) {
-        case MU_STR:    return str_replace(m, sub, rep, max);
-        default:        mu_err_undefined();
+    if (mu_isstr(sub) && mu_isstr(rep) && (!max || mu_isnum(max))) {
+        switch (mu_type(m)) {
+            case MU_STR:    return str_replace(m, sub, rep, max);
+            default:        break;
+        }
     }
+
+    mu_error_arg4("replace", m, sub, rep, max);
 }
 
 mu_t mu_split(mu_t m, mu_t delim) {
-    if (delim && !mu_isstr(delim))
-        mu_err_undefined();
-
-    switch (mu_type(m)) {
-        case MU_STR:    return str_split(m, delim);
-        default:        mu_err_undefined();
+    if (!delim || mu_isstr(delim)) {
+        switch (mu_type(m)) {
+            case MU_STR:    return str_split(m, delim);
+            default:        break;
+        }
     }
+
+    mu_error_arg2("split", m, delim);
 }
 
 mu_t mu_join(mu_t m, mu_t delim) {
-    if (delim && !mu_isstr(delim))
-        mu_err_undefined();
+    if (!delim || mu_isstr(delim))
+        return str_join(mu_iter(m), delim);
 
-    return str_join(mu_iter(m), delim);
+    mu_error_arg2("join", m, delim);
 }
 
 mu_t mu_pad(mu_t m, mu_t len, mu_t pad) {
-    if (!mu_isnum(len) || (pad && !mu_isstr(pad)))
-        mu_err_undefined();
-
-    switch (mu_type(m)) {
-        case MU_STR:    return str_pad(m, len, pad);
-        default:        mu_err_undefined();
+    if (mu_isnum(len) && 
+        (!pad || (mu_isstr(pad) && str_len(pad) > 0))) {
+        switch (mu_type(m)) {
+            case MU_STR:    return str_pad(m, len, pad);
+            default:        break;
+        }
     }
+
+    mu_error_arg3("pad", m, len, pad);
 }
 
 mu_t mu_strip(mu_t m, mu_t dir, mu_t pad) {
-    if ((dir && !mu_isnum(dir)) || (pad && !mu_isstr(pad)))
-        mu_err_undefined();
-
-    switch (mu_type(m)) {
-        case MU_STR:    return str_strip(m, dir, pad);
-        default:        mu_err_undefined();
+    if ((!dir || mu_isnum(dir)) && 
+        (!pad || (mu_isstr(pad) && str_len(pad) > 0))) {
+        switch (mu_type(m)) {
+            case MU_STR:    return str_strip(m, dir, pad);
+            default:        break;
+        }
     }
+
+    mu_error_arg3("strip", m, dir, pad);
 }
 
 // Function operations
 mu_t mu_bind(mu_t m, mu_t args) {
-    if (!mu_istbl(args))
-        mu_err_undefined();
-
+    mu_assert(mu_istbl(args));
     return fn_bind(m, args);
 }
 
@@ -653,9 +779,7 @@ mu_t mu_filter(mu_t m, mu_t iter) {
 }
 
 mu_t mu_reduce(mu_t m, mu_t iter, mu_t inits) {
-    if (inits && !mu_istbl(inits))
-        mu_err_undefined();
-
+    mu_assert(mu_istbl(inits));
     return fn_reduce(m, mu_iter(iter), inits);
 }
 
@@ -676,8 +800,10 @@ mu_t mu_iter(mu_t m) {
         case MU_FN:
         case MU_BFN:
         case MU_SFN:    return m;
-        default:        mu_err_undefined();
+        default:        break;
     }
+
+    mu_error_convert("iter", m);
 }
 
 mu_t mu_pairs(mu_t m) {
@@ -691,19 +817,19 @@ mu_t mu_pairs(mu_t m) {
 }
 
 mu_t mu_range(mu_t start, mu_t stop, mu_t step) {
-    if ((start && !mu_isnum(start)) ||
-        (stop && !mu_isnum(stop)) ||
-        (step && !mu_isnum(step)))
-        mu_err_undefined();
+    if ((!start || mu_isnum(start)) &&
+        (!stop || mu_isnum(stop)) &&
+        (!step || mu_isnum(step)))
+        return fn_range(start, stop, step);
 
-    return fn_range(start, stop, step);
+    mu_error_arg3("range", start, stop, step);
 }
 
 mu_t mu_repeat(mu_t value, mu_t times) {
-    if (times && !mu_isnum(times))
-        mu_err_undefined();
+    if (!times || mu_isnum(times))
+        return fn_repeat(value, times);
 
-    return fn_repeat(value, times);
+    mu_error_arg2("repeat", value, times);
 }
 
 // Iterator manipulation
@@ -742,18 +868,77 @@ mu_t mu_sort(mu_t iter) {
 
 // Random number generation
 mu_t mu_seed(mu_t m) {
-    if (!mu_isnum(m))
-        mu_err_undefined();
+    if (mu_isnum(m))
+        return num_seed(m);
 
-    return num_seed(m);
+    mu_error_arg1("seed", m);
 }
 
-mu_t mu_random(void) {
-    mu_t frame[MU_FRAME];
-    mu_t gen = tbl_lookup(MU_BUILTINS, mcstr("random"));
-    mu_fcall(gen, 0x01, frame);
-    mu_dec(gen);
-    return frame[0];
+// System operations
+mu_noreturn mu_error(mu_t message) {
+    mu_assert(mu_isstr(message) || mu_istbl(message));
+
+    if (mu_isstr(message)) {
+        sys_error((const char *)str_bytes(message), str_len(message));
+    } else {
+        mbyte_t *m = mstr_create(0);
+        muint_t len = 0;
+        mu_t v;
+
+        for (muint_t i = 0; tbl_next(message, &i, 0, &v);) {
+            if (!mu_isstr(v))
+                v = mu_repr(v);
+
+            mstr_concat(&m, &len, v);
+        }
+
+        sys_error((const char *)m, len);
+    }
+}
+
+void mu_print(mu_t message) {
+    mu_assert(mu_isstr(message) || mu_istbl(message));
+
+    if (mu_isstr(message)) {
+        sys_print((const char *)str_bytes(message), str_len(message));
+        str_dec(message);
+    } else {
+        mbyte_t *m = mstr_create(0);
+        muint_t len = 0;
+        mu_t v;
+
+        for (muint_t i = 0; tbl_next(message, &i, 0, &v);) {
+            if (!mu_isstr(v))
+                v = mu_repr(v);
+
+            mstr_concat(&m, &len, v);
+        }
+
+        sys_print((const char *)m, len);
+        mstr_dec(m);
+        tbl_dec(message);
+    }
+}
+
+
+static mu_t import_history = 0;
+
+mu_t mu_import(mu_t name) {
+    if (!mu_isstr(name))
+        mu_error_arg1("import", name);
+
+    if (!import_history)
+        import_history = tbl_create(0);
+
+    mu_t module = tbl_lookup(import_history, str_inc(name));
+    if (module) {
+        str_dec(name);
+        return module;
+    }
+
+    module = sys_import(str_inc(name));
+    tbl_insert(import_history, name, mu_inc(module));
+    return module;
 }
 
 
@@ -1134,7 +1319,7 @@ static mc_t mb_repeat(mu_t *frame) {
 // Iterator manipulation
 static mc_t mb_zip(mu_t *frame) {
     if (tbl_len(frame[0]) == 0) {
-        mu_err_undefined();
+        mu_error(mcstr("no arguments passed to zip"));
     } else if (tbl_len(frame[0]) == 1) {
         mu_t iter = tbl_lookup(frame[0], muint(0));
         mu_dec(frame[0]);
@@ -1148,7 +1333,7 @@ static mc_t mb_zip(mu_t *frame) {
 
 static mc_t mb_chain(mu_t *frame) {
     if (tbl_len(frame[0]) == 0) {
-        mu_err_undefined();
+        mu_error(mcstr("no arguments passed to chain"));
     } else if (tbl_len(frame[0]) == 1) {
         mu_t iter = tbl_lookup(frame[0], muint(0));
         mu_dec(frame[0]);
@@ -1172,9 +1357,7 @@ static mc_t mb_drop(mu_t *frame) {
 
 // Iterator ordering
 static mc_t mb_min(mu_t *frame) {
-    if (tbl_len(frame[0]) == 0) {
-        mu_err_undefined();
-    } else if (tbl_len(frame[0]) == 1) {
+    if (tbl_len(frame[0]) == 1) {
         mu_t iter = tbl_lookup(frame[0], muint(0));
         mu_dec(frame[0]);
         frame[0] = mu_min(iter);
@@ -1186,9 +1369,7 @@ static mc_t mb_min(mu_t *frame) {
 }
 
 static mc_t mb_max(mu_t *frame) {
-    if (tbl_len(frame[0]) == 0) {
-        mu_err_undefined();
-    } else if (tbl_len(frame[0]) == 1) {
+    if (tbl_len(frame[0]) == 1) {
         mu_t iter = tbl_lookup(frame[0], muint(0));
         mu_dec(frame[0]);
         frame[0] = mu_max(iter);
@@ -1211,6 +1392,20 @@ static mc_t mb_sort(mu_t *frame) {
 
 static mc_t mb_seed(mu_t *frame) {
     frame[0] = mu_seed(frame[0]);
+    return 1;
+}
+
+static mc_t mb_error(mu_t *frame) {
+    mu_error(frame[0]);
+}
+
+static mc_t mb_print(mu_t *frame) {
+    mu_print(frame[0]);
+    return 0;
+}
+
+static mc_t mb_import(mu_t *frame) {
+    frame[0] = mu_import(frame[0]);
     return 1;
 }
 
@@ -1340,6 +1535,10 @@ mu_pure mu_t mu_builtins(void) {
 
         // Random number generation
         { mcstr("seed"),    mcfn(0x1, mb_seed) },
-        { mcstr("random"),  mu_seed(muint(0)) },
+
+        // System operations
+        { mcstr("error"),   mcfn(0xf, mb_error) },
+        { mcstr("print"),   mcfn(0xf, mb_print) },
+        { mcstr("import"),  mcfn(0x1, mb_import) },
     });
 }

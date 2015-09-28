@@ -6,14 +6,8 @@
 #define MU_TYPES_H
 #include "config.h"
 #include "mem.h"
+#include <string.h>
 #include <stdarg.h>
-
-
-// Smallest addressable unit
-typedef unsigned char mbyte_t;
-
-// Length type for strings/tables
-typedef muinth_t mlen_t;
 
 
 // Three bit type specifier located in lowest bits of each variable
@@ -36,6 +30,7 @@ enum mtype {
 // void * would risk unwanted implicit conversions.
 typedef struct mu *mu_t;
 
+
 // Nil is stored as null
 #define mnil  ((mu_t)0)
 
@@ -52,6 +47,7 @@ mu_inline bool mu_isfn(mu_t m)  { return mu_type(m) >= MU_FN;  }
 
 mu_inline bool mu_isref(mu_t m)   { return 6 & (muint_t)m; }
 mu_inline bool mu_isconst(mu_t m) { return mu_type(m) != MU_TBL; }
+
 
 // Reference counting
 mu_inline mu_t mu_inc(mu_t m) {
@@ -83,15 +79,16 @@ mu_inline void mu_dec(mu_t m) {
 // nibbles for arguments and return values, in that order.
 typedef uint8_t mc_t;
 
+
 // Conversion between different frame types
-void mu_fto(mc_t dc, mc_t sc, mu_t *frame);
+void mu_fconvert(mc_t dc, mc_t sc, mu_t *frame);
 
 mu_inline muint_t mu_fcount(mc_t fc) {
     return (fc == 0xf) ? 1 : fc;
 }
 
-mu_inline muint_t mu_fsize(mc_t fc) {
-    return sizeof(mu_t) * mu_fcount(fc);
+mu_inline void mu_fcopy(mc_t fc, mu_t *dframe, mu_t *sframe) {
+    memcpy(dframe, sframe, sizeof(mu_t)*mu_fcount(fc));
 }
 
 
@@ -167,6 +164,7 @@ mu_t mu_shr(mu_t a, mu_t b);
 
 // String representation
 mu_t mu_parse(mu_t m);
+mu_t mu_addr(mu_t m);
 mu_t mu_repr(mu_t m);
 mu_t mu_dump(mu_t m, mu_t depth, mu_t indent);
 
@@ -237,8 +235,11 @@ mu_t mu_sort(mu_t iter);
 
 // Random number generation
 mu_t mu_seed(mu_t m);
-mu_t mu_random(void);
 
+// System operations
+mu_noreturn mu_error(mu_t message);
+void mu_print(mu_t message);
+mu_t mu_import(mu_t name);
 
 
 #endif

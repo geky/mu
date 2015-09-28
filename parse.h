@@ -5,7 +5,6 @@
 #ifndef MU_PARSE_H
 #define MU_PARSE_H
 #include "mu.h"
-#include "fn.h"
 
 
 // Parse literals without side-effects

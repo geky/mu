@@ -59,9 +59,6 @@ mu_t fn_max(mu_t iter);
 mu_t fn_reverse(mu_t iter);
 mu_t fn_sort(mu_t iter);
 
-// String representation
-mu_t fn_repr(mu_t f);
-
 
 // Definition of code structure used to represent the
 // executable component of Mu functions.

@@ -5,8 +5,6 @@
 #ifndef MU_NUM_H
 #define MU_NUM_H
 #include "mu.h"
-#include "err.h"
-#include "str.h"
 #include <math.h>
 
 

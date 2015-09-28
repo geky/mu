@@ -7,7 +7,7 @@ SIZE = size
 
 SRC += main.c
 SRC += mu.c
-SRC += mem.c err.c
+SRC += mem.c
 SRC += num.c str.c tbl.c fn.c
 SRC += vm.c parse.c
 OBJ := $(SRC:.c=.o)

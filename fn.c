@@ -5,8 +5,6 @@
 #include "tbl.h"
 #include "parse.h"
 #include "vm.h"
-#include <string.h>
-#include <stdarg.h>
 
 
 // Function access
@@ -71,14 +69,14 @@ void code_destroy(struct code *c) {
 
 // C interface for calling functions
 mc_t bfn_tcall(mu_t f, mc_t fc, mu_t *frame) {
-    mu_fto(fn(f)->args, fc, frame);
+    mu_fconvert(fn(f)->args, fc, frame);
     mbfn_t *bfn = fn(f)->bfn;
     fn_dec(f);
     return bfn(frame);
 }
 
 mc_t sfn_tcall(mu_t f, mc_t fc, mu_t *frame) {
-    mu_fto(fn(f)->args, fc, frame);
+    mu_fconvert(fn(f)->args, fc, frame);
     mc_t rc = fn(f)->sfn(fn(f)->closure, frame);
     fn_dec(f);
     return rc;
@@ -86,7 +84,7 @@ mc_t sfn_tcall(mu_t f, mc_t fc, mu_t *frame) {
 
 mc_t mfn_tcall(mu_t f, mc_t fc, mu_t *frame) {
     struct code *c = fn_code(f);
-    mu_fto(c->args, fc, frame);
+    mu_fconvert(c->args, fc, frame);
     mu_t scope = tbl_extend(c->scope, fn_closure(f));
     fn_dec(f);
     return mu_exec(c, scope, frame);
@@ -105,7 +103,7 @@ mc_t fn_tcall(mu_t f, mc_t fc, mu_t *frame) {
 
 void fn_fcall(mu_t f, mc_t fc, mu_t *frame) {
     mc_t rets = fn_tcall(mu_inc(f), fc >> 4, frame);
-    mu_fto(fc & 0xf, rets, frame);
+    mu_fconvert(fc & 0xf, rets, frame);
 }
 
 
@@ -120,7 +118,7 @@ bool fn_next(mu_t f, mc_t fc, mu_t *frame) {
                 mu_dec(frame[0]);
             return true;
         } else {
-            mu_fto(0, fc, frame);
+            mu_fconvert(0, fc, frame);
             return false;
         }
     } else {
@@ -518,7 +516,7 @@ mu_t fn_min(mu_t iter) {
     mu_t min_frame = frame[0];
     mu_t min = tbl_lookup(min_frame, muint(0));
     if (!min)
-        mu_err_undefined();
+        mu_error(mcstr("no elements passed to min"));
 
     while (fn_next(iter, 0xf, frame)) {
         mu_t m = tbl_lookup(frame[0], muint(0));
@@ -547,7 +545,7 @@ mu_t fn_max(mu_t iter) {
     mu_t max_frame = frame[0];
     mu_t max = tbl_lookup(max_frame, muint(0));
     if (!max)
-        mu_err_undefined();
+        mu_error(mcstr("no elements passed to max"));
 
     while (fn_next(iter, 0xf, frame)) {
         mu_t m = tbl_lookup(frame[0], muint(0));
@@ -669,16 +667,3 @@ mu_t fn_sort(mu_t iter) {
     return msfn(0x0, fn_sort_step, mmlist({store, muint(0)}));
 }
 
-
-// String representation
-mu_t fn_repr(mu_t f) {
-    mu_assert(mu_isfn(f));
-    mbyte_t *s = mstr_create(6 + 2*sizeof(muint_t));
-    memcpy(s, "fn(0x", 5);
-
-    for (muint_t i = 0; i < 2*sizeof(muint_t); i++)
-        s[i+5] = mu_toascii(0xf & ((muint_t)f >> 4*(2*sizeof(muint_t)-1 - i)));
-
-    s[5 + 2*sizeof(muint_t)] = ')';
-    return mstr_intern(s, 6 + 2*sizeof(muint_t));
-}

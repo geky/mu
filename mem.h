@@ -17,9 +17,8 @@ typedef mu_aligned muinth_t mref_t;
 // Manual memory management
 // simple wrapper over malloc and free if available
 // returns 0 when size == 0
-void *mu_alloc(size_t size);
-void *mu_realloc(void *, size_t prev, size_t size);
-void mu_dealloc(void *, size_t size);
+void *mu_alloc(muint_t size);
+void mu_dealloc(void *, muint_t size);
 
 
 // Garbage collected memory based on reference counting
@@ -29,14 +28,14 @@ void mu_dealloc(void *, size_t size);
 // which could be statically allocated. This nicely handles
 // overflow allowing a small reference count size.
 // It is up to the user to avoid cyclic dependencies.
-mu_inline void *ref_alloc(size_t size) {
+mu_inline void *ref_alloc(muint_t size) {
     mref_t *ref = mu_alloc(size);
     *ref = 1;
 
     return ref;
 }
 
-mu_inline void ref_dealloc(void *m, size_t size) {
+mu_inline void ref_dealloc(void *m, muint_t size) {
     mu_dealloc((mref_t *)(~7 & (muint_t)m), size);
 }
 

@@ -7,13 +7,14 @@
 #include "str.h"
 #include "tbl.h"
 #include "fn.h"
-#include "err.h"
 #include "parse.h"
 #include "vm.h"
+#include "sys.h"
 
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
+#include <setjmp.h>
 
 #define PROMPT_A "\033[32m> \033[0m"
 #define PROMPT_B "\033[32m. \033[0m"
@@ -33,6 +34,35 @@ static bool do_stdin = false;
 static bool do_default = true;
 
 
+// System functions
+const char *error_message;
+muint_t error_len;
+jmp_buf error_handler;
+
+struct error_handler {
+    const char *message;
+    muint_t len;
+    jmp_buf buf;
+} eh;
+
+mu_noreturn sys_error(const char *m, muint_t len) {
+    eh.message = m;
+    eh.len = len;
+
+    longjmp(eh.buf, 1);
+}
+
+void sys_print(const char *m, muint_t len) {
+    fwrite(m, sizeof(mbyte_t), len, stdout);
+    fputc('\n', stdout);
+}
+
+mu_t sys_import(mu_t name) {
+    mu_dec(name);
+    return mnil;
+}
+
+
 static void printvar(mu_t v) {
     if (!mu_isstr(v)) {
         v = mu_repr(v);
@@ -45,16 +75,10 @@ static void printrepr(mu_t v) {
     printvar(mu_dump(v, MU_INF, 0));
 }
 
-static void printerr(mu_t err) {
-    mu_try_begin {
-        printf("%s", ERR_START);
-        printvar(tbl_lookup(err, mcstr("type")));
-        printf(" error: ");
-        printvar(tbl_lookup(err, mcstr("reason")));
-        printf("%s\n", ERR_END);
-    } mu_on_err (err) {
-        printf("%serror handling error%s\n", ERR_START, ERR_END);
-    } mu_try_end;
+static void printerr(void) {
+    printf("%s", ERR_START);
+    printf("error: %.*s", eh.len, eh.message);
+    printf("%s\n", ERR_END);
 }
 
 static void printoutput(mu_t f) {
@@ -64,18 +88,6 @@ static void printoutput(mu_t f) {
         return;
 
     printf("%s", OUTPUT_A);
-//    tbl_for_begin (k, v, f) {
-//        if (!mu_isnum(k)) {
-//            printrepr(k);
-//            printf(": ");
-//        }
-//
-//        printrepr(v);
-//
-//        if (--i != 0) {
-//            printf(", ");
-//        }
-//    } tbl_for_end
 
     mu_t k, v;
     for (muint_t j = 0; tbl_next(f, &j, &k, &v);) {
@@ -106,32 +118,8 @@ static mlen_t prompt(mbyte_t *input) {
     }
 }
 
-static mc_t b_print(mu_t *frame) {
-    mu_t k, v;
-    for (muint_t i = 0; tbl_next(frame[0], &i, &k, &v);) {
-        printvar(v);
-    }
-
-    mu_dec(frame[0]);
-    printf("\n");
-    return 0;
-}
-
-static mc_t b_error(mu_t *frame) {
-    if (!mu_isstr(frame[0]))
-        mu_err_undefined();
-
-    if (mu_isstr(frame[1]))
-        mu_cerr(frame[0], frame[1]);
-    else
-        mu_cerr(mcstr("general"), frame[0]);
-}
-
 static void genscope() {
-    scope = mxmtbl(MU_BUILTINS, {
-        { mcstr("print"), mcfn(0xf, b_print) },
-        { mcstr("error"), mcfn(0x2, b_error) }
-    });
+    scope = mxmtbl(MU_BUILTINS, {});
 }
 
 static int genargs(int i, int argc, const char **argv) {
@@ -151,7 +139,7 @@ static void execute(const char *input) {
     struct code *c = mu_compile(mzstr(input));
     mu_t frame[MU_FRAME];
     mc_t rets = mu_exec(c, tbl_create(c->scope), frame);
-    mu_fto(0, rets, frame);
+    mu_fconvert(0, rets, frame);
 }
 
 static void load_file(FILE *file) {
@@ -161,8 +149,7 @@ static void load_file(FILE *file) {
     size_t len = fread(buffer, 1, BUFFER_SIZE, file);
 
     if (ferror(file)) {
-        mu_cerr(mcstr("io"),
-                mcstr("encountered file reading error"));
+        mu_error(mcstr("io error reading file"));
     }
 
     struct code *c = mu_compile(mnstr(buffer+off, len-off));
@@ -171,15 +158,14 @@ static void load_file(FILE *file) {
     mu_t s = tbl_extend(c->scope, mu_inc(scope));
     mu_t frame[MU_FRAME];
     mc_t rets = mu_exec(c, s, frame);
-    mu_fto(0, rets, frame);
+    mu_fconvert(0, rets, frame);
 }
 
 static void load(const char *name) {
     FILE *file;
 
     if (!(file = fopen(name, "r"))) {
-        mu_cerr(mcstr("io"),
-                mcstr("could not open file"));
+        mu_error(mcstr("io error opening file"));
     }
 
     load_file(file);
@@ -194,28 +180,19 @@ static mu_noreturn interpret() {
         mlen_t len = prompt(buffer);
         mu_t code = mnstr(buffer, len);
 
-        mu_try_begin {
+        struct error_handler old_eh = eh;
+        if (!setjmp(eh.buf)) {
             mu_t frame[MU_FRAME];
             struct code *c = mu_compile(code);
             mc_t rets = mu_exec(c, mu_inc(scope), frame);
-            mu_fto(0xf, rets, frame);
-//
-//            mu_try_begin {
-//                f = fn_create_expr(0, code);
-//            } mu_on_err (err) {
-//                f = fn_create(0, code);
-//            } mu_try_end;
-
-//            mu_t output = fn_call_in(f, 0, scope);
-
-            // TODO use strs?
-//            mu_dis(f->code);
+            mu_fconvert(0xf, rets, frame);
 
             printoutput(frame[0]);
             mu_dec(frame[0]);
-        } mu_on_err (err) {
-            printerr(err);
-        } mu_try_end;
+        } else {
+            printerr();
+        }
+        eh = old_eh;
     }
 }
 
@@ -292,7 +269,7 @@ static int options(int i, int argc, const char **argv) {
 
 
 int main(int argc, const char **argv) {
-    mu_try_begin {
+    if (!setjmp(eh.buf)) {
         int i = 1;
 
         genscope();
@@ -327,15 +304,9 @@ int main(int argc, const char **argv) {
         else
             return run();
 
-    } mu_on_err (err) {
-        printerr(err);
-
-        // TODO fix this with constant allocations
-        mu_t code = tbl_lookup(err, mcstr("code"));
-        if (mu_isnum(code))
-            return num_int(code);
-        else
-            return -1;
-    } mu_try_end;
+    } else {
+        printerr();
+        return -1;
+    }
 }
 

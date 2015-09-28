@@ -3,9 +3,7 @@
 #include "num.h"
 #include "tbl.h"
 #include "fn.h"
-#include "err.h"
 #include "parse.h"
-#include <string.h>
 
 
 // Mutable string access
@@ -19,6 +17,16 @@ mu_inline const struct str *str(mu_t s) {
 
 mu_inline struct str *wstr(mbyte_t *s) {
     return (struct str *)(s - mu_offset(struct str, data));
+}
+
+
+// Common errors
+static mu_noreturn mu_error_length(void) {
+    mu_error(mcstr("exceeded max length in string"));
+}
+
+static mu_noreturn mu_error_unterminated(void) {
+    mu_error(mcstr("unterminated string literal"));
 }
 
 
@@ -78,7 +86,7 @@ static void str_table_insert(mint_t i, mu_t s) {
         memcpy(ntable, str_table, i * sizeof(mu_t));
         memcpy(&ntable[i+1], &str_table[i],
                (str_table_len-i) * sizeof(mu_t));
-        mu_dealloc(str_table, str_table_size);
+        mu_dealloc(str_table, str_table_size * sizeof(mu_t));
 
         str_table = ntable;
         str_table_size = nsize;
@@ -100,7 +108,8 @@ static void str_table_remove(mint_t i) {
 
 // String management
 static mu_t str_intern(const mbyte_t *s, muint_t len) {
-    mu_check_len(len);
+    if (len > (mlen_t)-1)
+        mu_error_length();
 
     mint_t i = str_table_find(s, len);
     if (i >= 0)
@@ -127,7 +136,8 @@ void str_destroy(mu_t s) {
 // these can avoid unnecessary allocations when interning
 // since mstr_intern can reuse their internal structure
 mbyte_t *mstr_create(muint_t len) {
-    mu_check_len(len);
+    if (len > (mlen_t)-1)
+        mu_error_length();
 
     struct str *s = ref_alloc(mu_offset(struct str, data) + len);
     s->len = len;
@@ -140,7 +150,8 @@ void mstr_destroy(mbyte_t *b) {
 }
 
 mu_t mstr_intern(mbyte_t *b, muint_t len) {
-    mu_check_len(len);
+    if (len > (mlen_t)-1)
+        mu_error_length();
 
     // unfortunately, reusing the mstr struct only
     // works with exact length currently
@@ -188,7 +199,9 @@ void mstr_ncat(mbyte_t **b, muint_t *i, const mbyte_t *c, muint_t len) {
             size <<= 1;
 
         size -= mu_offset(struct str, data);
-        mu_check_len(size);
+
+        if (len > (mlen_t)-1)
+            mu_error_length();
 
         mbyte_t *nb = mstr_create(size);
         memcpy(nb, *b, wstr(*b)->len);
@@ -215,12 +228,8 @@ mu_t str_frombyte(mbyte_t c) {
 }
 
 mu_t str_fromnum(mu_t n) {
-    mbyte_t c = (mbyte_t)num_uint(n);
-
-    if (n != muint(c))
-        mu_cerr(mcstr("out of range"), mcstr("num value out of range"));
-
-    return str_frombyte(c);
+    mu_assert(n == muint((mbyte_t)num_uint(n)));
+    return str_frombyte((mbyte_t)num_uint(n));
 }
 
 mu_t str_fromiter(mu_t iter) {
@@ -416,7 +425,10 @@ mu_t str_join(mu_t i, mu_t delim) {
 
     while (fn_next(i, 0x1, frame)) {
         if (!mu_isstr(frame[0]))
-            mu_err_undefined();
+            mu_error(mmlist({
+                mcstr("invalid value "),
+                mu_repr(frame[0]),
+                mcstr(" passed to join")}));
 
         if (first)
             first = false;
@@ -432,17 +444,11 @@ mu_t str_join(mu_t i, mu_t delim) {
 }
 
 mu_t str_pad(mu_t s, mu_t mlen, mu_t pad) {
-    mu_assert(mu_isstr(s) && mu_isnum(mlen)
-              && (!pad || mu_isstr(pad)));
-
-    if (num_cmp(num_abs(mlen), muint((mlen_t)-1)) > 0)
-        mu_err_len();
+    mu_assert(mu_isstr(s) && mu_isnum(mlen) &&
+              (!pad || (mu_isstr(pad) && str_len(pad) > 0)));
     
     if (!pad)
         pad = mcstr(" ");
-    else if (str_len(pad) == 0)
-        mu_cerr(mcstr("invalid arg"), 
-                mcstr("empty string passed as padding"));
 
     bool left;
     muint_t len;
@@ -478,14 +484,11 @@ mu_t str_pad(mu_t s, mu_t mlen, mu_t pad) {
 }
 
 mu_t str_strip(mu_t s, mu_t dir, mu_t pad) {
-    mu_assert(mu_isstr(s) && (!dir || mu_isnum(dir)) 
-                          && (!pad || mu_isstr(pad)));
+    mu_assert(mu_isstr(s) && (!dir || mu_isnum(dir)) &&
+              (!pad || (mu_isstr(pad) && str_len(pad) > 0)));
 
     if (!pad)
         pad = mcstr(" ");
-    else if (str_len(pad) == 0)
-        mu_cerr(mcstr("invalid arg"), 
-                mcstr("empty string passed as padding"));
 
     const mbyte_t *pos = str_bytes(s);
     const mbyte_t *end = pos + str_len(s);
@@ -545,7 +548,7 @@ mu_t str_parse(const mbyte_t **ppos, const mbyte_t *end) {
 
     mbyte_t quote = *pos++;
     if (quote != '\'' && quote != '"')
-        mu_err_parse();
+        mu_error_unterminated();
 
     mbyte_t *s = mstr_create(0);
     muint_t len = 0;
@@ -619,7 +622,7 @@ mu_t str_parse(const mbyte_t **ppos, const mbyte_t *end) {
     }
 
     if (quote != *pos++)
-        mu_err_parse();
+        mu_error_unterminated();
 
     *ppos = pos;
     return mstr_intern(s, len);
