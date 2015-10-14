@@ -17,24 +17,23 @@
  * 1 to 3 operands named d, a, and b and their ranges are limited 
  * by the underlying virtual machine's implementation.
  *
- * In order to ensure correct reference counting with significantly
+ * In order to ensure correct reference counting without significantly
  * more bytecode, some operations consume their arguments. Reference
  * counting is indicated by a trailing +/-. Because of reference 
  * counting, registers may or may not contain valid Mu values, and values
  * may remain in use after decrementing.
  *
- * The special register r0 contains the scope of the current function at 
- * all times and is also used for creating unconditional jumps.
+ * The special register r0 contains the scope of the current function.
  */
 enum op {
 /*  opcode     encoding  operation                  description                         */
-    OP_IMM     = 0x3, /* rd = imms[a]               loads immediate                     */
-    OP_FN      = 0x4, /* rd = fn(fns[a], r0)        creates new function in the scope   */
-    OP_TBL     = 0x5, /* rd = tbl(a)                creates new empty table             */
+    OP_IMM     = 0x6, /* rd = imms[a]               loads immediate                     */
+    OP_FN      = 0x7, /* rd = fn(fns[a], r0)        creates new function in the scope   */
+    OP_TBL     = 0x8, /* rd = tbl(a)                creates new empty table             */
 
-    OP_MOVE    = 0x6, /* rd = ra                    moves register                      */
-    OP_DUP     = 0x7, /* rd = ra+                   copies and increments register      */
-    OP_DROP    = 0x8, /* rd-                        decrements register                 */
+    OP_MOVE    = 0x3, /* rd = ra                    moves register                      */
+    OP_DUP     = 0x4, /* rd = ra+                   copies and increments register      */
+    OP_DROP    = 0x5, /* rd-                        decrements register                 */
 
     OP_LOOKUP  = 0xa, /* rd = ra[rb-]               table lookup                        */
     OP_LOOKDN  = 0x9, /* rd = ra-[rb-]              table lookup which drops table      */

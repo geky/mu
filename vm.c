@@ -9,12 +9,13 @@
 
 
 // Instruction access functions
-mu_inline enum op      op(uint16_t ins) { return (enum op)(ins >> 12); }
-mu_inline unsigned int rd(uint16_t ins) { return 0xf & (ins >> 8); }
-mu_inline unsigned int ra(uint16_t ins) { return 0xf & (ins >> 4); }
-mu_inline unsigned int rb(uint16_t ins) { return 0xf & (ins >> 0); }
-mu_inline unsigned int i(uint16_t ins)  { return (uint8_t)ins; }
-mu_inline signed int   j(uint16_t ins)  { return (int8_t)ins; }
+mu_inline enum op  op(const mbyte_t *pc) { return 0xf & pc[0] >> 4; }
+mu_inline unsigned d(const mbyte_t *pc)  { return 0xf & pc[0] >> 0; }
+mu_inline unsigned a(const mbyte_t *pc)  { return 0xf & pc[1] >> 4; }
+mu_inline unsigned b(const mbyte_t *pc)  { return 0xf & pc[1] >> 0; }
+mu_inline unsigned c(const mbyte_t *pc)  { return pc[1]; }
+mu_inline unsigned i(const mbyte_t *pc)  { return (pc[2] << 8) | pc[1]; }
+mu_inline signed   j(const mbyte_t *pc)  { return (int16_t)i(pc); }
 
 // Bytecode errors
 static mu_noreturn mu_error_bytecode(void) {
@@ -30,46 +31,48 @@ void mu_encode(void (*emit)(void *, mbyte_t), void *p,
     if (op > 0xf || d > 0xf)
         mu_error_bytecode();
 
-    uint16_t ins = 0;
-    ins |= op << 12;
-    ins |= d << 8;
+    emit(p, (op << 4) | d);
 
-    if (op >= OP_RET && op <= OP_DROP) {
+    if (op >= OP_RET && op <= OP_DUP) {
         if (a > 0xff)
             mu_error_bytecode();
 
-        ins |= a;
-    } else if (op >= OP_JFALSE && op <= OP_JUMP) {
-        a = (a-2) >> 1;
-        if (a > 0xff || a < -0x100)
+        emit(p, a);
+    } else if (op >= OP_IMM && op <= OP_TBL) {
+        if (a > 0xffff)
             mu_error_bytecode();
 
-        ins |= 0xff & a;
-    } else {
+        emit(p, a);
+        emit(p, a >> 8);
+    } else if (op >= OP_LOOKDN && op <= OP_ASSIGN) {
         if (a > 0xf || b > 0xf)
             mu_error_bytecode();
 
-        ins |= a << 4;
-        ins |= b;
-    }
+        emit(p, (a << 4) | b);
+    } else if (op >= OP_JFALSE && op <= OP_JUMP) {
+        a -= 3;
+        if (a > 0x7fff || a < -0x8000)
+            mu_error_bytecode();
 
-    emit(p, ((mbyte_t *)&ins)[0]);
-    emit(p, ((mbyte_t *)&ins)[1]);
+        emit(p, a);
+        emit(p, a >> 8);
+    }
 }
 
 mint_t mu_patch(void *c, mint_t nj) {
-    uint16_t ins = *(uint16_t *)c;
-    mu_assert(op(ins) >= OP_JFALSE && op(ins) <= OP_JUMP);
+    mbyte_t *p = c;
+    int16_t pj = p[1] | (p[2] << 8);
 
-    nj = (nj-2) >> 1;
-    if (nj > 0x7f || nj < -0x80)
+    mu_assert((p[0] >> 4) >= OP_JFALSE && (p[0] >> 4) <= OP_JUMP);
+
+    nj -= 3;
+    if (nj > 0x7fff || nj < -0x8000)
         mu_error_bytecode();
 
-    mint_t pj = (j(ins)<<1) + 2;
-    ins = (0xff00 & ins) | (0xff & nj);
-    *(uint16_t *)c = ins;
+    p[1] = nj;
+    p[2] = nj >> 8;
 
-    return pj;
+    return pj + 3;
 }
 
 
@@ -77,12 +80,12 @@ mint_t mu_patch(void *c, mint_t nj) {
 // currently just outputs to stdout
 // Unsure if this should be kept as is, returned as string
 // or just dropped completely.
-void mu_dis(struct code *c) {
-    mu_t *imms = code_imms(c);
-    struct code **fns = code_fns(c);
-    const uint16_t *pc = code_bcode(c);
-    const uint16_t *end = pc + c->bcount/2;
-    uint16_t ins;
+// TODO change this to Mu prints?
+void mu_dis(struct code *code) {
+    mu_t *imms = code_imms(code);
+    struct code **fns = code_fns(code);
+    const mbyte_t *pc = code_bcode(code);
+    const mbyte_t *end = pc + code->bcount;
 
 #ifdef MU32
 #define PTR "%08x"
@@ -90,83 +93,113 @@ void mu_dis(struct code *c) {
 #define PTR "%016lx"
 #endif
 
-    printf("-- dis 0x"PTR" --\n", (muint_t)c);
+    printf("-- dis 0x"PTR" --\n", (muint_t)code);
     printf("regs: %u, scope: %u, args: %x\n",
-           c->regs, c->scope, c->args);
+           code->regs, code->scope, code->args);
 
-    if (c->icount > 0) {
+    if (code->icount > 0) {
         printf("imms:\n");
-        for (muint_t i = 0; i < c->icount; i++) {
+        for (muint_t i = 0; i < code->icount; i++) {
             mu_t repr = mu_repr(mu_inc(imms[i]));
             printf(PTR" (%.*s)\n", (muint_t)imms[i], str_len(repr), str_bytes(repr));
             str_dec(repr);
         }
     }
 
-    if (c->fcount > 0) {
+    if (code->fcount > 0) {
         printf("fns:\n");
-        for (muint_t i = 0; i < c->fcount; i++) {
+        for (muint_t i = 0; i < code->fcount; i++) {
             printf(PTR"\n", (muint_t)fns[i]);
         }
     }
 
     printf("bcode:\n");
     while (pc < end) {
-        ins = *pc++;
-        printf("%04x ", ins);
 
-        switch (op(ins)) {
+        switch (op(pc)) {
             case OP_IMM:
-                printf("imm r%d, %d", rd(ins), i(ins));
-                { mu_t repr = mu_repr(mu_inc(imms[i(ins)]));
+                printf("%02x%02x%02x ", pc[0], pc[1], pc[2]);
+                printf("imm r%d, %d", d(pc), i(pc));
+                { mu_t repr = mu_repr(mu_inc(imms[i(pc)]));
                   printf("(%.*s)\n", str_len(repr), str_bytes(repr));
                   str_dec(repr);
                 }
+                pc += 3;
                 break;
             case OP_FN:
-                printf("fn r%d, %d\n", rd(ins), i(ins));
+                printf("%02x%02x%02x ", pc[0], pc[1], pc[2]);
+                printf("fn r%d, %d\n", d(pc), i(pc));
+                pc += 3;
                 break;
             case OP_TBL:
-                printf("tbl r%d, %d\n", rd(ins), i(ins));
+                printf("%02x%02x%02x ", pc[0], pc[1], pc[2]);
+                printf("tbl r%d, %d\n", d(pc), i(pc));
+                pc += 3;
                 break;
             case OP_MOVE:
-                printf("move r%d, r%d\n", rd(ins), i(ins));
+                printf("%02x%02x   ", pc[0], pc[1]);
+                printf("move r%d, r%d\n", d(pc), c(pc));
+                pc += 2;
                 break;
             case OP_DUP:
-                printf("dup r%d, r%d\n", rd(ins), i(ins));
+                printf("%02x%02x   ", pc[0], pc[1]);
+                printf("dup r%d, r%d\n", d(pc), c(pc));
+                pc += 2;
                 break;
             case OP_DROP:
-                printf("drop r%d\n", rd(ins));
+                printf("%02x     ", pc[0]);
+                printf("drop r%d\n", d(pc));
+                pc += 1;
                 break;
             case OP_LOOKUP:
-                printf("lookup r%d, r%d[r%d]\n", rd(ins), ra(ins), rb(ins));
+                printf("%02x%02x   ", pc[0], pc[1]);
+                printf("lookup r%d, r%d[r%d]\n", d(pc), a(pc), b(pc));
+                pc += 2;
                 break;
             case OP_LOOKDN:
-                printf("lookdn r%d, r%d[r%d]\n", rd(ins), ra(ins), rb(ins));
+                printf("%02x%02x   ", pc[0], pc[1]);
+                printf("lookdn r%d, r%d[r%d]\n", d(pc), a(pc), b(pc));
+                pc += 2;
                 break;
             case OP_INSERT:
-                printf("insert r%d, r%d[r%d]\n", rd(ins), ra(ins), rb(ins));
+                printf("%02x%02x   ", pc[0], pc[1]);
+                printf("insert r%d, r%d[r%d]\n", d(pc), a(pc), b(pc));
+                pc += 2;
                 break;
             case OP_ASSIGN:
-                printf("assign r%d, r%d[r%d]\n", rd(ins), ra(ins), rb(ins));
+                printf("%02x%02x   ", pc[0], pc[1]);
+                printf("assign r%d, r%d[r%d]\n", d(pc), a(pc), b(pc));
+                pc += 2;
                 break;
             case OP_JUMP:
-                printf("jump %d\n", j(ins));
+                printf("%02x%02x%02x ", pc[0], pc[1], pc[2]);
+                printf("jump %d\n", j(pc));
+                pc += 3;
                 break;
             case OP_JTRUE:
-                printf("jtrue r%d, %d\n", rd(ins), j(ins));
+                printf("%02x%02x%02x ", pc[0], pc[1], pc[2]);
+                printf("jtrue r%d, %d\n", d(pc), j(pc));
+                pc += 3;
                 break;
             case OP_JFALSE:
-                printf("jfalse r%d, %d\n", rd(ins), j(ins));
+                printf("%02x%02x%02x ", pc[0], pc[1], pc[2]);
+                printf("jfalse r%d, %d\n", d(pc), j(pc));
+                pc += 3;
                 break;
             case OP_CALL:
-                printf("call r%d, 0x%02x\n", rd(ins), i(ins));
+                printf("%02x%02x   ", pc[0], pc[1]);
+                printf("call r%d, 0x%02x\n", d(pc), c(pc));
+                pc += 2;
                 break;
             case OP_TCALL:
-                printf("tcall r%d, 0x%01x\n", rd(ins), i(ins));
+                printf("%02x%02x   ", pc[0], pc[1]);
+                printf("tcall r%d, 0x%01x\n", d(pc), c(pc));
+                pc += 2;
                 break;
             case OP_RET:
-                printf("ret r%d, 0x%01x\n", rd(ins), i(ins));
+                printf("%02x%02x   ", pc[0], pc[1]);
+                printf("ret r%d, 0x%01x\n", d(pc), c(pc));
+                pc += 2;
                 break;
         }
     }
@@ -174,117 +207,131 @@ void mu_dis(struct code *c) {
 
 
 // Execute bytecode
-mc_t mu_exec(struct code *c, mu_t scope, mu_t *frame) {
+mc_t mu_exec(struct code *code, mu_t scope, mu_t *frame) {
     // Allocate temporary variables
-    register const uint16_t *pc;
+    register const mbyte_t *pc;
     mu_t *imms;
     struct code **fns;
 
     register mu_t scratch;
 
 reenter:
-    {   // Setup the registers and scope
-        mu_t regs[c->regs];
+    {   mu_dis(code);
+
+        // Setup the registers and scope
+        mu_t regs[code->regs];
         regs[0] = scope;
-        mu_fcopy(c->args, &regs[1], frame);
+        mu_fcopy(code->args, &regs[1], frame);
 
         // Setup other state
-        imms = code_imms(c);
-        fns = code_fns(c);
-        pc = code_bcode(c);
+        imms = code_imms(code);
+        fns = code_fns(code);
+        pc = code_bcode(code);
 
         // Enter main execution loop
         while (1) {
-            register uint16_t ins = *pc++;
-
-            switch (op(ins)) {
+            switch (op(pc)) {
                 case OP_IMM:
-                    regs[rd(ins)] = mu_inc(imms[i(ins)]);
+                    regs[d(pc)] = mu_inc(imms[i(pc)]);
+                    pc += 3;
                     break;
 
                 case OP_FN:
-                    regs[rd(ins)] = mcode(code_inc(fns[i(ins)]), mu_inc(regs[0]));
+                    regs[d(pc)] = mcode(code_inc(fns[i(pc)]), mu_inc(regs[0]));
+                    pc += 3;
                     break;
 
                 case OP_TBL:
-                    regs[rd(ins)] = tbl_create(i(ins));
+                    regs[d(pc)] = tbl_create(i(pc));
+                    pc += 3;
                     break;
 
                 case OP_MOVE:
-                    regs[rd(ins)] = regs[i(ins)];
+                    regs[d(pc)] = regs[c(pc)];
+                    pc += 2;
                     break;
 
                 case OP_DUP:
-                    regs[rd(ins)] = mu_inc(regs[i(ins)]);
+                    regs[d(pc)] = mu_inc(regs[c(pc)]);
+                    pc += 2;
                     break;
 
                 case OP_DROP:
-                    mu_dec(regs[rd(ins)]);
+                    mu_dec(regs[d(pc)]);
+                    pc += 1;
                     break;
 
                 case OP_LOOKUP:
-                    scratch = mu_lookup(regs[ra(ins)], regs[rb(ins)]);
-                    regs[rd(ins)] = scratch;
+                    scratch = mu_lookup(regs[a(pc)], regs[b(pc)]);
+                    regs[d(pc)] = scratch;
+                    pc += 2;
                     break;
 
                 case OP_LOOKDN:
-                    scratch = mu_lookup(regs[ra(ins)], regs[rb(ins)]);
-                    mu_dec(regs[ra(ins)]);
-                    regs[rd(ins)] = scratch;
+                    scratch = mu_lookup(regs[a(pc)], regs[b(pc)]);
+                    mu_dec(regs[a(pc)]);
+                    regs[d(pc)] = scratch;
+                    pc += 2;
                     break;
 
                 case OP_INSERT:
-                    mu_insert(regs[ra(ins)], regs[rb(ins)], regs[rd(ins)]);
+                    mu_insert(regs[a(pc)], regs[b(pc)], regs[d(pc)]);
+                    pc += 2;
                     break;
 
                 case OP_ASSIGN:
-                    mu_assign(regs[ra(ins)], regs[rb(ins)], regs[rd(ins)]);
+                    mu_assign(regs[a(pc)], regs[b(pc)], regs[d(pc)]);
+                    pc += 2;
                     break;
 
                 case OP_JUMP:
-                    pc += j(ins);
+                    pc += j(pc);
+                    pc += 3;
                     break;
 
                 case OP_JTRUE:
-                    if (regs[rd(ins)])
-                        pc += j(ins);
+                    if (regs[d(pc)])
+                        pc += j(pc);
+                    pc += 3;
                     break;
 
                 case OP_JFALSE:
-                    if (!regs[rd(ins)])
-                        pc += j(ins);
+                    if (!regs[d(pc)])
+                        pc += j(pc);
+                    pc += 3;
                     break;
 
                 case OP_CALL:
-                    mu_fcopy(i(ins) >> 4, frame, &regs[rd(ins)+1]);
-                    mu_fcall(regs[rd(ins)], i(ins), frame);
-                    mu_dec(regs[rd(ins)]);
-                    mu_fcopy(0xf & i(ins), &regs[rd(ins)], frame);
+                    mu_fcopy(c(pc) >> 4, frame, &regs[d(pc)+1]);
+                    mu_fcall(regs[d(pc)], c(pc), frame);
+                    mu_dec(regs[d(pc)]);
+                    mu_fcopy(0xf & c(pc), &regs[d(pc)], frame);
+                    pc += 2;
                     break;
 
                 case OP_RET:
-                    mu_fcopy(i(ins), frame, &regs[rd(ins)]);
+                    mu_fcopy(c(pc), frame, &regs[d(pc)]);
                     tbl_dec(scope);
-                    code_dec(c);
-                    return i(ins);
+                    code_dec(code);
+                    return c(pc);
 
                 case OP_TCALL:
-                    scratch = regs[rd(ins)];
-                    mu_fcopy(i(ins), frame, &regs[rd(ins)+1]);
+                    scratch = regs[d(pc)];
+                    mu_fcopy(c(pc), frame, &regs[d(pc)+1]);
                     tbl_dec(scope);
-                    code_dec(c);
+                    code_dec(code);
 
                     // Use a direct goto to garuntee a tail call when the target
                     // is another mu function. Otherwise, we just try our hardest
                     // to get a tail call emitted.
                     if (mu_type(scratch) == MTFN) {
-                        c = fn_code(scratch);
-                        mu_fconvert(c->args, i(ins), frame);
-                        scope = tbl_extend(c->scope, fn_closure(scratch));
+                        code = fn_code(scratch);
+                        mu_fconvert(code->args, c(pc), frame);
+                        scope = tbl_extend(code->scope, fn_closure(scratch));
                         fn_dec(scratch);
                         goto reenter;
                     } else {
-                        return mu_tcall(scratch, i(ins), frame);
+                        return mu_tcall(scratch, c(pc), frame);
                     }
             }
         }
