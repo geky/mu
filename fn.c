@@ -17,34 +17,34 @@ mu_inline struct fn *fn(mu_t f) {
 mu_t fn_frombfn(mc_t args, mbfn_t *bfn) {
     struct fn *f = ref_alloc(sizeof(struct fn));
     f->args = args;
-    f->type = MU_BFN - MU_FN;
-    f->closure = mnil;
+    f->type = MTBFN - MTFN;
+    f->closure = 0;
     f->bfn = bfn;
-    return (mu_t)((muint_t)f + MU_BFN);
+    return (mu_t)((muint_t)f + MTBFN);
 }
 
-mu_t fn_fromsfn(mc_t args, msfn_t *sfn, mu_t closure) {
+mu_t fn_fromsbfn(mc_t args, msbfn_t *sbfn, mu_t closure) {
     struct fn *f = ref_alloc(sizeof(struct fn));
     f->args = args;
-    f->type = MU_SFN - MU_FN;
+    f->type = MTSBFN - MTFN;
     f->closure = closure;
-    f->sfn = sfn;
-    return (mu_t)((muint_t)f + MU_SFN);
+    f->sbfn = sbfn;
+    return (mu_t)((muint_t)f + MTSBFN);
 }
 
 mu_t fn_fromcode(struct code *c, mu_t closure) {
     struct fn *f = ref_alloc(sizeof(struct fn));
     f->args = c->args;
-    f->type = MU_FN - MU_FN;
+    f->type = MTFN - MTFN;
     f->closure = closure;
     f->code = c;
-    return (mu_t)((muint_t)f + MU_FN);
+    return (mu_t)((muint_t)f + MTFN);
 }
 
 
 // Called by garbage collector to clean up
 void fn_destroy(mu_t f) {
-    if (mu_type(f) == MU_FN)
+    if (mu_type(f) == MTFN)
         code_dec(fn(f)->code);
 
     if (fn(f)->closure)
@@ -75,9 +75,9 @@ mc_t bfn_tcall(mu_t f, mc_t fc, mu_t *frame) {
     return bfn(frame);
 }
 
-mc_t sfn_tcall(mu_t f, mc_t fc, mu_t *frame) {
+mc_t sbfn_tcall(mu_t f, mc_t fc, mu_t *frame) {
     mu_fconvert(fn(f)->args, fc, frame);
-    mc_t rc = fn(f)->sfn(fn(f)->closure, frame);
+    mc_t rc = fn(f)->sbfn(fn(f)->closure, frame);
     fn_dec(f);
     return rc;
 }
@@ -94,9 +94,9 @@ mc_t fn_tcall(mu_t f, mc_t fc, mu_t *frame) {
     mu_assert(mu_isfn(f));
 
     switch (mu_type(f)) {
-        case MU_FN:  return mfn_tcall(f, fc, frame);
-        case MU_BFN: return bfn_tcall(f, fc, frame);
-        case MU_SFN: return sfn_tcall(f, fc, frame);
+        case MTFN:   return mfn_tcall(f, fc, frame);
+        case MTBFN:  return bfn_tcall(f, fc, frame);
+        case MTSBFN: return sbfn_tcall(f, fc, frame);
         default:     mu_unreachable;
     }
 }
@@ -137,23 +137,20 @@ bool fn_next(mu_t f, mc_t fc, mu_t *frame) {
 
 // Default function
 static mc_t fn_identity(mu_t *frame) { return 0xf; }
-
-mu_pure mu_t fn_id(void) {
-    return mcfn(0xf, fn_identity);
-}
+MBFN(mu_id, 0xf, fn_identity)
 
 // Binds arguments to function
 static mc_t fn_bound(mu_t scope, mu_t *frame) {
     mu_t f = tbl_lookup(scope, muint(0));
     mu_t args = tbl_lookup(scope, muint(1));
 
-    frame[0] = tbl_concat(args, frame[0], mnil);
+    frame[0] = tbl_concat(args, frame[0], 0);
     return fn_tcall(f, 0xf, frame);
 }
 
 mu_t fn_bind(mu_t f, mu_t args) {
     mu_assert(mu_isfn(f) && mu_istbl(args));
-    return msfn(0xf, fn_bound, mmlist({f, args}));
+    return msbfn(0xf, fn_bound, mlist({f, args}));
 }
 
 static mc_t fn_composed(mu_t fs, mu_t *frame) {
@@ -169,7 +166,7 @@ static mc_t fn_composed(mu_t fs, mu_t *frame) {
 
 mu_t fn_comp(mu_t fs) {
     mu_assert(mu_istbl(fs));
-    return msfn(0xf, fn_composed, fs);
+    return msbfn(0xf, fn_composed, fs);
 }
     
 
@@ -197,7 +194,7 @@ static mc_t fn_map_step(mu_t scope, mu_t *frame) {
 
 mu_t fn_map(mu_t f, mu_t iter) {
     mu_assert(mu_isfn(f) && mu_isfn(iter));
-    return msfn(0, fn_map_step, mmlist({f, iter}));
+    return msbfn(0, fn_map_step, mlist({f, iter}));
 }
 
 static mc_t fn_filter_step(mu_t scope, mu_t *frame) {
@@ -224,7 +221,7 @@ static mc_t fn_filter_step(mu_t scope, mu_t *frame) {
 
 mu_t fn_filter(mu_t f, mu_t iter) {
     mu_assert(mu_isfn(f) && mu_isfn(iter));
-    return msfn(0, fn_filter_step, mmlist({f, iter}));
+    return msbfn(0, fn_filter_step, mlist({f, iter}));
 }
 
 mu_t fn_reduce(mu_t f, mu_t iter, mu_t acc) {
@@ -239,7 +236,7 @@ mu_t fn_reduce(mu_t f, mu_t iter, mu_t acc) {
     }
 
     while (fn_next(iter, 0xf, frame)) {
-        frame[0] = tbl_concat(acc, frame[0], mnil);
+        frame[0] = tbl_concat(acc, frame[0], 0);
         fn_fcall(f, 0xff, frame);
         acc = frame[0];
     }
@@ -303,7 +300,7 @@ mu_t fn_range(mu_t start, mu_t stop, mu_t step) {
               (!stop || mu_isnum(stop)) && 
               (!step || mu_isnum(step)));
 
-    return msfn(0x0, fn_range_step, mmlist({
+    return msbfn(0x0, fn_range_step, mlist({
         start ? start : muint(0),
         stop ? stop : MU_INF,
         step ? step : muint(1)
@@ -323,7 +320,7 @@ static mc_t fn_repeat_step(mu_t scope, mu_t *frame) {
 mu_t fn_repeat(mu_t m, mu_t times) {
     mu_assert(mu_isnum(times) && (!times || mu_isnum(times)));
 
-    return msfn(0x0, fn_repeat_step, mmlist({
+    return msbfn(0x0, fn_repeat_step, mlist({
         m, 
         times ? times : MU_INF
     }));
@@ -361,7 +358,7 @@ static mc_t fn_zip_step(mu_t scope, mu_t *frame) {
         }
         mu_dec(m);
 
-        acc = tbl_concat(acc, frame[0], mnil);
+        acc = tbl_concat(acc, frame[0], 0);
     }
 
     tbl_dec(iters);
@@ -371,7 +368,7 @@ static mc_t fn_zip_step(mu_t scope, mu_t *frame) {
 
 mu_t fn_zip(mu_t iters) {
     mu_assert(mu_isfn(iters));
-    return msfn(0x0, fn_zip_step, mmlist({iters}));
+    return msbfn(0x0, fn_zip_step, mlist({iters}));
 }
 
 static mc_t fn_chain_step(mu_t scope, mu_t *frame) {
@@ -402,7 +399,7 @@ static mc_t fn_chain_step(mu_t scope, mu_t *frame) {
 
 mu_t fn_chain(mu_t iters) {
     mu_assert(mu_isfn(iters));
-    return msfn(0x0, fn_chain_step, mmlist({iters}));
+    return msbfn(0x0, fn_chain_step, mlist({iters}));
 }
 
 static mc_t fn_take_count_step(mu_t scope, mu_t *frame) {
@@ -444,9 +441,9 @@ mu_t fn_take(mu_t cond, mu_t iter) {
     mu_assert((mu_isnum(cond) || mu_isfn(cond)) && mu_isfn(iter));
 
     if (mu_isnum(cond)) {
-        return msfn(0x0, fn_take_count_step, mmlist({iter, cond}));
+        return msbfn(0x0, fn_take_count_step, mlist({iter, cond}));
     } else {
-        return msfn(0x0, fn_take_while_step, mmlist({iter, cond}));
+        return msbfn(0x0, fn_take_while_step, mlist({iter, cond}));
     }
 }
 
@@ -465,7 +462,7 @@ static mc_t fn_drop_count_step(mu_t scope, mu_t *frame) {
             i = num_sub(i, muint(1));
         }
 
-        tbl_insert(scope, muint(1), mnil);
+        tbl_insert(scope, muint(1), 0);
     }
 
     return fn_tcall(iter, 0x0, frame);
@@ -483,7 +480,7 @@ static mc_t fn_drop_while_step(mu_t scope, mu_t *frame) {
                 fn_dec(iter);
                 fn_dec(cond);
                 frame[0] = m;
-                tbl_insert(scope, muint(1), mnil);
+                tbl_insert(scope, muint(1), 0);
                 return 0xf;
             }
             mu_dec(m);
@@ -501,9 +498,9 @@ mu_t fn_drop(mu_t cond, mu_t iter) {
     mu_assert((mu_isnum(cond) || mu_isfn(cond)) && mu_isfn(iter));
 
     if (mu_isnum(cond)) {
-        return msfn(0x0, fn_drop_count_step, mmlist({iter, cond}));
+        return msbfn(0x0, fn_drop_count_step, mlist({iter, cond}));
     } else {
-        return msfn(0x0, fn_drop_while_step, mmlist({iter, cond}));
+        return msbfn(0x0, fn_drop_while_step, mlist({iter, cond}));
     }
 }
 
@@ -590,7 +587,7 @@ mu_t fn_reverse(mu_t iter) {
 
     fn_dec(iter);
 
-    return msfn(0x0, fn_reverse_step, mmlist({
+    return msbfn(0x0, fn_reverse_step, mlist({
         store, muint(tbl_len(store)-1)
     }));
 }
@@ -664,6 +661,6 @@ mu_t fn_sort(mu_t iter) {
 
     fn_merge_sort(store);
 
-    return msfn(0x0, fn_sort_step, mmlist({store, muint(0)}));
+    return msbfn(0x0, fn_sort_step, mlist({store, muint(0)}));
 }
 

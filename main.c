@@ -59,7 +59,7 @@ void sys_print(const char *m, muint_t len) {
 
 mu_t sys_import(mu_t name) {
     mu_dec(name);
-    return mnil;
+    return 0;
 }
 
 
@@ -119,14 +119,14 @@ static mlen_t prompt(mbyte_t *input) {
 }
 
 static void genscope() {
-    scope = mxmtbl(MU_BUILTINS, {});
+    scope = mu_tbl(MU_BUILTINS, 0);
 }
 
 static int genargs(int i, int argc, const char **argv) {
     mu_t args = tbl_create(argc-i);
 
     for (muint_t j = 0; j < argc-i; j++) {
-        tbl_insert(args, muint(j), mzstr(argv[i]));
+        tbl_insert(args, muint(j), mcstr(argv[i]));
     }
 
     // TODO use this?
@@ -136,7 +136,7 @@ static int genargs(int i, int argc, const char **argv) {
 
 
 static void execute(const char *input) {
-    struct code *c = mu_compile(mzstr(input));
+    struct code *c = mu_compile(mcstr(input));
     mu_t frame[MU_FRAME];
     mc_t rets = mu_exec(c, tbl_create(c->scope), frame);
     mu_fconvert(0, rets, frame);

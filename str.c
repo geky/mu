@@ -6,13 +6,19 @@
 #include "parse.h"
 
 
+#define MU_EMPTY_STR mu_empty_str()
+#define MU_SPACE_STR mu_space_str()
+MSTR(mu_empty_str, "")
+MSTR(mu_space_str, " ")
+
+
 // Mutable string access
 mu_inline mu_t mstr(mbyte_t *s) {
-    return (mu_t)(s - mu_offset(struct str, data) + MU_STR);
+    return (mu_t)(s - mu_offset(struct str, data) + MTSTR);
 }
 
 mu_inline const struct str *str(mu_t s) {
-    return (struct str *)((muint_t)s - MU_STR);
+    return (struct str *)((muint_t)s - MTSTR);
 }
 
 mu_inline struct str *wstr(mbyte_t *s) {
@@ -219,7 +225,7 @@ mu_t str_fromnstr(const mbyte_t *s, muint_t len) {
     return str_intern(s, len);
 }
 
-mu_t str_fromzstr(const char *s) {
+mu_t str_fromcstr(const char *s) {
     return str_intern((const mbyte_t *)s, strlen(s));
 }
 
@@ -233,7 +239,7 @@ mu_t str_fromnum(mu_t n) {
 }
 
 mu_t str_fromiter(mu_t iter) {
-    return str_join(iter, mcstr(""));
+    return str_join(iter, MU_EMPTY_STR);
 }
     
 
@@ -296,7 +302,7 @@ mu_t str_subset(mu_t s, mu_t lower, mu_t upper) {
         b = num_uint(upper);
 
     if (a > b)
-        return mcstr("");
+        return MU_EMPTY_STR;
 
     mu_t d = mnstr(str_bytes(s) + a, b - a);
 
@@ -321,7 +327,7 @@ mu_t str_find(mu_t a, mu_t s) {
 
     str_dec(a);
     str_dec(s);
-    return mnil;
+    return 0;
 }
 
 mu_t str_replace(mu_t a, mu_t s, mu_t r, mu_t mmax) {
@@ -404,11 +410,11 @@ mu_t str_split(mu_t s, mu_t delim) {
     mu_assert(mu_isstr(s) && (!delim || mu_isstr(delim)));
 
     if (!delim)
-        delim = mcstr(" ");
+        delim = MU_SPACE_STR;
     else if (str_len(delim) == 0)
         return str_iter(s);
 
-    return msfn(0x0, str_split_step, mmlist({
+    return msbfn(0x0, str_split_step, mlist({
         s, delim, muint(0),
     }));
 }
@@ -421,11 +427,11 @@ mu_t str_join(mu_t i, mu_t delim) {
     bool first = true;
 
     if (!delim)
-        delim = mcstr(" ");
+        delim = MU_SPACE_STR;
 
     while (fn_next(i, 0x1, frame)) {
         if (!mu_isstr(frame[0]))
-            mu_error(mmlist({
+            mu_error(mlist({
                 mcstr("invalid value "),
                 mu_repr(frame[0]),
                 mcstr(" passed to join")}));
@@ -448,7 +454,7 @@ mu_t str_pad(mu_t s, mu_t mlen, mu_t pad) {
               (!pad || (mu_isstr(pad) && str_len(pad) > 0)));
     
     if (!pad)
-        pad = mcstr(" ");
+        pad = MU_SPACE_STR;
 
     bool left;
     muint_t len;
@@ -488,7 +494,7 @@ mu_t str_strip(mu_t s, mu_t dir, mu_t pad) {
               (!pad || (mu_isstr(pad) && str_len(pad) > 0)));
 
     if (!pad)
-        pad = mcstr(" ");
+        pad = MU_SPACE_STR;
 
     const mbyte_t *pos = str_bytes(s);
     const mbyte_t *end = pos + str_len(s);
@@ -538,7 +544,7 @@ mc_t str_step(mu_t scope, mu_t *frame) {
 
 mu_t str_iter(mu_t s) {
     mu_assert(mu_isstr(s));
-    return msfn(0x00, str_step, mmlist({s, muint(0)}));
+    return msbfn(0x00, str_step, mlist({s, muint(0)}));
 }
 
 

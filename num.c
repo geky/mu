@@ -5,6 +5,8 @@
 #include "fn.h"
 #include "parse.h"
 
+#include <math.h>
+
 
 // Binary digits of precision
 #ifdef MU64
@@ -14,9 +16,16 @@
 #endif
 
 
+// Number constants
+MFLOAT(mu_inf,  INFINITY)
+MFLOAT(mu_ninf, -INFINITY)
+MFLOAT(mu_e,    2.71828182845904523536)
+MFLOAT(mu_pi,   3.14159265358979323846)
+
+
 // Number creating macro assuming NaN and -0 not possible
 mu_inline mu_t mnum(mfloat_t n) {
-    return (mu_t)(MU_NUM + (~7 &
+    return (mu_t)(MTNUM + (~7 &
         ((union { mfloat_t n; muint_t u; }){(mfloat_t)n}).u));
 }
 
@@ -32,8 +41,16 @@ mu_t num_fromfloat(mfloat_t n) {
     return mnum(n);
 }
 
+// Other conversions
 mu_t num_fromuint(muint_t n) { return muint(n); }
 mu_t num_fromint(mint_t n) { return mint(n); }
+
+mu_t num_fromstr(mu_t m) {
+    mu_assert(mu_isstr(m) && str_len(m) == 1);
+    mu_t n = muint(str_bytes(m)[0]);
+    str_dec(m);
+    return n;
+}
 
 
 // Comparison operation
@@ -227,7 +244,7 @@ static mc_t num_random(mu_t scope, mu_t *frame) {
 mu_t num_seed(mu_t m) {
     muint_t x = (muint_t)m;
 
-    return msfn(0x0, num_random, mmlist({
+    return msbfn(0x0, num_random, mlist({
         muint(x >> sizeof(muinth_t)),
         muint(x & (muinth_t)-1),
         muint(x & (muinth_t)-1),
@@ -235,14 +252,6 @@ mu_t num_seed(mu_t m) {
     }));
 }
 
-
-// Conversion from single character
-mu_t num_fromstr(mu_t m) {
-    mu_assert(mu_isstr(m) && str_len(m) == 1);
-    mu_t n = muint(str_bytes(m)[0]);
-    str_dec(m);
-    return n;
-}
 
 // Convert string representation to variable
 mu_t num_parse(const mbyte_t **ppos, const mbyte_t *end) {

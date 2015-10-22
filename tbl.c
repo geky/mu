@@ -12,13 +12,13 @@ mu_inline const struct tbl *tbl(mu_t t) {
 }
 
 mu_inline struct tbl *wtbl(mu_t t) {
-    return (struct tbl *)((muint_t)t - MU_TBL);
+    return (struct tbl *)((muint_t)t - MTTBL);
 }
 
 
 // Common errors
 static mu_noreturn mu_error_readonly(mu_t t) {
-    mu_error(mmlist({
+    mu_error(mlist({
         mcstr("unable to modify read-only table "), 
         mu_repr(t)}));
 }
@@ -78,7 +78,7 @@ mu_t tbl_create(muint_t len) {
     t->array = mu_alloc(size * sizeof(mu_t));
     memset(t->array, 0, size * sizeof(mu_t));
 
-    return (mu_t)((muint_t)t + MU_TBL);
+    return (mu_t)((muint_t)t + MTTBL);
 }
 
 mu_t tbl_extend(muint_t len, mu_t tail) {
@@ -110,7 +110,7 @@ void tbl_destroy(mu_t t) {
 mu_t tbl_lookup(mu_t t, mu_t k) {
     mu_assert(mu_istbl(t));
     if (!k)
-        return mnil;
+        return 0;
 
     for (; t; t = tbl(t)->tail) {
         muint_t mask = (1 << tbl(t)->npw2) - 1;
@@ -136,7 +136,7 @@ mu_t tbl_lookup(mu_t t, mu_t k) {
     }
 
     mu_dec(k);
-    return mnil;
+    return 0;
 }
 
 
@@ -373,7 +373,7 @@ static mc_t tbl_iter_step(mu_t scope, mu_t *frame) {
 
 mu_t tbl_iter(mu_t t) {
     mu_assert(mu_istbl(t));
-    return msfn(0x0, tbl_iter_step, mmlist({t, muint(0)}));
+    return msbfn(0x0, tbl_iter_step, mlist({t, muint(0)}));
 }
 
 static mc_t tbl_pairs_step(mu_t scope, mu_t *frame) {
@@ -388,7 +388,7 @@ static mc_t tbl_pairs_step(mu_t scope, mu_t *frame) {
 
 mu_t tbl_pairs(mu_t t) {
     mu_assert(mu_istbl(t));
-    return msfn(0x0, tbl_pairs_step, mmlist({t, muint(0)}));
+    return msbfn(0x0, tbl_pairs_step, mlist({t, muint(0)}));
 }
 
 
@@ -398,7 +398,7 @@ mu_t tbl_fromnum(mu_t n) {
     return tbl_create(num_uint(n));
 }
 
-mu_t tbl_fromntbl(muint_t n, mu_t (*pairs)[2]) {
+mu_t tbl_fromntbl(mu_t (*pairs)[2], muint_t n) {
     mu_t t = tbl_create(n);
 
     for (muint_t i = 0; i < n; i++)
@@ -407,16 +407,16 @@ mu_t tbl_fromntbl(muint_t n, mu_t (*pairs)[2]) {
     return t;
 }
 
-mu_t tbl_fromztbl(mu_t (*pairs)[2]) {
-    muint_t n = 0;
+mu_t tbl_fromgtbl(mu_t (*const (*gen)[2])(void), muint_t n) {
+    mu_t t = tbl_create(n);
 
-    while (pairs[n][0])
-        n++;
+    for (muint_t i = 0; i < n; i++)
+        tbl_insert(t, gen[i][0](), gen[i][1]());
 
-    return tbl_fromntbl(n, pairs);
+    return t;
 }
 
-mu_t tbl_fromnlist(muint_t n, mu_t *list) {
+mu_t tbl_fromnlist(mu_t *list, muint_t n) {
     mu_t t = tbl_create(n);
 
     for (muint_t i = 0; i < n; i++)
@@ -425,13 +425,13 @@ mu_t tbl_fromnlist(muint_t n, mu_t *list) {
     return t;
 }
 
-mu_t tbl_fromzlist(mu_t *list) {
-    muint_t n = 0;
+mu_t tbl_fromglist(mu_t (*const *gen)(void), muint_t n) {
+    mu_t t = tbl_create(n);
 
-    while (list[n])
-        n++;
+    for (muint_t i = 0; i < n; i++)
+        tbl_insert(t, muint(i), gen[i]());
 
-    return tbl_fromnlist(n, list);
+    return t;
 }
 
 mu_t tbl_fromiter(mu_t i) {
@@ -472,7 +472,7 @@ void tbl_push(mu_t t, mu_t v, mu_t i) {
 
             memmove(&wtbl(t)->array[j+1], &wtbl(t)->array[j], 
                     (size-j)*sizeof(mu_t));
-            wtbl(t)->array[j] = mnil;
+            wtbl(t)->array[j] = 0;
         }
     } else {
         mu_t d = tbl_create(wtbl(t)->len);
@@ -481,7 +481,7 @@ void tbl_push(mu_t t, mu_t v, mu_t i) {
         for (muint_t j = 0; tbl_next(t, &j, &k, &v);) {
             if (mu_isnum(k) && num_cmp(k, i) >= 0) {
                 tbl_insert(d, num_add(k, muint(1)), v);
-                tbl_insert(t, k, mnil);
+                tbl_insert(t, k, 0);
             } else {
                 mu_dec(k);
                 mu_dec(v);
@@ -510,7 +510,7 @@ mu_t tbl_pop(mu_t t, mu_t i) {
         i = num_add(i, muint(tbl_len(t)));
 
     mu_t ret = tbl_lookup(t, mu_inc(i));
-    tbl_insert(t, i, mnil);
+    tbl_insert(t, i, 0);
 
     if (wtbl(t)->linear) {
         muint_t size = 1 << wtbl(t)->npw2;
@@ -520,7 +520,7 @@ mu_t tbl_pop(mu_t t, mu_t i) {
 
             memmove(&wtbl(t)->array[j], &wtbl(t)->array[j+1], 
                     (size-(j+1))*sizeof(mu_t));
-            wtbl(t)->array[size-1] = mnil;
+            wtbl(t)->array[size-1] = 0;
         }
     } else {
         mu_t d = tbl_create(wtbl(t)->len);
@@ -529,7 +529,7 @@ mu_t tbl_pop(mu_t t, mu_t i) {
         for (muint_t j = 0; tbl_next(t, &j, &k, &v);) {
             if (mu_isnum(k) && num_cmp(k, i) > 0) {
                 tbl_insert(d, num_sub(k, muint(1)), v);
-                tbl_insert(t, k, mnil);
+                tbl_insert(t, k, 0);
             } else {
                 mu_dec(k);
                 mu_dec(v);

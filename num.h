@@ -5,14 +5,17 @@
 #ifndef MU_NUM_H
 #define MU_NUM_H
 #include "mu.h"
-#include <math.h>
 
 
 // Number constants
-#define MU_INF  mfloat(INFINITY)
-#define MU_NINF mfloat(-INFINITY)
-#define MU_E    mfloat(2.71828182845904523536)
-#define MU_PI   mfloat(3.14159265358979323846)
+#define MU_INF  mu_inf()
+#define MU_NINF mu_ninf()
+#define MU_E    mu_e()
+#define MU_PI   mu_pi()
+mu_pure mu_t mu_inf(void);
+mu_pure mu_t mu_ninf(void);
+mu_pure mu_t mu_e(void);
+mu_pure mu_t mu_pi(void);
 
 
 // Conversion operations
@@ -67,26 +70,36 @@ mu_t num_oct(mu_t);
 mu_t num_hex(mu_t);
 
 
-// Number creating macros
+// Number creating functions
 mu_inline mu_t mfloat(mfloat_t n) { return num_fromfloat(n); }
 
 mu_inline mu_t muint(muint_t n) {
-    return (mu_t)(MU_NUM + (~7 &
+    return (mu_t)(MTNUM + (~7 &
         ((union { mfloat_t n; muint_t u; }){(mfloat_t)n}).u));
 }
 
 mu_inline mu_t mint(mint_t n) {
-    return (mu_t)(MU_NUM + (~7 &
+    return (mu_t)(MTNUM + (~7 &
         ((union { mfloat_t n; muint_t u; }){(mfloat_t)n}).u));
 }
 
-// Number accessing macros
+// Number accessing functions
 mu_inline mfloat_t num_float(mu_t m) {
-    return ((union { muint_t u; mfloat_t n; }){(muint_t)m - MU_NUM}).n;
+    return ((union { muint_t u; mfloat_t n; }){(muint_t)m - MTNUM}).n;
 }
 
 mu_inline muint_t num_uint(mu_t m) { return (muint_t)num_float(m); }
 mu_inline mint_t  num_int(mu_t m)  { return (mint_t)num_float(m); }
+
+// Number constant macro
+#define MFLOAT(name, num)                                           \
+mu_pure mu_t name(void) {                                           \
+    return (mu_t)(MTNUM + (~7 &                                     \
+        ((union { mfloat_t n; muint_t u; }){(mfloat_t)num}).u));    \
+}
+
+#define MUINT(name, num) MFLOAT(name, (muint_t)num)
+#define MINT(name, num)  MFLOAT(name, (mint_t)num)
 
 
 #endif

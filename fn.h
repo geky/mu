@@ -8,18 +8,19 @@
 
 
 // Function constants
-#define MU_ID fn_id()
-mu_pure mu_t fn_id(void);
+#define MU_ID mu_id()
+mu_pure mu_t mu_id(void);
 
 // Definition of C Function types
 struct code;
 typedef mc_t mbfn_t(mu_t *frame);
-typedef mc_t msfn_t(mu_t closure, mu_t *frame);
+typedef mc_t msbfn_t(mu_t closure, mu_t *frame);
+
 
 // Conversion operations
 mu_t fn_fromcode(struct code *c, mu_t closure);
 mu_t fn_frombfn(mc_t args, mbfn_t *bfn);
-mu_t fn_fromsfn(mc_t args, msfn_t *sfn, mu_t closure);
+mu_t fn_fromsbfn(mc_t args, msbfn_t *sbfn, mu_t closure);
 
 // Function calls
 mc_t fn_tcall(mu_t f, mc_t fc, mu_t *frame);
@@ -120,13 +121,12 @@ struct fn {
 
     union {
         mbfn_t *bfn;       // c function
-        msfn_t *sfn;       // scoped c function
+        msbfn_t *sbfn;     // scoped c function
         struct code *code; // compiled mu code
     };
 };
 
-
-// C Function creating functions
+// Function creating functions
 mu_inline mu_t mcode(struct code *c, mu_t closure) {
     return fn_fromcode(c, closure);
 }
@@ -135,17 +135,9 @@ mu_inline mu_t mbfn(mc_t args, mbfn_t *bfn) {
     return fn_frombfn(args, bfn);
 }
 
-mu_inline mu_t msfn(mc_t args, msfn_t *sfn, mu_t closure) {
-    return fn_fromsfn(args, sfn, closure);
+mu_inline mu_t msbfn(mc_t args, msbfn_t *sbfn, mu_t closure) {
+    return fn_fromsbfn(args, sbfn, closure);
 }
-
-#define mcfn(args, bfn) ({                      \
-    static const struct fn _c =                 \
-        {0, args, MU_BFN - MU_FN, 0, {bfn}};    \
-                                                \
-    (mu_t)((muint_t)&_c + MU_BFN);              \
-})
-
 
 // Function reference counting
 mu_inline mu_t fn_inc(mu_t f) {
@@ -159,14 +151,22 @@ mu_inline void fn_dec(mu_t f) {
     return mu_dec(f);
 }
 
-
 // Function access
 mu_inline struct code *fn_code(mu_t m) {
-    return code_inc(((struct fn *)((muint_t)m - MU_FN))->code);
+    return code_inc(((struct fn *)((muint_t)m - MTFN))->code);
 }
 
 mu_inline mu_t fn_closure(mu_t m) {
-    return mu_inc(((struct fn *)((muint_t)m - MU_FN))->closure);
+    return mu_inc(((struct fn *)((muint_t)m - MTFN))->closure);
+}
+
+// Function constant macro
+#define MBFN(name, args, bfn)                           \
+static const struct fn _mu_val_##name =                 \
+    {0, args, MTBFN - MTFN, 0, {bfn}};                  \
+                                                        \
+mu_pure mu_t name(void) {                               \
+    return (mu_t)((muint_t)&_mu_val_##name + MTBFN);    \
 }
 
 

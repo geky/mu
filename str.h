@@ -16,10 +16,9 @@ void mstr_concat(mbyte_t **s, muint_t *i, mu_t c);
 void mstr_ncat(mbyte_t **s, muint_t *i, const mbyte_t *c, muint_t len);
 void mstr_zcat(mbyte_t **s, muint_t *i, const char *c);
 
-
 // Conversion operations
 mu_t str_fromnstr(const mbyte_t *s, muint_t len);
-mu_t str_fromzstr(const char *s);
+mu_t str_fromcstr(const char *s);
 mu_t str_frombyte(mbyte_t c);
 mu_t str_fromnum(mu_t n);
 mu_t str_fromiter(mu_t iter);
@@ -68,26 +67,9 @@ mu_inline mu_t mnstr(const mbyte_t *s, muint_t len) {
     return str_fromnstr(s, len);
 }
 
-mu_inline mu_t mzstr(const char *s) {
-    return str_fromzstr(s);
+mu_inline mu_t mcstr(const char *s) {
+    return str_fromcstr(s);
 }
-
-#define mcstr(s) ({                                             \
-    static mu_t _m = 0;                                         \
-    static const struct {                                       \
-        mref_t ref; mlen_t len;                                 \
-        mbyte_t data[(sizeof s)-1];                             \
-    } _c = {0, (sizeof s)-1, {s}};                              \
-                                                                \
-    if (!_m) {                                                  \
-        _m = mstr_intern((mbyte_t *)_c.data, (sizeof s)-1);     \
-        if (((struct str *)((muint_t)_m - MU_STR))->ref != 0)   \
-            ((struct str *)((muint_t)_m - MU_STR))->ref = 0;    \
-    }                                                           \
-                                                                \
-    _m;                                                         \
-})
-
 
 // Reference counting
 mu_inline mbyte_t *mstr_inc(mbyte_t *s) {
@@ -114,15 +96,53 @@ mu_inline void str_dec(mu_t m) {
         str_destroy(m);
 }
 
-
 // String access functions
 mu_inline mlen_t str_len(mu_t m) {
-    return ((struct str *)((muint_t)m - MU_STR))->len;
+    return ((struct str *)((muint_t)m - MTSTR))->len;
 }
 
 mu_inline const mbyte_t *str_bytes(mu_t m) {
-    return ((struct str *)((muint_t)m - MU_STR))->data;
+    return ((struct str *)((muint_t)m - MTSTR))->data;
 }
+
+// String constant macro
+#ifdef mu_constructor
+#define MSTR(name, str)                                         \
+static mu_t _mu_ref_##name = 0;                                 \
+static const struct {                                           \
+    mref_t ref; mlen_t len;                                     \
+    mbyte_t data[(sizeof str)-1];                               \
+} _mu_val_##name = {0, (sizeof str)-1, str};                    \
+                                                                \
+mu_constructor void _mu_init_##name(void) {                     \
+    _mu_ref_##name = mstr_intern(                               \
+        (mbyte_t*)_mu_val_##name.data,                          \
+        _mu_val_##name.len);                                    \
+}                                                               \
+                                                                \
+mu_pure mu_t name(void) {                                       \
+    return _mu_ref_##name;                                      \
+}
+#else
+#define MSTR(name, str)                                         \
+static mu_t _mu_ref_##name = 0;                                 \
+static const struct {                                           \
+    mref_t ref; mlen_t len;                                     \
+    mbyte_t data[(sizeof str)-1];                               \
+} _mu_val_##name = {0, (sizeof str)-1, str};                    \
+                                                                \
+mu_pure mu_t name(void) {                                       \
+    if (!_mu_ref_##name) {                                      \
+        _mu_ref_##name = mstr_intern(                           \
+            (mbyte_t *)_mu_val_##name.data,                     \
+            _mu_val_##name.len);                                \
+        if (*(mref_t *)((muint_t)_mu_ref_##name - MTSTR))       \
+            *(mref_t *)((muint_t)_mu_ref_##name - MTSTR) = 0;   \
+    }                                                           \
+                                                                \
+    return _mu_ref_##name;                                      \
+}
+#endif
 
 
 #endif

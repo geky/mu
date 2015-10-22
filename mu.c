@@ -8,12 +8,16 @@
 #include "parse.h"
 
 
+// Constants
+MUINT(mu_true,      1)
+
+
 // Common errors
-mu_noreturn mu_error_args(const char *name, mc_t count, mu_t *args) {
+mu_noreturn mu_error_args(mu_t name, mc_t count, mu_t *args) {
     mbyte_t *message = mstr_create(0);
     muint_t len = 0;
     mstr_zcat(&message, &len, "invalid argument in ");
-    mstr_zcat(&message, &len, name);
+    mstr_concat(&message, &len, name);
     mstr_zcat(&message, &len, "(");
 
     for (muint_t i = 0; i < count; i++) {
@@ -33,18 +37,18 @@ mu_noreturn mu_error_args(const char *name, mc_t count, mu_t *args) {
 #define mu_error_arg3(name, ...) mu_error_args(name, 3, (mu_t[3]){__VA_ARGS__})
 #define mu_error_arg4(name, ...) mu_error_args(name, 4, (mu_t[4]){__VA_ARGS__})
 
-static mu_noreturn mu_error_ops(const char *name, mc_t count, mu_t *args) {
+static mu_noreturn mu_error_ops(mu_t name, mc_t count, mu_t *args) {
     mbyte_t *message = mstr_create(0);
     muint_t len = 0;
     mstr_zcat(&message, &len, "unsupported operation ");
 
     if (count == 1) {
-        mstr_zcat(&message, &len, name);
+        mstr_concat(&message, &len, name);
         mstr_concat(&message, &len, mu_repr(args[0]));
     } else {
         mstr_concat(&message, &len, mu_repr(args[0]));
         mstr_zcat(&message, &len, " ");
-        mstr_zcat(&message, &len, name);
+        mstr_concat(&message, &len, name);
         mstr_zcat(&message, &len, " ");
         mstr_concat(&message, &len, mu_repr(args[1]));
     }
@@ -55,13 +59,13 @@ static mu_noreturn mu_error_ops(const char *name, mc_t count, mu_t *args) {
 #define mu_error_op1(name, ...) mu_error_ops(name, 1, (mu_t[1]){__VA_ARGS__})
 #define mu_error_op2(name, ...) mu_error_ops(name, 2, (mu_t[2]){__VA_ARGS__})
 
-static mu_noreturn mu_error_convert(const char *name, mu_t m) {
+static mu_noreturn mu_error_convert(mu_t name, mu_t m) {
     mbyte_t *message = mstr_create(0);
     muint_t len = 0;
     mstr_zcat(&message, &len, "unable to convert ");
     mstr_concat(&message, &len, mu_repr(m));
     mstr_zcat(&message, &len, " to ");
-    mstr_zcat(&message, &len, name);
+    mstr_concat(&message, &len, name);
     mu_error(mstr_intern(message, len));
 }
 
@@ -73,7 +77,7 @@ void mu_fconvert(mc_t dc, mc_t sc, mu_t *frame) {
             mu_dec(frame[i]);
 
         for (muint_t i = sc; i < dc; i++)
-            frame[i] = mnil;
+            frame[i] = 0;
 
     } else if (dc != 0xf) {
         mu_t t = *frame;
@@ -108,9 +112,9 @@ void (*const mu_destroy_table[6])(mu_t) = {
 // Table related functions performed on variables
 mu_t mu_lookup(mu_t m, mu_t k) {
     switch (mu_type(m)) {
-        case MU_TBL:
-        case MU_RTBL:   return tbl_lookup(m, k);
-        default:        mu_error(mmlist({
+        case MTTBL:
+        case MTRTBL:    return tbl_lookup(m, k);
+        default:        mu_error(mlist({
                             mcstr("unable to lookup "),
                             mu_repr(k),
                             mcstr(" in "),
@@ -120,9 +124,9 @@ mu_t mu_lookup(mu_t m, mu_t k) {
 
 void mu_insert(mu_t m, mu_t k, mu_t v) {
     switch (mu_type(m)) {
-        case MU_TBL:
-        case MU_RTBL:   return tbl_insert(m, k, v);
-        default:        mu_error(mmlist({
+        case MTTBL:
+        case MTRTBL:    return tbl_insert(m, k, v);
+        default:        mu_error(mlist({
                             mcstr("unable to insert "),
                             mu_repr(v),
                             mcstr(" to "),
@@ -134,9 +138,9 @@ void mu_insert(mu_t m, mu_t k, mu_t v) {
 
 void mu_assign(mu_t m, mu_t k, mu_t v) {
     switch (mu_type(m)) {
-        case MU_TBL:
-        case MU_RTBL:   return tbl_assign(m, k, v);
-        default:        mu_error(mmlist({
+        case MTTBL:
+        case MTRTBL:    return tbl_assign(m, k, v);
+        default:        mu_error(mlist({
                             mcstr("unable to assign "),
                             mu_repr(v),
                             mcstr(" to "),
@@ -149,14 +153,14 @@ void mu_assign(mu_t m, mu_t k, mu_t v) {
 // Function calls performed on variables
 mc_t mu_tcall(mu_t m, mc_t fc, mu_t *frame) {
     extern mc_t bfn_tcall(mu_t f, mc_t fc, mu_t *frame);
-    extern mc_t sfn_tcall(mu_t f, mc_t fc, mu_t *frame);
+    extern mc_t sbfn_tcall(mu_t f, mc_t fc, mu_t *frame);
     extern mc_t mfn_tcall(mu_t f, mc_t fc, mu_t *frame);
 
     switch (mu_type(m)) {
-        case MU_FN:     return mfn_tcall(m, fc, frame);
-        case MU_BFN:    return bfn_tcall(m, fc, frame);
-        case MU_SFN:    return sfn_tcall(m, fc, frame);
-        default:        mu_error(mmlist({
+        case MTFN:      return mfn_tcall(m, fc, frame);
+        case MTBFN:     return bfn_tcall(m, fc, frame);
+        case MTSBFN:    return sbfn_tcall(m, fc, frame);
+        default:        mu_error(mlist({
                             mcstr("unable to call "),
                             mu_repr(m)}));
     }
@@ -178,7 +182,7 @@ mu_t mu_vcall(mu_t m, mc_t fc, va_list args) {
     for (muint_t i = 1; i < mu_fcount(fc >> 4); i++)
         *va_arg(args, mu_t *) = frame[i];
 
-    return (fc >> 4) ? *frame : mnil;
+    return (fc >> 4) ? *frame : 0;
 }
 
 mu_t mu_call(mu_t m, mc_t fc, ...) {
@@ -191,51 +195,75 @@ mu_t mu_call(mu_t m, mc_t fc, ...) {
 
 
 // Type casts and declarations
+static mc_t mu_num_thunk(mu_t *frame);
+MSTR(mu_num_key, "num")
+MBFN(mu_num_bfn, 0x1, mu_num_thunk);
+static mc_t mu_num_thunk(mu_t *frame) {
+    frame[0] = mu_num(frame[0]);
+    return 1;
+}
+
 mu_t mu_num(mu_t m) {
     switch (mu_type(m)) {
-        case MU_NIL:    return muint(0);
-        case MU_NUM:    return m;
-        case MU_STR:    if (str_len(m) == 1)
+        case MTNIL:     return muint(0);
+        case MTNUM:     return m;
+        case MTSTR:     if (str_len(m) == 1)
                             return num_fromstr(m);
                         break;
         default:        break;
     }
 
-    mu_error_convert("num", m);
+    mu_error_convert(MU_NUM_KEY, m);
+}
+
+static mc_t mu_str_thunk(mu_t *frame);
+MSTR(mu_str_key, "str")
+MBFN(mu_str_bfn, 0x1, mu_str_thunk);
+static mc_t mu_str_thunk(mu_t *frame) {
+    frame[0] = mu_str(frame[0]);
+    return 1;
 }
 
 mu_t mu_str(mu_t m) {
     switch (mu_type(m)) {
-        case MU_NIL:    return mcstr("");
-        case MU_NUM:    if (m == muint((mbyte_t)num_uint(m)))
+        case MTNIL:     return mcstr("");
+        case MTNUM:     if (m == muint((mbyte_t)num_uint(m)))
                             return str_fromnum(m);
                         break;
-        case MU_STR:    return m;
-        case MU_TBL:
-        case MU_RTBL:
-        case MU_FN:
-        case MU_BFN:
-        case MU_SFN:    return str_fromiter(mu_iter(m));
+        case MTSTR:     return m;
+        case MTTBL:
+        case MTRTBL:
+        case MTFN:
+        case MTBFN:
+        case MTSBFN:    return str_fromiter(mu_iter(m));
         default:        mu_unreachable;
     }
 
-    mu_error_convert("str", m);
+    mu_error_convert(MU_STR_KEY, m);
+}
+
+static mc_t mu_tbl_thunk(mu_t *frame);
+MSTR(mu_tbl_key, "tbl")
+MBFN(mu_tbl_bfn, 0x2, mu_tbl_thunk)
+static mc_t mu_tbl_thunk(mu_t *frame) {
+    frame[0] = mu_tbl(frame[0], frame[1]);
+    return 1;
 }
 
 mu_t mu_tbl(mu_t m, mu_t tail) {
     if (tail && !mu_istbl(tail))
-        mu_error_arg2("tbl", m, tail);
+        mu_error_arg2(MU_TBL_KEY, m, tail);
 
     mu_t t;
     switch (mu_type(m)) {
-        case MU_NIL:    t = tbl_create(0); break;
-        case MU_NUM:    t = tbl_fromnum(m); break;
-        case MU_STR:    t = tbl_fromiter(mu_iter(m)); break;
-        case MU_TBL:    
-        case MU_RTBL:   t = tbl_fromiter(mu_pairs(m)); break;
-        case MU_FN:
-        case MU_BFN:
-        case MU_SFN:    t = tbl_fromiter(m); break;
+        case MTNIL:     t = tbl_create(0); break;
+        case MTNUM:     t = tbl_fromnum(m); break;
+        case MTSTR:     t = tbl_fromiter(mu_iter(m)); break;
+        case MTTBL:     
+        case MTRTBL:    t = tbl_fromiter(mu_pairs(m)); break;
+        case MTFN:
+        case MTBFN:
+        case MTSBFN:    t = tbl_fromiter(m); break;
         default:        mu_unreachable;
     }
 
@@ -243,45 +271,136 @@ mu_t mu_tbl(mu_t m, mu_t tail) {
     return t;
 }
 
+static mc_t mu_fn_thunk(mu_t *frame);
+MSTR(mu_fn_key, "fn_")
+MBFN(mu_fn_bfn, 0x1, mu_fn_thunk)
+static mc_t mu_fn_thunk(mu_t *frame) {
+    frame[0] = mu_fn(frame[0]);
+    return 1;
+}
+
 mu_t mu_fn(mu_t m) {
     switch (mu_type(m)) {
-        case MU_NIL:    return MU_ID;
-        case MU_FN:
-        case MU_BFN:
-        case MU_SFN:    return m;
+        case MTNIL:     return MU_ID;
+        case MTFN:
+        case MTBFN:
+        case MTSBFN:    return m;
         default:        break;
     }
 
-    mu_error_convert("str", m);
+    mu_error_convert(MU_FN_KEY, m);
 }
 
 
-// Comparison operations
-// does not consume
+// Logic operations
+static mc_t mu_not_thunk(mu_t *frame);
+MSTR(mu_not_key, "!")
+MBFN(mu_not_bfn, 0x1, mu_not_thunk)
+static mc_t mu_not_thunk(mu_t *frame) {
+    mu_dec(frame[0]);
+    frame[0] = !frame[0] ? MU_TRUE : MU_FALSE;
+    return 1;
+}
+
+static mc_t mu_is_thunk(mu_t *frame);
+MSTR(mu_is_key, "is")
+MBFN(mu_is_bfn, 0x2, mu_is_thunk)
+static mc_t mu_is_thunk(mu_t *frame) {
+    mu_dec(frame[0]);
+    mu_dec(frame[1]);
+    frame[0] = mu_is(frame[0], frame[1]) ? muint(1) : 0;
+    return 1;
+}
+
 bool mu_is(mu_t a, mu_t type) {
     switch (mu_type(a)) {
-        case MU_NIL:    return !type;
-        case MU_NUM:    return type == MU_NUM_TYPE;
-        case MU_STR:    return type == MU_STR_TYPE;
-        case MU_RTBL:
-        case MU_TBL:    return type == MU_TBL_TYPE;
-        case MU_FN:
-        case MU_BFN:
-        case MU_SFN:    return type == MU_FN_TYPE;
+        case MTNIL:     return !type;
+        case MTNUM:     return type == MU_NUM_BFN;
+        case MTSTR:     return type == MU_STR_BFN;
+        case MTRTBL:
+        case MTTBL:     return type == MU_TBL_BFN;
+        case MTFN:
+        case MTBFN:
+        case MTSBFN:    return type == MU_FN_BFN;
         default:        mu_unreachable;
     }
-}    
+}
 
+static mc_t mu_eq_thunk(mu_t *frame);
+MSTR(mu_eq_key,  "==")
+MBFN(mu_eq_bfn,  0x2, mu_eq_thunk)
+static mc_t mu_eq_thunk(mu_t *frame) {
+    mu_dec(frame[0]);
+    mu_dec(frame[1]);
+    frame[0] = frame[0] == frame[1] ? MU_TRUE : MU_FALSE;
+    return 1;
+}
+
+static mc_t mu_neq_thunk(mu_t *frame);
+MSTR(mu_neq_key, "!=")
+MBFN(mu_neq_bfn, 0x2, mu_neq_thunk)
+static mc_t mu_neq_thunk(mu_t *frame) {
+    mu_dec(frame[0]);
+    mu_dec(frame[1]);
+    frame[0] = frame[0] != frame[1] ? MU_TRUE : MU_FALSE;
+    return 1;
+}
+
+static mc_t mu_lt_thunk(mu_t *frame);
+MSTR(mu_lt_key,  "<")
+MBFN(mu_lt_bfn,  0x2, mu_lt_thunk)
+static mc_t mu_lt_thunk(mu_t *frame) {
+    mint_t cmp = mu_cmp(frame[0], frame[1]);
+    mu_dec(frame[0]);
+    mu_dec(frame[1]);
+    frame[0] = cmp < 0 ? MU_TRUE : MU_FALSE;
+    return 1;
+}
+
+static mc_t mu_lte_thunk(mu_t *frame);
+MSTR(mu_lte_key, "<=")
+MBFN(mu_lte_bfn, 0x2, mu_lte_thunk)
+static mc_t mu_lte_thunk(mu_t *frame) {
+    mint_t cmp = mu_cmp(frame[0], frame[1]);
+    mu_dec(frame[0]);
+    mu_dec(frame[1]);
+    frame[0] = cmp <= 0 ? MU_TRUE : MU_FALSE;
+    return 1;
+}
+
+static mc_t mu_gt_thunk(mu_t *frame);
+MSTR(mu_gt_key,  ">")
+MBFN(mu_gt_bfn,  0x2, mu_gt_thunk)
+static mc_t mu_gt_thunk(mu_t *frame) {
+    mint_t cmp = mu_cmp(frame[0], frame[1]);
+    mu_dec(frame[0]);
+    mu_dec(frame[1]);
+    frame[0] = cmp > 0 ? MU_TRUE : MU_FALSE;
+    return 1;
+}
+
+static mc_t mu_gte_thunk(mu_t *frame);
+MSTR(mu_gte_key, ">=")
+MBFN(mu_gte_bfn, 0x2, mu_gte_thunk)
+static mc_t mu_gte_thunk(mu_t *frame) {
+    mint_t cmp = mu_cmp(frame[0], frame[1]);
+    mu_dec(frame[0]);
+    mu_dec(frame[1]);
+    frame[0] = cmp >= 0 ? MU_TRUE : MU_FALSE;
+    return 1;
+}
+
+// does not consume
 mint_t mu_cmp(mu_t a, mu_t b) {
     if (mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
-            case MU_NUM:    return num_cmp(a, b);
-            case MU_STR:    return str_cmp(a, b);
+            case MTNUM:     return num_cmp(a, b);
+            case MTSTR:     return str_cmp(a, b);
             default:        break;
         }
     }
 
-    mu_error(mmlist({
+    mu_error(mlist({
         mcstr("unable to compare "),
         mu_repr(a),
         mcstr(" and "),
@@ -290,273 +409,478 @@ mint_t mu_cmp(mu_t a, mu_t b) {
 
 
 // Arithmetic operations
-mu_t mu_pos(mu_t a) {
-    switch (mu_type(a)) {
-        case MU_NUM:    return a;
-        default:        mu_error_op1("+", a);
-    }
+static mc_t mu_add_thunk(mu_t *frame);
+MSTR(mu_add_key, "+")
+MBFN(mu_add_bfn, 0x2, mu_add_thunk)
+static mc_t mu_add_thunk(mu_t *frame) {
+    if (!frame[1]) frame[0] = mu_pos(frame[0]);
+    else           frame[0] = mu_add(frame[0], frame[1]);
+    return 1;
 }
 
-mu_t mu_neg(mu_t a) {
+mu_t mu_pos(mu_t a) {
     switch (mu_type(a)) {
-        case MU_NUM:    return num_neg(a);
-        default:        mu_error_op1("-", a);
+        case MTNUM:     return a;
+        default:        mu_error_op1(MU_ADD_KEY, a);
     }
 }
 
 mu_t mu_add(mu_t a, mu_t b) {
     if (mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
-            case MU_NUM:    return num_add(a, b);
+            case MTNUM:     return num_add(a, b);
             default:        break;
         }
     }
 
-    mu_error_op2("+", a, b);
+    mu_error_op2(MU_ADD_KEY, a, b);
+}
+
+static mc_t mu_sub_thunk(mu_t *frame);
+MSTR(mu_sub_key, "-")
+MBFN(mu_sub_bfn, 0x2, mu_sub_thunk)
+static mc_t mu_sub_thunk(mu_t *frame) {
+    if (!frame[1]) frame[0] = mu_neg(frame[0]);
+    else           frame[0] = mu_sub(frame[0], frame[1]);
+    return 1;
+}
+
+mu_t mu_neg(mu_t a) {
+    switch (mu_type(a)) {
+        case MTNUM:     return num_neg(a);
+        default:        mu_error_op1(MU_SUB_KEY, a);
+    }
 }
 
 mu_t mu_sub(mu_t a, mu_t b) {
     if (mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
-            case MU_NUM:    return num_sub(a, b);
+            case MTNUM:     return num_sub(a, b);
             default:        break;
         }
     }
 
-    mu_error_op2("-", a, b);
+    mu_error_op2(MU_SUB_KEY, a, b);
+}
+
+static mc_t mu_mul_thunk(mu_t *frame);
+MSTR(mu_mul_key, "*")
+MBFN(mu_mul_bfn, 0x2, mu_mul_thunk)
+static mc_t mu_mul_thunk(mu_t *frame) {
+    frame[0] = mu_mul(frame[0], frame[1]);
+    return 1;
 }
 
 mu_t mu_mul(mu_t a, mu_t b) {
     if (mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
-            case MU_NUM:    return num_mul(a, b);
+            case MTNUM:     return num_mul(a, b);
             default:        break;
         }
     }
 
-    mu_error_op2("*", a, b);
+    mu_error_op2(MU_MUL_KEY, a, b);
+}
+
+static mc_t mu_div_thunk(mu_t *frame);
+MSTR(mu_div_key, "/")
+MBFN(mu_div_bfn, 0x2, mu_div_thunk)
+static mc_t mu_div_thunk(mu_t *frame) {
+    frame[0] = mu_div(frame[0], frame[1]);
+    return 1;
 }
 
 mu_t mu_div(mu_t a, mu_t b) {
     if (mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
-            case MU_NUM:    return num_div(a, b);
+            case MTNUM:     return num_div(a, b);
             default:        break;
         }
     }
 
-    mu_error_op2("/", a, b);
+    mu_error_op2(MU_DIV_KEY, a, b);
+}
+
+static mc_t mu_abs_thunk(mu_t *frame);
+MSTR(mu_abs_key, "abs")
+MBFN(mu_abs_bfn, 0x1, mu_abs_thunk)
+static mc_t mu_abs_thunk(mu_t *frame) {
+    frame[0] = mu_abs(frame[0]);
+    return 1;
 }
 
 mu_t mu_abs(mu_t a) {
     switch (mu_type(a)) {
-        case MU_NUM:    return num_abs(a);
-        default:        mu_error_arg1("abs", a);
+        case MTNUM:     return num_abs(a);
+        default:        mu_error_arg1(MU_ABS_KEY, a);
     }
+}
+
+static mc_t mu_floor_thunk(mu_t *frame);
+MSTR(mu_floor_key, "floor")
+MBFN(mu_floor_bfn, 0x1, mu_floor_thunk)
+static mc_t mu_floor_thunk(mu_t *frame) {
+    frame[0] = mu_floor(frame[0]);
+    return 1;
 }
 
 mu_t mu_floor(mu_t a) {
     switch (mu_type(a)) {
-        case MU_NUM:    return num_floor(a);
-        default:        mu_error_arg1("floor", a);
+        case MTNUM:     return num_floor(a);
+        default:        mu_error_arg1(MU_FLOOR_KEY, a);
     }
+}
+
+static mc_t mu_ceil_thunk(mu_t *frame);
+MSTR(mu_ceil_key, "ceil")
+MBFN(mu_ceil_bfn, 0x1, mu_ceil_thunk)
+static mc_t mu_ceil_thunk(mu_t *frame) {
+    frame[0] = mu_ceil(frame[0]);
+    return 1;
 }
 
 mu_t mu_ceil(mu_t a) {
     switch (mu_type(a)) {
-        case MU_NUM:    return num_ceil(a);
-        default:        mu_error_arg1("ceil", a);
+        case MTNUM:     return num_ceil(a);
+        default:        mu_error_arg1(MU_CEIL_KEY, a);
     }
+}
+
+static mc_t mu_idiv_thunk(mu_t *frame);
+MSTR(mu_idiv_key, "//")
+MBFN(mu_idiv_bfn, 0x2, mu_idiv_thunk)
+static mc_t mu_idiv_thunk(mu_t *frame) {
+    frame[0] = mu_idiv(frame[0], frame[1]);
+    return 1;
 }
 
 mu_t mu_idiv(mu_t a, mu_t b) {
     if (mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
-            case MU_NUM:    return num_idiv(a, b);
+            case MTNUM:     return num_idiv(a, b);
             default:        break;
         }
     }
 
-    mu_error_op2("//", a, b);
+    mu_error_op2(MU_IDIV_KEY, a, b);
+}
+
+static mc_t mu_mod_thunk(mu_t *frame);
+MSTR(mu_mod_key, "%")
+MBFN(mu_mod_bfn, 0x2, mu_mod_thunk)
+static mc_t mu_mod_thunk(mu_t *frame) {
+    frame[0] = mu_mod(frame[0], frame[1]);
+    return 1;
 }
 
 mu_t mu_mod(mu_t a, mu_t b) {
     if (mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
-            case MU_NUM:    return num_mod(a, b);
+            case MTNUM:     return num_mod(a, b);
             default:        break;
         }
     }
 
-    mu_error_op2("%", a, b);
+    mu_error_op2(MU_MOD_KEY, a, b);
+}
+
+static mc_t mu_pow_thunk(mu_t *frame);
+MSTR(mu_pow_key, "^")
+MBFN(mu_pow_bfn, 0x2, mu_pow_thunk)
+static mc_t mu_pow_thunk(mu_t *frame) {
+    frame[0] = mu_pow(frame[0], frame[1]);
+    return 1;
 }
 
 mu_t mu_pow(mu_t a, mu_t b) {
     if (mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
-            case MU_NUM:    return num_pow(a, b);
+            case MTNUM:     return num_pow(a, b);
             default:        break;
         }
     }
 
-    mu_error_op2("^", a, b);
+    mu_error_op2(MU_POW_KEY, a, b);
+}
+
+static mc_t mu_log_thunk(mu_t *frame);
+MSTR(mu_log_key, "log")
+MBFN(mu_log_bfn, 0x2, mu_log_thunk)
+static mc_t mu_log_thunk(mu_t *frame) {
+    frame[0] = mu_log(frame[0], frame[1]);
+    return 1;
 }
 
 mu_t mu_log(mu_t a, mu_t b) {
     if (!b || mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
-            case MU_NUM:    return num_pow(a, b);
+            case MTNUM:     return num_pow(a, b);
             default:        break;
         }
     }
 
-    mu_error_arg2("log", a, b);
+    mu_error_arg2(MU_LOG_KEY, a, b);
+}
+
+static mc_t mu_cos_thunk(mu_t *frame);
+MSTR(mu_cos_key, "cos")
+MBFN(mu_cos_bfn, 0x1, mu_cos_thunk)
+static mc_t mu_cos_thunk(mu_t *frame) {
+    frame[0] = mu_cos(frame[0]);
+    return 1;
 }
 
 mu_t mu_cos(mu_t a) {
     switch (mu_type(a)) {
-        case MU_NUM:    return num_cos(a);
-        default:        mu_error_arg1("cos", a);
+        case MTNUM:     return num_cos(a);
+        default:        mu_error_arg1(MU_COS_KEY, a);
     }
+}
+
+static mc_t mu_acos_thunk(mu_t *frame);
+MSTR(mu_acos_key, "acos")
+MBFN(mu_acos_bfn, 0x1, mu_acos_thunk)
+static mc_t mu_acos_thunk(mu_t *frame) {
+    frame[0] = mu_acos(frame[0]);
+    return 1;
 }
 
 mu_t mu_acos(mu_t a) {
     switch (mu_type(a)) {
-        case MU_NUM:    return num_acos(a);
-        default:        mu_error_arg1("acos", a);
+        case MTNUM:     return num_acos(a);
+        default:        mu_error_arg1(MU_ACOS_KEY, a);
     }
+}
+
+static mc_t mu_sin_thunk(mu_t *frame);
+MSTR(mu_sin_key, "sin")
+MBFN(mu_sin_bfn, 0x1, mu_sin_thunk)
+static mc_t mu_sin_thunk(mu_t *frame) {
+    frame[0] = mu_sin(frame[0]);
+    return 1;
 }
 
 mu_t mu_sin(mu_t a) {
     switch (mu_type(a)) {
-        case MU_NUM:    return num_sin(a);
-        default:        mu_error_arg1("sin", a);
+        case MTNUM:     return num_sin(a);
+        default:        mu_error_arg1(MU_SIN_KEY, a);
     }
+}
+
+static mc_t mu_asin_thunk(mu_t *frame);
+MSTR(mu_asin_key, "asin")
+MBFN(mu_asin_bfn, 0x1, mu_asin_thunk)
+static mc_t mu_asin_thunk(mu_t *frame) {
+    frame[0] = mu_asin(frame[0]);
+    return 1;
 }
 
 mu_t mu_asin(mu_t a) {
     switch (mu_type(a)) {
-        case MU_NUM:    return num_asin(a);
-        default:        mu_error_arg1("asin", a);
+        case MTNUM:     return num_asin(a);
+        default:        mu_error_arg1(MU_ASIN_KEY, a);
     }
+}
+
+static mc_t mu_tan_thunk(mu_t *frame);
+MSTR(mu_tan_key, "tan")
+MBFN(mu_tan_bfn, 0x1, mu_tan_thunk)
+static mc_t mu_tan_thunk(mu_t *frame) {
+    frame[0] = mu_tan(frame[0]);
+    return 1;
 }
 
 mu_t mu_tan(mu_t a) {
     switch (mu_type(a)) {
-        case MU_NUM:    return num_tan(a);
-        default:        mu_error_arg1("tan", a);
+        case MTNUM:     return num_tan(a);
+        default:        mu_error_arg1(MU_TAN_KEY, a);
     }
+}
+
+static mc_t mu_atan_thunk(mu_t *frame);
+MSTR(mu_atan_key, "atan")
+MBFN(mu_atan_bfn, 0x2, mu_atan_thunk)
+static mc_t mu_atan_thunk(mu_t *frame) {
+    frame[0] = mu_atan(frame[0], frame[1]);
+    return 1;
 }
 
 mu_t mu_atan(mu_t a, mu_t b) {
     if (!b || mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
-            case MU_NUM:    return num_atan(a, b);
+            case MTNUM:     return num_atan(a, b);
             default:        break;
         }
     }
 
-    mu_error_arg2("atan", a, b);
+    mu_error_arg2(MU_ATAN_KEY, a, b);
 }
 
 
 // Bitwise/Set operations
-mu_t mu_not(mu_t a) {
-    switch (mu_type(a)) {
-        case MU_NUM:    return num_not(a);
-        default:        mu_error_op1("~", a);
-    }
+static mc_t mu_and_thunk(mu_t *frame);
+MSTR(mu_and_key, "&")
+MBFN(mu_and_bfn, 0x2, mu_and_thunk)
+static mc_t mu_and_thunk(mu_t *frame) {
+    frame[0] = mu_and(frame[0], frame[1]);
+    return 1;
 }
 
 mu_t mu_and(mu_t a, mu_t b) {
     if (mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
-            case MU_NUM:    return num_and(a, b);
-            case MU_TBL:
-            case MU_RTBL:   return tbl_and(a, b);
+            case MTNUM:     return num_and(a, b);
+            case MTTBL:
+            case MTRTBL:    return tbl_and(a, b);
             default:        break;
         }
     }
 
-    mu_error_op2("&", a, b);
+    mu_error_op2(MU_AND_KEY, a, b);
+}
+
+static mc_t mu_or_thunk(mu_t *frame);
+MSTR(mu_or_key, "|")
+MBFN(mu_or_bfn, 0x2, mu_or_thunk)
+static mc_t mu_or_thunk(mu_t *frame) {
+    frame[0] = mu_or(frame[0], frame[1]);
+    return 1;
 }
 
 mu_t mu_or(mu_t a, mu_t b) {
     if (mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
-            case MU_NUM:    return num_or(a, b);
-            case MU_TBL:
-            case MU_RTBL:   return tbl_or(a, b);
+            case MTNUM:     return num_or(a, b);
+            case MTTBL:
+            case MTRTBL:    return tbl_or(a, b);
             default:        break;
         }
     }
 
-    mu_error_op2("|", a, b);
+    mu_error_op2(MU_OR_KEY, a, b);
+}
+
+
+static mc_t mu_xor_thunk(mu_t *frame);
+MSTR(mu_xor_key, "~")
+MBFN(mu_xor_bfn, 0x2, mu_xor_thunk)
+static mc_t mu_xor_thunk(mu_t *frame) {
+    if (!frame[1]) frame[0] = mu_not(frame[0]);
+    else           frame[0] = mu_xor(frame[0], frame[1]);
+    return 1;
+}
+
+mu_t mu_not(mu_t a) {
+    switch (mu_type(a)) {
+        case MTNUM:     return num_not(a);
+        default:        mu_error_op1(MU_XOR_KEY, a);
+    }
 }
 
 mu_t mu_xor(mu_t a, mu_t b) {
     if (mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
-            case MU_NUM:    return num_xor(a, b);
-            case MU_TBL:
-            case MU_RTBL:   return tbl_xor(a, b);
+            case MTNUM:     return num_xor(a, b);
+            case MTTBL:
+            case MTRTBL:    return tbl_xor(a, b);
             default:        break;
         }
     }
 
-    mu_error_op2("~", a, b);
+    mu_error_op2(MU_XOR_KEY, a, b);
+}
+
+static mc_t mu_diff_thunk(mu_t *frame);
+MSTR(mu_diff_key, "&~")
+MBFN(mu_diff_bfn, 0x2, mu_diff_thunk)
+static mc_t mu_diff_thunk(mu_t *frame) {
+    frame[0] = mu_diff(frame[0], frame[1]);
+    return 1;
 }
 
 mu_t mu_diff(mu_t a, mu_t b) {
     if (mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
-            case MU_NUM:    return num_xor(a, num_not(b));
-            case MU_TBL:
-            case MU_RTBL:   return tbl_diff(a, b);
+            case MTNUM:     return num_xor(a, num_not(b));
+            case MTTBL:
+            case MTRTBL:    return tbl_diff(a, b);
             default:        break;
         }
     }
 
-    mu_error_op2("&~", a, b);
+    mu_error_op2(MU_DIFF_KEY, a, b);
+}
+
+static mc_t mu_shl_thunk(mu_t *frame);
+MSTR(mu_shl_key, "<<")
+MBFN(mu_shl_bfn, 0x2, mu_shl_thunk)
+static mc_t mu_shl_thunk(mu_t *frame) {
+    frame[0] = mu_shl(frame[0], frame[1]);
+    return 1;
 }
 
 mu_t mu_shl(mu_t a, mu_t b) {
     if (mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
-            case MU_NUM:    return num_shl(a, b);
+            case MTNUM:     return num_shl(a, b);
             default:        break; 
         }
     }
 
-    mu_error_op2("<<", a, b);
+    mu_error_op2(MU_SHL_KEY, a, b);
+}
+
+static mc_t mu_shr_thunk(mu_t *frame);
+MSTR(mu_shr_key, ">>")
+MBFN(mu_shr_bfn, 0x2, mu_shr_thunk)
+static mc_t mu_shr_thunk(mu_t *frame) {
+    frame[0] = mu_shr(frame[0], frame[1]);
+    return 1;
 }
 
 mu_t mu_shr(mu_t a, mu_t b) {
     if (mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
-            case MU_NUM:    return num_shr(a, b);
+            case MTNUM:     return num_shr(a, b);
             default:        break;
         }
     }
 
-    mu_error_op2(">>", a, b);
+    mu_error_op2(MU_SHR_KEY, a, b);
 }
 
+
 // String representation
+static mc_t mu_parse_thunk(mu_t *frame);
+MSTR(mu_parse_key, "parse")
+MBFN(mu_parse_bfn, 0x1, mu_parse_thunk)
+static mc_t mu_parse_thunk(mu_t *frame) {
+    frame[0] = mu_parse(frame[0]);
+    return 1;
+}
+
+static mc_t mu_repr_thunk(mu_t *frame);
+MSTR(mu_repr_key, "repr")
+MBFN(mu_repr_bfn, 0x3, mu_repr_thunk)
+static mc_t mu_repr_thunk(mu_t *frame) {
+    frame[0] = mu_dump(frame[0], frame[1], frame[2]);
+    return 1;
+}
+
 mu_t mu_addr(mu_t m) {
     mbyte_t *s = mstr_create(8 + 2*sizeof(muint_t));
     muint_t len = 0;
     mstr_insert(&s, &len, '<');
 
     switch (mu_type(m)) {
-        case MU_NIL:    mstr_zcat(&s, &len, "nil");     break;
-        case MU_NUM:    mstr_zcat(&s, &len, "num");     break;
-        case MU_STR:    mstr_zcat(&s, &len, "str");     break;
-        case MU_TBL:
-        case MU_RTBL:   mstr_zcat(&s, &len, "tbl");     break;
-        case MU_FN:
-        case MU_BFN:
-        case MU_SFN:    mstr_zcat(&s, &len, "fn");      break;
+        case MTNIL:     mstr_concat(&s, &len, MU_KW_NIL);   break;
+        case MTNUM:     mstr_concat(&s, &len, MU_NUM_KEY);  break;
+        case MTSTR:     mstr_concat(&s, &len, MU_STR_KEY);  break;
+        case MTTBL:
+        case MTRTBL:    mstr_concat(&s, &len, MU_TBL_KEY);  break;
+        case MTFN:
+        case MTBFN:
+        case MTSBFN:    mstr_concat(&s, &len, MU_KW_FN);    break;
         default:        mu_unreachable;
     }
 
@@ -571,211 +895,396 @@ mu_t mu_addr(mu_t m) {
 }
 
 mu_t mu_repr(mu_t m) {
-    return mu_dump(m, mnil, mnil);
+    return mu_dump(m, 0, 0);
 }
 
 mu_t mu_dump(mu_t m, mu_t indent, mu_t depth) {
     if ((indent && !mu_isnum(indent)) || (depth && !mu_isnum(depth)))
-        mu_error_arg3("repr", m, indent, depth);
+        mu_error_arg3(MU_REPR_KEY, m, indent, depth);
 
     switch (mu_type(m)) {
-        case MU_NIL:    return mcstr("nil");
-        case MU_NUM:    return num_repr(m);
-        case MU_STR:    return str_repr(m);
-        case MU_TBL:
-        case MU_RTBL:   return tbl_dump(m, indent, depth);
-        case MU_FN:
-        case MU_BFN:
-        case MU_SFN:    return mu_addr(m);
+        case MTNIL:     return MU_KW_NIL;
+        case MTNUM:     return num_repr(m);
+        case MTSTR:     return str_repr(m);
+        case MTTBL:
+        case MTRTBL:    return tbl_dump(m, indent, depth);
+        case MTFN:
+        case MTBFN:
+        case MTSBFN:    return mu_addr(m);
         default:        mu_unreachable;
     }
 }
 
+static mc_t mu_bin_thunk(mu_t *frame);
+MSTR(mu_bin_key, "bin")
+MBFN(mu_bin_bfn, 0x1, mu_bin_thunk)
+static mc_t mu_bin_thunk(mu_t *frame) {
+    frame[0] = mu_bin(frame[0]);
+    return 1;
+}
 mu_t mu_bin(mu_t m) {
     switch (mu_type(m)) {
-        case MU_NUM:    return num_bin(m);
-        case MU_STR:    return str_bin(m);
-        default:        mu_error_arg1("bin", m);
+        case MTNUM:     return num_bin(m);
+        case MTSTR:     return str_bin(m);
+        default:        mu_error_arg1(MU_BIN_KEY, m);
     }
+}
+
+static mc_t mu_oct_thunk(mu_t *frame);
+MSTR(mu_oct_key, "oct")
+MBFN(mu_oct_bfn, 0x1, mu_oct_thunk)
+static mc_t mu_oct_thunk(mu_t *frame) {
+    frame[0] = mu_oct(frame[0]);
+    return 1;
 }
 
 mu_t mu_oct(mu_t m) {
     switch (mu_type(m)) {
-        case MU_NUM:    return num_oct(m);
-        case MU_STR:    return str_oct(m);
-        default:        mu_error_arg1("oct", m);
+        case MTNUM:     return num_oct(m);
+        case MTSTR:     return str_oct(m);
+        default:        mu_error_arg1(MU_OCT_KEY, m);
     }
+}
+
+static mc_t mu_hex_thunk(mu_t *frame);
+MSTR(mu_hex_key, "hex")
+MBFN(mu_hex_bfn, 0x1, mu_hex_thunk)
+static mc_t mu_hex_thunk(mu_t *frame) {
+    frame[0] = mu_hex(frame[0]);
+    return 1;
 }
 
 mu_t mu_hex(mu_t m) {
     switch (mu_type(m)) {
-        case MU_NUM:    return num_hex(m);
-        case MU_STR:    return str_hex(m);
-        default:        mu_error_arg1("hex", m);
+        case MTNUM:     return num_hex(m);
+        case MTSTR:     return str_hex(m);
+        default:        mu_error_arg1(MU_HEX_KEY, m);
     }
 }
 
+
 // Data structure operations
 // These do not consume their first argument
+static mc_t mu_len_thunk(mu_t *frame);
+MSTR(mu_len_key, "len")
+MBFN(mu_len_bfn, 0x1, mu_len_thunk)
+static mc_t mu_len_thunk(mu_t *frame) {
+    mlen_t len = mu_len(frame[0]);
+    mu_dec(frame[0]);
+    frame[0] = muint(len);
+    return 1;
+}
+
 mlen_t mu_len(mu_t m) {
     switch (mu_type(m)) {
-        case MU_STR:    return str_len(m);
-        case MU_TBL:    
-        case MU_RTBL:   return tbl_len(m);
-        default:        mu_error_arg1("len", m);
+        case MTSTR:     return str_len(m);
+        case MTTBL:     
+        case MTRTBL:    return tbl_len(m);
+        default:        mu_error_arg1(MU_LEN_KEY, m);
     }
+}
+
+static mc_t mu_tail_thunk(mu_t *frame);
+MSTR(mu_tail_key, "tail")
+MBFN(mu_tail_bfn, 0x1, mu_tail_thunk)
+static mc_t mu_tail_thunk(mu_t *frame) {
+    mu_t tail = mu_tail(frame[0]);
+    mu_dec(frame[0]);
+    frame[0] = tail;
+    return 1;
 }
 
 mu_t mu_tail(mu_t m) {
     switch (mu_type(m)) {
-        case MU_TBL:
-        case MU_RTBL:   return tbl_tail(m);
-        default:        mu_error_arg1("tail", m);
+        case MTTBL:
+        case MTRTBL:    return tbl_tail(m);
+        default:        mu_error_arg1(MU_TAIL_KEY, m);
     }
+}
+
+static mc_t mu_const_thunk(mu_t *frame);
+MSTR(mu_const_key, "const")
+MBFN(mu_const_bfn, 0x1, mu_const_thunk)
+static mc_t mu_const_thunk(mu_t *frame) {
+    frame[0] = mu_const(frame[0]);
+    return 1;
+}
+
+mu_t mu_const(mu_t m) {
+    switch (mu_type(m)) {
+        case MTTBL:     return tbl_const(m);
+        default:        return m;
+    }
+}
+
+static mc_t mu_push_thunk(mu_t *frame);
+MSTR(mu_push_key, "push")
+MBFN(mu_push_bfn, 0x3, mu_push_thunk)
+static mc_t mu_push_thunk(mu_t *frame) {
+    mu_push(frame[0], frame[1], frame[2]);
+    mu_dec(frame[0]);
+    return 0;
 }
 
 void mu_push(mu_t m, mu_t v, mu_t i) {
     if (!i || mu_isnum(i)) {
         switch (mu_type(m)) {
-            case MU_TBL:
-            case MU_RTBL:   return tbl_push(m, v, i);
+            case MTTBL:
+            case MTRTBL:    return tbl_push(m, v, i);
             default:        break;
         }
     }
 
-    mu_error_arg3("push", m, v, i);
+    mu_error_arg3(MU_PUSH_KEY, m, v, i);
+}
+
+static mc_t mu_pop_thunk(mu_t *frame);
+MSTR(mu_pop_key, "pop")
+MBFN(mu_pop_bfn, 0x2, mu_pop_thunk)
+static mc_t mu_pop_thunk(mu_t *frame) {
+    mu_t v = mu_pop(frame[0], frame[1]);
+    mu_dec(frame[0]);
+    frame[0] = v;
+    return 1;
 }
 
 mu_t mu_pop(mu_t m, mu_t i) {
     if (!i || mu_isnum(i)) {
         switch (mu_type(m)) {
-            case MU_TBL:
-            case MU_RTBL:   return tbl_pop(m, i);
+            case MTTBL:
+            case MTRTBL:    return tbl_pop(m, i);
             default:        break;
         }
     }
 
-    mu_error_arg2("pop", m, i);
+    mu_error_arg2(MU_POP_KEY, m, i);
 }
 
-mu_t mu_const(mu_t m) {
-    switch (mu_type(m)) {
-        case MU_TBL:    return tbl_const(m);
-        default:        return m;
-    }
+static mc_t mu_concat_thunk(mu_t *frame);
+MSTR(mu_concat_key, "++")
+MBFN(mu_concat_bfn, 0x3, mu_concat_thunk)
+static mc_t mu_concat_thunk(mu_t *frame) {
+    frame[0] = mu_concat(frame[0], frame[1], frame[2]);
+    return 1;
 }
-
 
 mu_t mu_concat(mu_t a, mu_t b, mu_t offset) {
     if (offset && !mu_isnum(offset))
-        mu_error_arg3("concat", a, b, offset);
+        mu_error_arg3(MU_CONCAT_KEY, a, b, offset);
 
     if (mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
-            case MU_STR:    return str_concat(a, b);
-            case MU_TBL:
-            case MU_RTBL:   return tbl_concat(a, b, offset);
+            case MTSTR:     return str_concat(a, b);
+            case MTTBL:
+            case MTRTBL:    return tbl_concat(a, b, offset);
             default:        break;
         }
     }
 
-    mu_error_op2("++", a, b);
+    mu_error_op2(MU_CONCAT_KEY, a, b);
+}
+
+static mc_t mu_subset_thunk(mu_t *frame);
+MSTR(mu_subset_key, "sub")
+MBFN(mu_subset_bfn, 0x3, mu_subset_thunk)
+static mc_t mu_subset_thunk(mu_t *frame) {
+    frame[0] = mu_subset(frame[0], frame[1], frame[2]);
+    return 1;
 }
 
 mu_t mu_subset(mu_t m, mu_t lower, mu_t upper) {
     if (mu_isnum(lower) && (!upper || mu_isnum(upper))) {
         switch (mu_type(m)) {
-            case MU_STR:    return str_subset(m, lower, upper);
-            case MU_TBL:    
-            case MU_RTBL:   return tbl_subset(m, lower, upper);
+            case MTSTR:     return str_subset(m, lower, upper);
+            case MTTBL:     
+            case MTRTBL:    return tbl_subset(m, lower, upper);
             default:        break;
         }
     }
 
-    mu_error_arg3("sub", m, lower, upper);
+    mu_error_arg3(MU_SUBSET_KEY, m, lower, upper);
 }
 
+
 // String operations
+static mc_t mu_find_thunk(mu_t *frame);
+MSTR(mu_find_key, "find")
+MBFN(mu_find_bfn, 0x2, mu_find_thunk)
+static mc_t mu_find_thunk(mu_t *frame) {
+    frame[0] = mu_find(frame[0], frame[1]);
+    return 1;
+}
+
 mu_t mu_find(mu_t m, mu_t sub) {
     if (mu_isstr(sub)) {
         switch (mu_type(m)) {
-            case MU_STR:    return str_find(m, sub);
+            case MTSTR:     return str_find(m, sub);
             default:        break;
         }
     }
 
-    mu_error_arg2("find", m, sub);
+    mu_error_arg2(MU_FIND_KEY, m, sub);
+}
+
+static mc_t mu_replace_thunk(mu_t *frame);
+MSTR(mu_replace_key, "replace")
+MBFN(mu_replace_bfn, 0x4, mu_replace_thunk)
+static mc_t mu_replace_thunk(mu_t *frame) {
+    frame[0] = mu_replace(frame[0], frame[1], frame[2], frame[3]);
+    return 1;
 }
 
 mu_t mu_replace(mu_t m, mu_t sub, mu_t rep, mu_t max) {
     if (mu_isstr(sub) && mu_isstr(rep) && (!max || mu_isnum(max))) {
         switch (mu_type(m)) {
-            case MU_STR:    return str_replace(m, sub, rep, max);
+            case MTSTR:     return str_replace(m, sub, rep, max);
             default:        break;
         }
     }
 
-    mu_error_arg4("replace", m, sub, rep, max);
+    mu_error_arg4(MU_REPLACE_KEY, m, sub, rep, max);
+}
+
+static mc_t mu_split_thunk(mu_t *frame);
+MSTR(mu_split_key, "split")
+MBFN(mu_split_bfn, 0x2, mu_split_thunk)
+static mc_t mu_split_thunk(mu_t *frame) {
+    frame[0] = mu_split(frame[0], frame[1]);
+    return 1;
 }
 
 mu_t mu_split(mu_t m, mu_t delim) {
     if (!delim || mu_isstr(delim)) {
         switch (mu_type(m)) {
-            case MU_STR:    return str_split(m, delim);
+            case MTSTR:     return str_split(m, delim);
             default:        break;
         }
     }
 
-    mu_error_arg2("split", m, delim);
+    mu_error_arg2(MU_SPLIT_KEY, m, delim);
+}
+
+static mc_t mu_join_thunk(mu_t *frame);
+MSTR(mu_join_key, "join")
+MBFN(mu_join_bfn, 0x2, mu_join_thunk)
+static mc_t mu_join_thunk(mu_t *frame) {
+    frame[0] = mu_join(frame[0], frame[1]);
+    return 1;
 }
 
 mu_t mu_join(mu_t m, mu_t delim) {
     if (!delim || mu_isstr(delim))
         return str_join(mu_iter(m), delim);
 
-    mu_error_arg2("join", m, delim);
+    mu_error_arg2(MU_JOIN_KEY, m, delim);
+}
+
+static mc_t mu_pad_thunk(mu_t *frame);
+MSTR(mu_pad_key, "pad")
+MBFN(mu_pad_bfn, 0x3, mu_pad_thunk)
+static mc_t mu_pad_thunk(mu_t *frame) {
+    frame[0] = mu_pad(frame[0], frame[1], frame[2]);
+    return 1;
 }
 
 mu_t mu_pad(mu_t m, mu_t len, mu_t pad) {
     if (mu_isnum(len) && 
         (!pad || (mu_isstr(pad) && str_len(pad) > 0))) {
         switch (mu_type(m)) {
-            case MU_STR:    return str_pad(m, len, pad);
+            case MTSTR:     return str_pad(m, len, pad);
             default:        break;
         }
     }
 
-    mu_error_arg3("pad", m, len, pad);
+    mu_error_arg3(MU_PAD_KEY, m, len, pad);
+}
+
+static mc_t mu_strip_thunk(mu_t *frame);
+MSTR(mu_strip_key, "strip")
+MBFN(mu_strip_bfn, 0x3, mu_strip_thunk)
+static mc_t mu_strip_thunk(mu_t *frame) {
+    if (mu_isstr(frame[1])) {
+        mu_dec(frame[2]);
+        frame[2] = frame[1];
+        frame[1] = 0;
+    }
+
+    frame[0] = mu_strip(frame[0], frame[1], frame[2]);
+    return 1;
 }
 
 mu_t mu_strip(mu_t m, mu_t dir, mu_t pad) {
     if ((!dir || mu_isnum(dir)) && 
         (!pad || (mu_isstr(pad) && str_len(pad) > 0))) {
         switch (mu_type(m)) {
-            case MU_STR:    return str_strip(m, dir, pad);
+            case MTSTR:     return str_strip(m, dir, pad);
             default:        break;
         }
     }
 
-    mu_error_arg3("strip", m, dir, pad);
+    mu_error_arg3(MU_STRIP_KEY, m, dir, pad);
 }
 
+
 // Function operations
+static mc_t mu_bind_thunk(mu_t *frame);
+MSTR(mu_bind_key, "bind")
+MBFN(mu_bind_bfn, 0xf, mu_bind_thunk)
+static mc_t mu_bind_thunk(mu_t *frame) {
+    mu_t m = tbl_pop(frame[0], muint(0));
+    frame[0] = mu_bind(m, frame[0]);
+    return 1;
+}
+
 mu_t mu_bind(mu_t m, mu_t args) {
     mu_assert(mu_istbl(args));
     return fn_bind(m, args);
+}
+
+static mc_t mu_comp_thunk(mu_t *frame);
+MSTR(mu_comp_key, "comp")
+MBFN(mu_comp_bfn, 0xf, mu_comp_thunk)
+static mc_t mu_comp_thunk(mu_t *frame) {
+    frame[0] = mu_comp(frame[0]);
+    return 1;
 }
 
 mu_t mu_comp(mu_t ms) {
     return fn_comp(ms);
 }
 
+static mc_t mu_map_thunk(mu_t *frame);
+MSTR(mu_map_key, "map")
+MBFN(mu_map_bfn, 0x2, mu_map_thunk)
+static mc_t mu_map_thunk(mu_t *frame) {
+    frame[0] = mu_map(frame[0], frame[1]);
+    return 1;
+}
+
 mu_t mu_map(mu_t m, mu_t iter) {
     return fn_map(m, mu_iter(iter));
 }
 
+static mc_t mu_filter_thunk(mu_t *frame);
+MSTR(mu_filter_key, "filter")
+MBFN(mu_filter_bfn, 0x2, mu_filter_thunk)
+static mc_t mu_filter_thunk(mu_t *frame) {
+    frame[0] = mu_filter(frame[0], frame[1]);
+    return 1;
+}
+
 mu_t mu_filter(mu_t m, mu_t iter) {
     return fn_filter(m, mu_iter(iter));
+}
+
+static mc_t mu_reduce_thunk(mu_t *frame);
+MSTR(mu_reduce_key, "reduce")
+MBFN(mu_reduce_bfn, 0xf, mu_reduce_thunk)
+static mc_t mu_reduce_thunk(mu_t *frame) {
+    mu_t f = tbl_pop(frame[0], muint(0));
+    mu_t i = tbl_pop(frame[0], muint(0));
+    frame[0] = mu_reduce(f, i, frame[0]);
+    return 0xf;
 }
 
 mu_t mu_reduce(mu_t m, mu_t iter, mu_t inits) {
@@ -783,37 +1292,83 @@ mu_t mu_reduce(mu_t m, mu_t iter, mu_t inits) {
     return fn_reduce(m, mu_iter(iter), inits);
 }
 
+static mc_t mu_any_thunk(mu_t *frame);
+MSTR(mu_any_key, "any")
+MBFN(mu_any_bfn, 0x2, mu_any_thunk)
+static mc_t mu_any_thunk(mu_t *frame) {
+    frame[0] = mu_any(frame[0], frame[1]) ? MU_TRUE : MU_FALSE;
+    return 1;
+}
+
 bool mu_any(mu_t m, mu_t iter) {
     return fn_any(m, mu_iter(iter));
+}
+
+static mc_t mu_all_thunk(mu_t *frame);
+MSTR(mu_all_key, "all")
+MBFN(mu_all_bfn, 0x2, mu_all_thunk)
+static mc_t mu_all_thunk(mu_t *frame) {
+    frame[0] = mu_all(frame[0], frame[1]) ? MU_TRUE : MU_FALSE;
+    return 1;
 }
 
 bool mu_all(mu_t m, mu_t iter) {
     return fn_all(m, mu_iter(iter));
 }
 
+
 // Iterators and generators
+static mc_t mu_iter_thunk(mu_t *frame);
+MSTR(mu_iter_key, "iter")
+MBFN(mu_iter_bfn, 0x1, mu_iter_thunk)
+static mc_t mu_iter_thunk(mu_t *frame) {
+    frame[0] = mu_iter(frame[0]);
+    return 1;
+}
+
 mu_t mu_iter(mu_t m) {
     switch (mu_type(m)) {
-        case MU_STR:    return str_iter(m);
-        case MU_TBL:
-        case MU_RTBL:   return tbl_iter(m);
-        case MU_FN:
-        case MU_BFN:
-        case MU_SFN:    return m;
+        case MTSTR:     return str_iter(m);
+        case MTTBL:
+        case MTRTBL:    return tbl_iter(m);
+        case MTFN:
+        case MTBFN:
+        case MTSBFN:    return m;
         default:        break;
     }
 
-    mu_error_convert("iter", m);
+    mu_error_convert(MU_ITER_KEY, m);
+}
+
+static mc_t mu_pairs_thunk(mu_t *frame);
+MSTR(mu_pairs_key, "pairs")
+MBFN(mu_pairs_bfn, 0x1, mu_pairs_thunk)
+static mc_t mu_pairs_thunk(mu_t *frame) {
+    frame[0] = mu_pairs(frame[0]);
+    return 1;
 }
 
 mu_t mu_pairs(mu_t m) {
     switch (mu_type(m)) {
-        case MU_TBL:
-        case MU_RTBL:   return tbl_pairs(m);
-        default:        return mu_zip(mmlist({
-                            mu_range(mnil, mnil, mnil), mu_iter(m)
+        case MTTBL:
+        case MTRTBL:    return tbl_pairs(m);
+        default:        return mu_zip(mlist({
+                            mu_range(0, 0, 0), mu_iter(m)
                         }));
     }
+}
+
+static mc_t mu_range_thunk(mu_t *frame);
+MSTR(mu_range_key, "range")
+MBFN(mu_range_bfn, 0x3, mu_range_thunk)
+static mc_t mu_range_thunk(mu_t *frame) {
+    if (!frame[1]) {
+        frame[1] = frame[0];
+        frame[0] = 0;
+    }
+
+    frame[0] = mu_range(frame[0], frame[1], frame[2]);
+    return 1;
 }
 
 mu_t mu_range(mu_t start, mu_t stop, mu_t step) {
@@ -822,59 +1377,180 @@ mu_t mu_range(mu_t start, mu_t stop, mu_t step) {
         (!step || mu_isnum(step)))
         return fn_range(start, stop, step);
 
-    mu_error_arg3("range", start, stop, step);
+    mu_error_arg3(MU_RANGE_KEY, start, stop, step);
+}
+
+static mc_t mu_repeat_thunk(mu_t *frame);
+MSTR(mu_repeat_key, "repeat")
+MBFN(mu_repeat_bfn, 0x2, mu_repeat_thunk)
+static mc_t mu_repeat_thunk(mu_t *frame) {
+    frame[0] = mu_repeat(frame[0], frame[1]);
+    return 1;
 }
 
 mu_t mu_repeat(mu_t value, mu_t times) {
     if (!times || mu_isnum(times))
         return fn_repeat(value, times);
 
-    mu_error_arg2("repeat", value, times);
+    mu_error_arg2(MU_REPEAT_KEY, value, times);
 }
 
+static mc_t mu_seed_thunk(mu_t *frame);
+MSTR(mu_seed_key, "seed")
+MBFN(mu_seed_bfn, 0x1, mu_seed_thunk)
+static mc_t mu_seed_thunk(mu_t *frame) {
+    frame[0] = mu_seed(frame[0]);
+    return 1;
+}
+
+mu_t mu_seed(mu_t m) {
+    if (mu_isnum(m))
+        return num_seed(m);
+
+    mu_error_arg1(MU_SEED_KEY, m);
+}
+
+
 // Iterator manipulation
+static mc_t mu_zip_thunk(mu_t *frame);
+MSTR(mu_zip_key, "zip")
+MBFN(mu_zip_bfn, 0xf, mu_zip_thunk)
+static mc_t mu_zip_thunk(mu_t *frame) {
+    if (tbl_len(frame[0]) == 0) {
+        mu_error(mcstr("no arguments passed to zip"));
+    } else if (tbl_len(frame[0]) == 1) {
+        mu_t iter = tbl_lookup(frame[0], muint(0));
+        mu_dec(frame[0]);
+        frame[0] = mu_zip(iter);
+    } else {
+        frame[0] = mu_zip(frame[0]);
+    }
+
+    return 1;
+}
+
 mu_t mu_zip(mu_t iters) {
     return fn_zip(mu_iter(iters));
+}
+
+static mc_t mu_chain_thunk(mu_t *frame);
+MSTR(mu_chain_key, "chain")
+MBFN(mu_chain_bfn, 0xf, mu_chain_thunk)
+static mc_t mu_chain_thunk(mu_t *frame) {
+    if (tbl_len(frame[0]) == 0) {
+        mu_error(mcstr("no arguments passed to chain"));
+    } else if (tbl_len(frame[0]) == 1) {
+        mu_t iter = tbl_lookup(frame[0], muint(0));
+        mu_dec(frame[0]);
+        frame[0] = mu_chain(iter);
+    } else {
+        frame[0] = mu_chain(frame[0]);
+    }
+
+    return 1;
 }
 
 mu_t mu_chain(mu_t iters) {
     return fn_chain(mu_iter(iters));
 }
 
+static mc_t mu_take_thunk(mu_t *frame);
+MSTR(mu_take_key, "take")
+MBFN(mu_take_bfn, 0x2, mu_take_thunk)
+static mc_t mu_take_thunk(mu_t *frame) {
+    frame[0] = mu_take(frame[0], frame[1]);
+    return 1;
+}
+
 mu_t mu_take(mu_t m, mu_t iter) {
     return fn_take(m, mu_iter(iter));
+}
+
+static mc_t mu_drop_thunk(mu_t *frame);
+MSTR(mu_drop_key, "drop")
+MBFN(mu_drop_bfn, 0x2, mu_drop_thunk)
+static mc_t mu_drop_thunk(mu_t *frame) {
+    frame[0] = mu_drop(frame[0], frame[1]);
+    return 1;
 }
 
 mu_t mu_drop(mu_t m, mu_t iter) {
     return fn_drop(m, mu_iter(iter));
 }
 
+
 // Iterator ordering
+static mc_t mu_min_thunk(mu_t *frame);
+MSTR(mu_min_key, "min")
+MBFN(mu_min_bfn, 0xf, mu_min_thunk)
+static mc_t mu_min_thunk(mu_t *frame) {
+    if (tbl_len(frame[0]) == 1) {
+        mu_t iter = tbl_lookup(frame[0], muint(0));
+        mu_dec(frame[0]);
+        frame[0] = mu_min(iter);
+    } else {
+        frame[0] = mu_min(frame[0]);
+    }
+
+    return 0xf;
+}
+
 mu_t mu_min(mu_t iter) {
     return fn_min(mu_iter(iter));
+}
+
+static mc_t mu_max_thunk(mu_t *frame);
+MSTR(mu_max_key, "max")
+MBFN(mu_max_bfn, 0xf, mu_max_thunk)
+static mc_t mu_max_thunk(mu_t *frame) {
+    if (tbl_len(frame[0]) == 1) {
+        mu_t iter = tbl_lookup(frame[0], muint(0));
+        mu_dec(frame[0]);
+        frame[0] = mu_max(iter);
+    } else {
+        frame[0] = mu_max(frame[0]);
+    }
+
+    return 0xf;
 }
 
 mu_t mu_max(mu_t iter) {
     return fn_max(mu_iter(iter));
 }
 
+static mc_t mu_reverse_thunk(mu_t *frame);
+MSTR(mu_reverse_key, "reverse")
+MBFN(mu_reverse_bfn, 0x1, mu_reverse_thunk)
+static mc_t mu_reverse_thunk(mu_t *frame) {
+    frame[0] = mu_reverse(frame[0]);
+    return 1;
+}
+
 mu_t mu_reverse(mu_t iter) {
     return fn_reverse(mu_iter(iter));
+}
+
+static mc_t mu_sort_thunk(mu_t *frame);
+MSTR(mu_sort_key, "sort")
+MBFN(mu_sort_bfn, 0x1, mu_sort_thunk)
+static mc_t mu_sort_thunk(mu_t *frame) {
+    frame[0] = mu_sort(frame[0]);
+    return 1;
 }
 
 mu_t mu_sort(mu_t iter) {
     return fn_sort(mu_iter(iter));
 }
 
-// Random number generation
-mu_t mu_seed(mu_t m) {
-    if (mu_isnum(m))
-        return num_seed(m);
-
-    mu_error_arg1("seed", m);
-}
 
 // System operations
+static mc_t mu_error_thunk(mu_t *frame);
+MSTR(mu_error_key, "error")
+MBFN(mu_error_bfn, 0xf, mu_error_thunk)
+static mc_t mu_error_thunk(mu_t *frame) {
+    mu_error(frame[0]);
+}
+
 mu_noreturn mu_error(mu_t message) {
     mu_assert(mu_isstr(message) || mu_istbl(message));
 
@@ -894,6 +1570,14 @@ mu_noreturn mu_error(mu_t message) {
 
         sys_error((const char *)m, len);
     }
+}
+
+static mc_t mu_print_thunk(mu_t *frame);
+MSTR(mu_print_key, "print")
+MBFN(mu_print_bfn, 0xf, mu_print_thunk)
+static mc_t mu_print_thunk(mu_t *frame) {
+    mu_print(frame[0]);
+    return 0;
 }
 
 void mu_print(mu_t message) {
@@ -920,13 +1604,19 @@ void mu_print(mu_t message) {
     }
 }
 
-
-static mu_t import_history = 0;
+static mc_t mu_import_thunk(mu_t *frame);
+MSTR(mu_import_key, "import")
+MBFN(mu_import_bfn, 0x1, mu_import_thunk)
+static mc_t mu_import_thunk(mu_t *frame) {
+    frame[0] = mu_import(frame[0]);
+    return 1;
+}
 
 mu_t mu_import(mu_t name) {
     if (!mu_isstr(name))
-        mu_error_arg1("import", name);
+        mu_error_arg1(MU_IMPORT_KEY, name);
 
+    static mu_t import_history = 0;
     if (!import_history)
         import_history = tbl_create(0);
 
@@ -942,603 +1632,135 @@ mu_t mu_import(mu_t name) {
 }
 
 
-// Builtin table bindings
-
-// Type casts
-static mc_t mb_num(mu_t *frame) {
-    frame[0] = mu_num(frame[0]);
-    return 1;
-}
-
-static mc_t mb_str(mu_t *frame) {
-    frame[0] = mu_str(frame[0]);
-    return 1;
-}
-
-static mc_t mb_tbl(mu_t *frame) {
-    frame[0] = mu_tbl(frame[0], frame[1]);
-    return 1;
-}
-
-static mc_t mb_fn(mu_t *frame) {
-    frame[0] = mu_fn(frame[0]);
-    return 1;
-}
-
-// Logic operations
-static mc_t mb_not(mu_t *frame) {
-    mu_dec(frame[0]);
-    frame[0] = !frame[0] ? muint(1) : mnil;
-    return 1;
-}
-
-static mc_t mb_equals(mu_t *frame) {
-    mu_dec(frame[0]);
-    mu_dec(frame[1]);
-    frame[0] = frame[0] == frame[1] ? muint(1) : mnil;
-    return 1;
-}
-
-static mc_t mb_not_equals(mu_t *frame) {
-    mu_dec(frame[0]);
-    mu_dec(frame[1]);
-    frame[0] = frame[0] != frame[1] ? muint(1) : mnil;
-    return 1;
-}
-
-static mc_t mb_is(mu_t *frame) {
-    mu_dec(frame[0]);
-    mu_dec(frame[1]);
-    frame[0] = mu_is(frame[0], frame[1]) ? muint(1) : mnil;
-    return 1;
-}
-
-static mc_t mb_lt(mu_t *frame) {
-    mint_t cmp = mu_cmp(frame[0], frame[1]);
-    mu_dec(frame[0]);
-    mu_dec(frame[1]);
-    frame[0] = cmp < 0 ? muint(1) : mnil;
-    return 1;
-}
-
-static mc_t mb_lte(mu_t *frame) {
-    mint_t cmp = mu_cmp(frame[0], frame[1]);
-    mu_dec(frame[0]);
-    mu_dec(frame[1]);
-    frame[0] = cmp <= 0 ? muint(1) : mnil;
-    return 1;
-}
-
-static mc_t mb_gt(mu_t *frame) {
-    mint_t cmp = mu_cmp(frame[0], frame[1]);
-    mu_dec(frame[0]);
-    mu_dec(frame[1]);
-    frame[0] = cmp > 0 ? muint(1) : mnil;
-    return 1;
-}
-
-static mc_t mb_gte(mu_t *frame) {
-    mint_t cmp = mu_cmp(frame[0], frame[1]);
-    mu_dec(frame[0]);
-    mu_dec(frame[1]);
-    frame[0] = cmp >= 0 ? muint(1) : mnil;
-    return 1;
-}
-
-// Arithmetic operations
-static mc_t mb_add(mu_t *frame) {
-    if (!frame[1]) frame[0] = mu_pos(frame[0]);
-    else           frame[0] = mu_add(frame[0], frame[1]);
-    return 1;
-}
-
-static mc_t mb_sub(mu_t *frame) {
-    if (!frame[1]) frame[0] = mu_neg(frame[0]);
-    else           frame[0] = mu_sub(frame[0], frame[1]);
-    return 1;
-}
-
-static mc_t mb_mul(mu_t *frame) {
-    frame[0] = mu_mul(frame[0], frame[1]);
-    return 1;
-}
-
-static mc_t mb_div(mu_t *frame) {
-    frame[0] = mu_div(frame[0], frame[1]);
-    return 1;
-}
-
-static mc_t mb_abs(mu_t *frame) {
-    frame[0] = mu_abs(frame[0]);
-    return 1;
-}
-
-static mc_t mb_floor(mu_t *frame) {
-    frame[0] = mu_floor(frame[0]);
-    return 1;
-}
-
-static mc_t mb_ceil(mu_t *frame) {
-    frame[0] = mu_ceil(frame[0]);
-    return 1;
-}
-
-static mc_t mb_idiv(mu_t *frame) {
-    frame[0] = mu_idiv(frame[0], frame[1]);
-    return 1;
-}
-
-static mc_t mb_mod(mu_t *frame) {
-    frame[0] = mu_mod(frame[0], frame[1]);
-    return 1;
-}
-
-static mc_t mb_pow(mu_t *frame) {
-    frame[0] = mu_pow(frame[0], frame[1]);
-    return 1;
-}
-
-static mc_t mb_log(mu_t *frame) {
-    frame[0] = mu_log(frame[0], frame[1]);
-    return 1;
-}
-
-static mc_t mb_cos(mu_t *frame) {
-    frame[0] = mu_cos(frame[0]);
-    return 1;
-}
-
-static mc_t mb_acos(mu_t *frame) {
-    frame[0] = mu_acos(frame[0]);
-    return 1;
-}
-
-static mc_t mb_sin(mu_t *frame) {
-    frame[0] = mu_sin(frame[0]);
-    return 1;
-}
-
-static mc_t mb_asin(mu_t *frame) {
-    frame[0] = mu_asin(frame[0]);
-    return 1;
-}
-
-static mc_t mb_tan(mu_t *frame) {
-    frame[0] = mu_tan(frame[0]);
-    return 1;
-}
-
-static mc_t mb_atan(mu_t *frame) {
-    frame[0] = mu_atan(frame[0], frame[1]);
-    return 1;
-}
-
-// Bitwise operations
-static mc_t mb_and(mu_t *frame) {
-    frame[0] = mu_and(frame[0], frame[1]);
-    return 1;
-}
-
-static mc_t mb_or(mu_t *frame) {
-    frame[0] = mu_or(frame[0], frame[1]);
-    return 1;
-}
-
-static mc_t mb_xor(mu_t *frame) {
-    if (!frame[1]) frame[0] = mu_not(frame[0]);
-    else           frame[0] = mu_xor(frame[0], frame[1]);
-    return 1;
-}
-
-static mc_t mb_diff(mu_t *frame) {
-    frame[0] = mu_diff(frame[0], frame[1]);
-    return 1;
-}
-
-static mc_t mb_shl(mu_t *frame) {
-    frame[0] = mu_shl(frame[0], frame[1]);
-    return 1;
-}
-
-static mc_t mb_shr(mu_t *frame) {
-    frame[0] = mu_shr(frame[0], frame[1]);
-    return 1;
-}
-
-// String representation
-static mc_t mb_parse(mu_t *frame) {
-    frame[0] = mu_parse(frame[0]);
-    return 1;
-}
-
-static mc_t mb_repr(mu_t *frame) {
-    frame[0] = mu_dump(frame[0], frame[1], frame[2]);
-    return 1;
-}
-
-static mc_t mb_bin(mu_t *frame) {
-    frame[0] = mu_bin(frame[0]);
-    return 1;
-}
-
-static mc_t mb_oct(mu_t *frame) {
-    frame[0] = mu_oct(frame[0]);
-    return 1;
-}
-
-static mc_t mb_hex(mu_t *frame) {
-    frame[0] = mu_hex(frame[0]);
-    return 1;
-}
-
-// Data struct operations
-static mc_t mb_len(mu_t *frame) {
-    mlen_t len = mu_len(frame[0]);
-    mu_dec(frame[0]);
-    frame[0] = muint(len);
-    return 1;
-}
-
-static mc_t mb_tail(mu_t *frame) {
-    mu_t tail = mu_tail(frame[0]);
-    mu_dec(frame[0]);
-    frame[0] = tail;
-    return 1;
-}
-
-static mc_t mb_const(mu_t *frame) {
-    frame[0] = mu_const(frame[0]);
-    return 1;
-}
-
-static mc_t mb_push(mu_t *frame) {
-    mu_push(frame[0], frame[1], frame[2]);
-    mu_dec(frame[0]);
-    return 0;
-}
-
-static mc_t mb_pop(mu_t *frame) {
-    mu_t v = mu_pop(frame[0], frame[1]);
-    mu_dec(frame[0]);
-    frame[0] = v;
-    return 1;
-}
-
-static mc_t mb_concat(mu_t *frame) {
-    frame[0] = mu_concat(frame[0], frame[1], frame[2]);
-    return 1;
-}
-
-static mc_t mb_subset(mu_t *frame) {
-    frame[0] = mu_subset(frame[0], frame[1], frame[2]);
-    return 1;
-}
-
-// String operations
-static mc_t mb_find(mu_t *frame) {
-    frame[0] = mu_find(frame[0], frame[1]);
-    return 1;
-}
-
-static mc_t mb_replace(mu_t *frame) {
-    frame[0] = mu_replace(frame[0], frame[1], frame[2], frame[3]);
-    return 1;
-}
-
-static mc_t mb_split(mu_t *frame) {
-    frame[0] = mu_split(frame[0], frame[1]);
-    return 1;
-}
-
-static mc_t mb_join(mu_t *frame) {
-    frame[0] = mu_join(frame[0], frame[1]);
-    return 1;
-}
-
-static mc_t mb_pad(mu_t *frame) {
-    frame[0] = mu_pad(frame[0], frame[1], frame[2]);
-    return 1;
-}
-
-static mc_t mb_strip(mu_t *frame) {
-    if (mu_isstr(frame[1])) {
-        mu_dec(frame[2]);
-        frame[2] = frame[1];
-        frame[1] = mnil;
-    }
-
-    frame[0] = mu_strip(frame[0], frame[1], frame[2]);
-    return 1;
-}
-        
-// Function operations
-static mc_t mb_bind(mu_t *frame) {
-    mu_t m = tbl_pop(frame[0], muint(0));
-    frame[0] = mu_bind(m, frame[0]);
-    return 1;
-}
-
-static mc_t mb_comp(mu_t *frame) {
-    frame[0] = mu_comp(frame[0]);
-    return 1;
-}
-
-static mc_t mb_map(mu_t *frame) {
-    frame[0] = mu_map(frame[0], frame[1]);
-    return 1;
-}
-
-static mc_t mb_filter(mu_t *frame) {
-    frame[0] = mu_filter(frame[0], frame[1]);
-    return 1;
-}
-
-static mc_t mb_reduce(mu_t *frame) {
-    mu_t f = tbl_pop(frame[0], muint(0));
-    mu_t i = tbl_pop(frame[0], muint(0));
-    frame[0] = mu_reduce(f, i, frame[0]);
-    return 0xf;
-}
-
-static mc_t mb_any(mu_t *frame) {
-    frame[0] = mu_any(frame[0], frame[1]) ? muint(1) : mnil;
-    return 1;
-}
-
-static mc_t mb_all(mu_t *frame) {
-    frame[0] = mu_all(frame[0], frame[1]) ? muint(1) : mnil;
-    return 1;
-}
-
-// Iterators and generators
-static mc_t mb_iter(mu_t *frame) {
-    frame[0] = mu_iter(frame[0]);
-    return 1;
-}
-
-static mc_t mb_pairs(mu_t *frame) {
-    frame[0] = mu_pairs(frame[0]);
-    return 1;
-}
-
-static mc_t mb_range(mu_t *frame) {
-    if (!frame[1]) {
-        frame[1] = frame[0];
-        frame[0] = mnil;
-    }
-
-    frame[0] = mu_range(frame[0], frame[1], frame[2]);
-    return 1;
-}
-
-static mc_t mb_repeat(mu_t *frame) {
-    frame[0] = mu_repeat(frame[0], frame[1]);
-    return 1;
-}
-
-// Iterator manipulation
-static mc_t mb_zip(mu_t *frame) {
-    if (tbl_len(frame[0]) == 0) {
-        mu_error(mcstr("no arguments passed to zip"));
-    } else if (tbl_len(frame[0]) == 1) {
-        mu_t iter = tbl_lookup(frame[0], muint(0));
-        mu_dec(frame[0]);
-        frame[0] = mu_zip(iter);
-    } else {
-        frame[0] = mu_zip(frame[0]);
-    }
-
-    return 1;
-}
-
-static mc_t mb_chain(mu_t *frame) {
-    if (tbl_len(frame[0]) == 0) {
-        mu_error(mcstr("no arguments passed to chain"));
-    } else if (tbl_len(frame[0]) == 1) {
-        mu_t iter = tbl_lookup(frame[0], muint(0));
-        mu_dec(frame[0]);
-        frame[0] = mu_chain(iter);
-    } else {
-        frame[0] = mu_chain(frame[0]);
-    }
-
-    return 1;
-}
-
-static mc_t mb_take(mu_t *frame) {
-    frame[0] = mu_take(frame[0], frame[1]);
-    return 1;
-}
-
-static mc_t mb_drop(mu_t *frame) {
-    frame[0] = mu_drop(frame[0], frame[1]);
-    return 1;
-}
-
-// Iterator ordering
-static mc_t mb_min(mu_t *frame) {
-    if (tbl_len(frame[0]) == 1) {
-        mu_t iter = tbl_lookup(frame[0], muint(0));
-        mu_dec(frame[0]);
-        frame[0] = mu_min(iter);
-    } else {
-        frame[0] = mu_min(frame[0]);
-    }
-
-    return 0xf;
-}
-
-static mc_t mb_max(mu_t *frame) {
-    if (tbl_len(frame[0]) == 1) {
-        mu_t iter = tbl_lookup(frame[0], muint(0));
-        mu_dec(frame[0]);
-        frame[0] = mu_max(iter);
-    } else {
-        frame[0] = mu_max(frame[0]);
-    }
-
-    return 0xf;
-}
-
-static mc_t mb_reverse(mu_t *frame) {
-    frame[0] = mu_reverse(frame[0]);
-    return 1;
-}
-
-static mc_t mb_sort(mu_t *frame) {
-    frame[0] = mu_sort(frame[0]);
-    return 1;
-}
-
-static mc_t mb_seed(mu_t *frame) {
-    frame[0] = mu_seed(frame[0]);
-    return 1;
-}
-
-static mc_t mb_error(mu_t *frame) {
-    mu_error(frame[0]);
-}
-
-static mc_t mb_print(mu_t *frame) {
-    mu_print(frame[0]);
-    return 0;
-}
-
-static mc_t mb_import(mu_t *frame) {
-    frame[0] = mu_import(frame[0]);
-    return 1;
-}
-
-
-// Types
-mu_pure mu_t mu_num_type(void) { return mcfn(0x1, mb_num); }
-mu_pure mu_t mu_str_type(void) { return mcfn(0x1, mb_str); }
-mu_pure mu_t mu_tbl_type(void) { return mcfn(0x2, mb_tbl); }
-mu_pure mu_t mu_fn_type(void)  { return mcfn(0x1, mb_fn); }
-
+// Constant keys
+MSTR(mu_nil_key,    "nil")
+MSTR(mu_true_key,   "true")
+MSTR(mu_false_key,  "false")
+MSTR(mu_inf_key,    "inf")
+MSTR(mu_ninf_key,   "ninf")
+MSTR(mu_e_key,      "e")
+MSTR(mu_pi_key,     "pi")
+MSTR(mu_id_key,     "id")
 
 // Builtins table
-mu_pure mu_t mu_builtins(void) {
-    return mctbl({
-        // Constants
-        { mcstr("true"),    muint(1) },
-        { mcstr("inf"),     MU_INF },
-        { mcstr("e"),       MU_E },
-        { mcstr("pi"),      MU_PI },
-        { mcstr("id"),      MU_ID },
+MTBL(mu_builtins, {
+    // Constants
+    { mu_true_key,      mu_true },
+    { mu_inf_key,       mu_inf },
+    { mu_e_key,         mu_e },
+    { mu_pi_key,        mu_pi },
+    { mu_id_key,        mu_id },
 
-        // Type casts
-        { mcstr("num"),     MU_NUM_TYPE },
-        { mcstr("str"),     MU_STR_TYPE },
-        { mcstr("tbl"),     MU_TBL_TYPE },
-        { mcstr("fn_"),     MU_FN_TYPE },
+    // Type casts
+    { mu_num_key,       mu_num_bfn },
+    { mu_str_key,       mu_str_bfn },
+    { mu_tbl_key,       mu_tbl_bfn },
+    { mu_fn_key,        mu_fn_bfn },
 
-        // Logic operations
-        { mcstr("!"),       mcfn(0x1, mb_not) },
-        { mcstr("=="),      mcfn(0x2, mb_equals) },
-        { mcstr("!="),      mcfn(0x2, mb_not_equals) },
-        { mcstr("is"),      mcfn(0x2, mb_is) },
-        { mcstr("<"),       mcfn(0x2, mb_lt) },
-        { mcstr("<="),      mcfn(0x2, mb_lte) },
-        { mcstr(">"),       mcfn(0x2, mb_gt) },
-        { mcstr(">="),      mcfn(0x2, mb_gte) },
+    // Logic operations
+    { mu_not_key,       mu_not_bfn },
+    { mu_eq_key,        mu_eq_bfn },
+    { mu_neq_key,       mu_neq_bfn },
+    { mu_is_key,        mu_is_bfn },
+    { mu_lt_key,        mu_lt_bfn },
+    { mu_lte_key,       mu_lte_bfn },
+    { mu_gt_key,        mu_gt_bfn },
+    { mu_gte_key,       mu_gte_bfn },
 
-        // Arithmetic operations
-        { mcstr("+"),       mcfn(0x2, mb_add) },
-        { mcstr("-"),       mcfn(0x2, mb_sub) },
-        { mcstr("*"),       mcfn(0x2, mb_mul) },
-        { mcstr("/"),       mcfn(0x2, mb_div) },
+    // Arithmetic operations
+    { mu_add_key,       mu_add_bfn },
+    { mu_sub_key,       mu_sub_bfn },
+    { mu_mul_key,       mu_mul_bfn },
+    { mu_div_key,       mu_div_bfn },
 
-        { mcstr("abs"),     mcfn(0x1, mb_abs) },
-        { mcstr("floor"),   mcfn(0x1, mb_floor) },
-        { mcstr("ceil"),    mcfn(0x1, mb_ceil) },
-        { mcstr("//"),      mcfn(0x2, mb_idiv) },
-        { mcstr("%"),       mcfn(0x2, mb_mod) },
+    { mu_abs_key,       mu_abs_bfn },
+    { mu_floor_key,     mu_floor_bfn },
+    { mu_ceil_key,      mu_ceil_bfn },
+    { mu_idiv_key,      mu_idiv_bfn },
+    { mu_mod_key,       mu_mod_bfn },
 
-        { mcstr("^"),       mcfn(0x2, mb_pow) },
-        { mcstr("log"),     mcfn(0x2, mb_log) },
+    { mu_pow_key,       mu_pow_bfn },
+    { mu_log_key,       mu_log_bfn },
 
-        { mcstr("cos"),     mcfn(0x1, mb_cos) },
-        { mcstr("acos"),    mcfn(0x1, mb_acos) },
-        { mcstr("sin"),     mcfn(0x1, mb_sin) },
-        { mcstr("asin"),    mcfn(0x1, mb_asin) },
-        { mcstr("tan"),     mcfn(0x1, mb_tan) },
-        { mcstr("atan"),    mcfn(0x2, mb_atan) },
+    { mu_cos_key,       mu_cos_bfn },
+    { mu_acos_key,      mu_acos_bfn },
+    { mu_sin_key,       mu_sin_bfn },
+    { mu_asin_key,      mu_asin_bfn },
+    { mu_tan_key,       mu_tan_bfn },
+    { mu_atan_key,      mu_atan_bfn },
 
-        // Bitwise/Set operations
-        { mcstr("&"),       mcfn(0x2, mb_and) },
-        { mcstr("|"),       mcfn(0x2, mb_or) },
-        { mcstr("~"),       mcfn(0x2, mb_xor) },
-        { mcstr("&~"),      mcfn(0x2, mb_diff) },
+    // Bitwise/Set operations
+    { mu_and_key,       mu_and_bfn },
+    { mu_or_key,        mu_or_bfn },
+    { mu_xor_key,       mu_xor_bfn },
+    { mu_diff_key,      mu_diff_bfn },
 
-        { mcstr("<<"),      mcfn(0x2, mb_shl) },
-        { mcstr(">>"),      mcfn(0x2, mb_shr) },
+    { mu_shl_key,       mu_shl_bfn },
+    { mu_shr_key,       mu_shr_bfn },
 
-        // String representation
-        { mcstr("parse"),   mcfn(0x1, mb_parse) },
-        { mcstr("repr"),    mcfn(0x3, mb_repr) },
+    // String representation
+    { mu_parse_key,     mu_parse_bfn },
+    { mu_repr_key,      mu_repr_bfn },
 
-        { mcstr("bin"),     mcfn(0x1, mb_bin) },
-        { mcstr("oct"),     mcfn(0x1, mb_oct) },
-        { mcstr("hex"),     mcfn(0x1, mb_hex) },
+    { mu_bin_key,       mu_bin_bfn },
+    { mu_oct_key,       mu_oct_bfn },
+    { mu_hex_key,       mu_hex_bfn },
 
-        // Data structure operations
-        { mcstr("len"),     mcfn(0x1, mb_len) },
-        { mcstr("tail"),    mcfn(0x1, mb_tail) },
-        { mcstr("const"),   mcfn(0x1, mb_const) },
+    // Data structure operations
+    { mu_len_key,       mu_len_bfn },
+    { mu_tail_key,      mu_tail_bfn },
+    { mu_const_key,     mu_const_bfn },
 
-        { mcstr("push"),    mcfn(0x3, mb_push) },
-        { mcstr("pop"),     mcfn(0x2, mb_pop) },
+    { mu_push_key,      mu_push_bfn },
+    { mu_pop_key,       mu_pop_bfn },
 
-        { mcstr("++"),      mcfn(0x3, mb_concat) },
-        { mcstr("sub"),     mcfn(0x3, mb_subset) },
+    { mu_concat_key,    mu_concat_bfn },
+    { mu_subset_key,    mu_subset_bfn },
 
-        // String operations
-        { mcstr("find"),    mcfn(0x2, mb_find) },
-        { mcstr("replace"), mcfn(0x4, mb_replace) },
-        { mcstr("split"),   mcfn(0x2, mb_split) },
-        { mcstr("join"),    mcfn(0x2, mb_join) },
-        { mcstr("pad"),     mcfn(0x3, mb_pad) },
-        { mcstr("strip"),   mcfn(0x3, mb_strip) },
+    // String operations
+    { mu_find_key,      mu_find_bfn },
+    { mu_replace_key,   mu_replace_bfn },
+    { mu_split_key,     mu_split_bfn },
+    { mu_join_key,      mu_join_bfn },
+    { mu_pad_key,       mu_pad_bfn },
+    { mu_strip_key,     mu_strip_bfn },
 
-        // Function operations
-        { mcstr("bind"),    mcfn(0xf, mb_bind) },
-        { mcstr("comp"),    mcfn(0xf, mb_comp) },
+    // Function operations
+    { mu_bind_key,      mu_bind_bfn },
+    { mu_comp_key,      mu_comp_bfn },
 
-        { mcstr("map"),     mcfn(0x2, mb_map) },
-        { mcstr("filter"),  mcfn(0x2, mb_filter) },
-        { mcstr("reduce"),  mcfn(0xf, mb_reduce) },
+    { mu_map_key,       mu_map_bfn },
+    { mu_filter_key,    mu_filter_bfn },
+    { mu_reduce_key,    mu_reduce_bfn },
 
-        { mcstr("any"),     mcfn(0x2, mb_any) },
-        { mcstr("all"),     mcfn(0x2, mb_all) },
+    { mu_any_key,       mu_any_bfn },
+    { mu_all_key,       mu_all_bfn },
 
-        // Iterators and generators
-        { mcstr("iter"),    mcfn(0x1, mb_iter) },
-        { mcstr("pairs"),   mcfn(0x1, mb_pairs) },
+    // Iterators and generators
+    { mu_iter_key,      mu_iter_bfn },
+    { mu_pairs_key,     mu_pairs_bfn },
 
-        { mcstr("range"),   mcfn(0x3, mb_range) },
-        { mcstr("repeat"),  mcfn(0x2, mb_repeat) },
+    { mu_range_key,     mu_range_bfn },
+    { mu_repeat_key,    mu_repeat_bfn },
+    { mu_seed_key,      mu_seed_bfn },
 
-        // Iterator manipulation
-        { mcstr("zip"),     mcfn(0xf, mb_zip) },
-        { mcstr("chain"),   mcfn(0xf, mb_chain) },
+    // Iterator manipulation
+    { mu_zip_key,       mu_zip_bfn },
+    { mu_chain_key,     mu_chain_bfn },
 
-        { mcstr("take"),    mcfn(0x2, mb_take) },
-        { mcstr("drop"),    mcfn(0x2, mb_drop) },
+    { mu_take_key,      mu_take_bfn },
+    { mu_drop_key,      mu_drop_bfn },
 
-        // Iterator ordering
-        { mcstr("min"),     mcfn(0xf, mb_min) },
-        { mcstr("max"),     mcfn(0xf, mb_max) },
+    // Iterator ordering
+    { mu_min_key,       mu_min_bfn },
+    { mu_max_key,       mu_max_bfn },
 
-        { mcstr("reverse"), mcfn(0x1, mb_reverse) },
-        { mcstr("sort"),    mcfn(0x1, mb_sort) },
+    { mu_reverse_key,   mu_reverse_bfn },
+    { mu_sort_key,      mu_sort_bfn },
 
-        // Random number generation
-        { mcstr("seed"),    mcfn(0x1, mb_seed) },
+    // System operations
+    { mu_error_key,     mu_error_bfn },
+    { mu_print_key,     mu_print_bfn },
+    { mu_import_key,    mu_import_bfn },
+})
 
-        // System operations
-        { mcstr("error"),   mcfn(0xf, mb_error) },
-        { mcstr("print"),   mcfn(0xf, mb_print) },
-        { mcstr("import"),  mcfn(0x1, mb_import) },
-    });
-}

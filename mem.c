@@ -14,6 +14,12 @@ extern void free(void *);
 #endif
 
 
+// Defined as constant since at this point Mu is
+// in fact out of memory
+#define MU_OOM mu_oom()
+MSTR(mu_oom, "out of memory")
+
+
 // Manual memory management
 // Currently just a wrapper over malloc and free
 // Garuntees 8 byte alignment
@@ -28,7 +34,7 @@ void *mu_alloc(muint_t size) {
     void *m = sys_alloc(size);
 
     if (m == 0)
-        mu_error(mcstr("out of memory"));
+        mu_error(MU_OOM);
 
     mu_assert(sizeof m == sizeof(muint_t)); // garuntee address width
     mu_assert((7 & (muint_t)m) == 0); // garuntee alignment

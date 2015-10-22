@@ -277,7 +277,7 @@ reenter:
                     // Use a direct goto to garuntee a tail call when the target
                     // is another mu function. Otherwise, we just try our hardest
                     // to get a tail call emitted.
-                    if (mu_type(scratch) == MU_FN) {
+                    if (mu_type(scratch) == MTFN) {
                         c = fn_code(scratch);
                         mu_fconvert(c->args, i(ins), frame);
                         scope = tbl_extend(c->scope, fn_closure(scratch));

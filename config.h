@@ -62,14 +62,11 @@ typedef muinth_t mlen_t;
 // Definition of pure functions
 #define mu_pure __attribute__((const))
 
+// Definition of constructor functions
+#define mu_constructor static __attribute__((constructor))
+
 // Definition of alignment for Mu types
 #define mu_aligned __attribute__((aligned(8)))
-
-// Builtin for thread specific variable
-#define mu_thread __thread
-
-// Builtin for a potentially unused variable
-#define mu_unused __attribute__((unused))
 
 // Determine offset of struct member
 #define mu_offset(x, m) __builtin_offsetof(x, m)
