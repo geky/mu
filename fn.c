@@ -318,7 +318,7 @@ static mc_t fn_repeat_step(mu_t scope, mu_t *frame) {
 }
 
 mu_t fn_repeat(mu_t m, mu_t times) {
-    mu_assert(mu_isnum(times) && (!times || mu_isnum(times)));
+    mu_assert(!times || mu_isnum(times));
 
     return msbfn(0x0, fn_repeat_step, mlist({
         m, 

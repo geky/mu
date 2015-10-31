@@ -62,6 +62,9 @@ typedef muinth_t mlen_t;
 // Definition of pure functions
 #define mu_pure __attribute__((const))
 
+// Definition of unused variables
+#define mu_unused __attribute__((unused))
+
 // Definition of constructor functions
 #define mu_constructor static __attribute__((constructor))
 
