@@ -225,34 +225,76 @@ void mu_dis(struct code *code) {
 
 
 // Virtual machine dispatch macros
+#define MU_COMPUTED_GOTO
+#ifdef MU_COMPUTED_GOTO
+#define VM_DISPATCH(pc)                         \
+    {   static void *const vm_entry[16] = {     \
+            [OP_IMM]    = &&VM_ENTRY_OP_IMM,    \
+            [OP_FN]     = &&VM_ENTRY_OP_FN,     \
+            [OP_TBL]    = &&VM_ENTRY_OP_TBL,    \
+            [OP_MOVE]   = &&VM_ENTRY_OP_MOVE,   \
+            [OP_DUP]    = &&VM_ENTRY_OP_DUP,    \
+            [OP_DROP]   = &&VM_ENTRY_OP_DROP,   \
+            [OP_LOOKUP] = &&VM_ENTRY_OP_LOOKUP, \
+            [OP_LOOKDN] = &&VM_ENTRY_OP_LOOKDN, \
+            [OP_INSERT] = &&VM_ENTRY_OP_INSERT, \
+            [OP_ASSIGN] = &&VM_ENTRY_OP_ASSIGN, \
+            [OP_JUMP]   = &&VM_ENTRY_OP_JUMP,   \
+            [OP_JTRUE]  = &&VM_ENTRY_OP_JTRUE,  \
+            [OP_JFALSE] = &&VM_ENTRY_OP_JFALSE, \
+            [OP_CALL]   = &&VM_ENTRY_OP_CALL,   \
+            [OP_TCALL]  = &&VM_ENTRY_OP_TCALL,  \
+            [OP_RET]    = &&VM_ENTRY_OP_RET,    \
+        };                                      \
+                                                \
+        while (1) {                             \
+            goto *vm_entry[*pc >> 4];
+#define VM_DISPATCH_END                         \
+        }                                       \
+        mu_unreachable;                         \
+    }
+
+#define VM_ENTRY(op)                            \
+    VM_ENTRY_##op: {
+#define VM_ENTRY_END                            \
+        goto *vm_entry[*pc >> 4];               \
+    }
+#else
 #define VM_DISPATCH(pc)             \
     {                               \
         while (1) {                 \
-            switch (*pc >> 4) {     \
-
+            switch (*pc >> 4) {
 #define VM_DISPATCH_END             \
             }                       \
         }                           \
         mu_unreachable;             \
     }
 
+#define VM_ENTRY(op)                \
+    case op: {
+#define VM_ENTRY_END                \
+        break;                      \
+    }
+#endif
+
+
 #define VM_ENTRY_D(op, d)                                       \
-    case op: {                                                  \
+    VM_ENTRY(op)                                                \
         mu_unused register unsigned d = 0xf & *pc++;
 
 #define VM_ENTRY_DA(op, d, a)                                   \
-    case op: {                                                  \
+    VM_ENTRY(op)                                                \
         mu_unused register unsigned d = 0xf & *pc++;            \
         mu_unused register unsigned a = *pc++;
 
 #define VM_ENTRY_DAB(op, d, a, b)                               \
-    case op: {                                                  \
+    VM_ENTRY(op)                                                \
         mu_unused register unsigned d = 0xf & *pc++;            \
         mu_unused register unsigned a = 0xf & *pc >> 4;         \
         mu_unused register unsigned b = 0xf & *pc++;
 
 #define VM_ENTRY_DI(op, d, i)                                   \
-    case op: {                                                  \
+    VM_ENTRY(op)                                                \
         mu_unused register unsigned d = 0xf & *pc++;            \
         mu_unused register muint_t i = 0;                       \
         do {                                                    \
@@ -260,16 +302,13 @@ void mu_dis(struct code *code) {
         } while (0x80 & *pc++);
 
 #define VM_ENTRY_DJ(op, d, j)                                   \
-    case op: {                                                  \
+    VM_ENTRY(op)                                                \
         mu_unused register unsigned d = 0xf & *pc++;            \
         mu_unused register mint_t j = (0x40 & *pc) ? -1 : 0;    \
         do {                                                    \
             j = (j << 7) | (0x7f & *pc);                        \
         } while (0x80 & *pc++);
 
-#define VM_ENTRY_END                                            \
-        break;                                                  \
-    }
 
 
 // Execute bytecode
