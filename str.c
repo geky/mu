@@ -14,15 +14,15 @@ MSTR(mu_space_str, " ")
 
 // Mutable string access
 mu_inline mu_t mstr(mbyte_t *s) {
-    return (mu_t)(s - mu_offset(struct str, data) + MTSTR);
+    return (mu_t)(s - sizeof(struct str) + MTSTR);
 }
 
-mu_inline const struct str *str(mu_t s) {
+mu_inline struct str *str(mu_t s) {
     return (struct str *)((muint_t)s - MTSTR);
 }
 
 mu_inline struct str *wstr(mbyte_t *s) {
-    return (struct str *)(s - mu_offset(struct str, data));
+    return (struct str *)(s - sizeof(struct str));
 }
 
 
@@ -61,7 +61,7 @@ static mint_t str_table_find(const mbyte_t *s, mlen_t len) {
         mint_t mid = (max + min) / 2;
         mint_t cmp = len > str(str_table[mid])->len ? +1 :
                      len < str(str_table[mid])->len ? -1 :
-                     memcmp(s, str(str_table[mid])->data, len);
+                     memcmp(s, str(str_table[mid])+1, len);
 
         if (cmp == 0) {
             return mid;
@@ -129,12 +129,12 @@ static mu_t str_intern(const mbyte_t *s, muint_t len) {
 }
 
 void str_destroy(mu_t s) {
-    mint_t i = str_table_find(str(s)->data, str(s)->len);
+    mint_t i = str_table_find((const mbyte_t *)(str(s)+1), str(s)->len);
 
     if (i >= 0)
         str_table_remove(i);
 
-    ref_dealloc(s, mu_offset(struct str, data) + str(s)->len);
+    ref_dealloc(s, sizeof(struct str) + str(s)->len);
 }
 
 
@@ -145,14 +145,13 @@ mbyte_t *mstr_create(muint_t len) {
     if (len > (mlen_t)-1)
         mu_error_length();
 
-    struct str *s = ref_alloc(mu_offset(struct str, data) + len);
+    struct str *s = ref_alloc(sizeof(struct str) + len);
     s->len = len;
-    return s->data;
+    return (mbyte_t *)(s+1);
 }
 
 void mstr_destroy(mbyte_t *b) {
-    ref_dealloc(b - mu_offset(struct str, data), 
-                mu_offset(struct str, data) + wstr(b)->len);
+    ref_dealloc(b - sizeof(struct str), sizeof(struct str) + wstr(b)->len);
 }
 
 mu_t mstr_intern(mbyte_t *b, muint_t len) {
@@ -196,15 +195,15 @@ void mstr_ncat(mbyte_t **b, muint_t *i, const mbyte_t *c, muint_t len) {
     muint_t nsize = *i + len;
 
     if (size < nsize) {
-        size += mu_offset(struct str, data);
+        size += sizeof(struct str);
 
         if (size < MU_MINALLOC)
             size = MU_MINALLOC;
 
-        while (size < nsize + mu_offset(struct str, data))
+        while (size < nsize + sizeof(struct str))
             size <<= 1;
 
-        size -= mu_offset(struct str, data);
+        size -= sizeof(struct str);
 
         if (len > (mlen_t)-1)
             mu_error_length();
@@ -220,9 +219,17 @@ void mstr_ncat(mbyte_t **b, muint_t *i, const mbyte_t *c, muint_t len) {
 }
 
 
-// Conversion operations
-mu_t str_fromnstr(const mbyte_t *s, muint_t len) {
-    return str_intern(s, len);
+// String creating functions
+mu_t str_init(const struct str *s) {
+    mu_t m = mstr_intern((mbyte_t *)(s + 1), s->len);
+    if (str(m)->ref)
+        str(m)->ref = 0;
+
+    return m;
+}
+
+mu_t str_fromnstr(const mbyte_t *s, muint_t n) {
+    return str_intern(s, n);
 }
 
 mu_t str_fromcstr(const char *s) {
@@ -230,7 +237,7 @@ mu_t str_fromcstr(const char *s) {
 }
 
 mu_t str_frombyte(mbyte_t c) {
-    return mnstr(&c, 1);
+    return str_intern(&c, 1);
 }
 
 mu_t str_fromnum(mu_t n) {
@@ -241,7 +248,7 @@ mu_t str_fromnum(mu_t n) {
 mu_t str_fromiter(mu_t iter) {
     return str_join(iter, MU_EMPTY_STR);
 }
-    
+
 
 // Comparison operation
 mint_t str_cmp(mu_t a, mu_t b) {

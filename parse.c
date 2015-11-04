@@ -651,7 +651,7 @@ static void encode_store(struct parse *p, struct expr *e,
 // Completing a parse and generating the final code object
 static struct code *compile(struct parse *p) {
     struct code *code = ref_alloc(
-        mu_offset(struct code, data) +
+        sizeof(struct code) +
         sizeof(mu_t)*tbl_len(p->imms) +
         sizeof(struct code *)*tbl_len(p->fns) +
         p->bcount);

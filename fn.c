@@ -55,12 +55,12 @@ void fn_destroy(mu_t f) {
 
 void code_destroy(struct code *c) {
     for (muint_t i = 0; i < c->icount; i++)
-        mu_dec(c->data[i].imms);
+        mu_dec(code_imms(c)[i]);
 
     for (muint_t i = 0; i < c->fcount; i++)
-        code_dec(c->data[c->icount+i].fns);
+        code_dec(code_fns(c)[i]);
 
-    ref_dealloc(c, mu_offset(struct code, data) +
+    ref_dealloc(c, sizeof(struct code) +
                    c->icount*sizeof(mu_t) +
                    c->fcount*sizeof(struct code *) +
                    c->bcount);

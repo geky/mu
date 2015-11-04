@@ -103,51 +103,53 @@ extern void tbl_destroy(mu_t);
 extern void fn_destroy(mu_t);
 
 void (*const mu_destroy_table[6])(mu_t) = {
-    tbl_destroy, tbl_destroy,
-    str_destroy, fn_destroy,
-    fn_destroy, fn_destroy,
+    [MTSTR-2]  = str_destroy,
+    [MTTBL-2]  = tbl_destroy,
+    [MTFN-2]   = fn_destroy,
+    [MTBFN-2]  = fn_destroy,
+    [MTSBFN-2] = fn_destroy,
 };
 
 
 // Table related functions performed on variables
 mu_t mu_lookup(mu_t m, mu_t k) {
-    switch (mu_type(m)) {
-        case MTTBL:
-        case MTRTBL:    return tbl_lookup(m, k);
-        default:        mu_error(mlist({
-                            mcstr("unable to lookup "),
-                            mu_repr(k),
-                            mcstr(" in "),
-                            mu_repr(m)}));
+    if (!mu_istbl(m)) {
+        mu_error(mlist({
+            mcstr("unable to lookup "),
+            mu_repr(k),
+            mcstr(" in "),
+            mu_repr(m)}));
     }
+
+    return tbl_lookup(m, k);
 }
 
 void mu_insert(mu_t m, mu_t k, mu_t v) {
-    switch (mu_type(m)) {
-        case MTTBL:
-        case MTRTBL:    return tbl_insert(m, k, v);
-        default:        mu_error(mlist({
-                            mcstr("unable to insert "),
-                            mu_repr(v),
-                            mcstr(" to "),
-                            mu_repr(k),
-                            mcstr(" in "),
-                            mu_repr(m)}));
+    if (!mu_istbl(m)) {
+        mu_error(mlist({
+            mcstr("unable to insert "),
+            mu_repr(v),
+            mcstr(" to "),
+            mu_repr(k),
+            mcstr(" in "),
+            mu_repr(m)}));
     }
+
+    return tbl_insert(m, k, v);
 }
 
 void mu_assign(mu_t m, mu_t k, mu_t v) {
-    switch (mu_type(m)) {
-        case MTTBL:
-        case MTRTBL:    return tbl_assign(m, k, v);
-        default:        mu_error(mlist({
-                            mcstr("unable to assign "),
-                            mu_repr(v),
-                            mcstr(" to "),
-                            mu_repr(k),
-                            mcstr(" in "),
-                            mu_repr(m)}));
+    if (!mu_istbl(m)) {
+        mu_error(mlist({
+            mcstr("unable to assign "),
+            mu_repr(v),
+            mcstr(" to "),
+            mu_repr(k),
+            mcstr(" in "),
+            mu_repr(m)}));
     }
+
+    return tbl_assign(m, k, v);
 }
 
 // Function calls performed on variables
@@ -232,7 +234,6 @@ mu_t mu_str(mu_t m) {
                         break;
         case MTSTR:     return m;
         case MTTBL:
-        case MTRTBL:
         case MTFN:
         case MTBFN:
         case MTSBFN:    return str_fromiter(mu_iter(m));
@@ -259,8 +260,7 @@ mu_t mu_tbl(mu_t m, mu_t tail) {
         case MTNIL:     t = tbl_create(0); break;
         case MTNUM:     t = tbl_fromnum(m); break;
         case MTSTR:     t = tbl_fromiter(mu_iter(m)); break;
-        case MTTBL:     
-        case MTRTBL:    t = tbl_fromiter(mu_pairs(m)); break;
+        case MTTBL:     t = tbl_fromiter(mu_pairs(m)); break;
         case MTFN:
         case MTBFN:
         case MTSBFN:    t = tbl_fromiter(m); break;
@@ -317,7 +317,6 @@ bool mu_is(mu_t a, mu_t type) {
         case MTNIL:     return !type;
         case MTNUM:     return type == MU_NUM_BFN;
         case MTSTR:     return type == MU_STR_BFN;
-        case MTRTBL:
         case MTTBL:     return type == MU_TBL_BFN;
         case MTFN:
         case MTBFN:
@@ -730,8 +729,7 @@ mu_t mu_and(mu_t a, mu_t b) {
     if (mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
             case MTNUM:     return num_and(a, b);
-            case MTTBL:
-            case MTRTBL:    return tbl_and(a, b);
+            case MTTBL:     return tbl_and(a, b);
             default:        break;
         }
     }
@@ -751,8 +749,7 @@ mu_t mu_or(mu_t a, mu_t b) {
     if (mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
             case MTNUM:     return num_or(a, b);
-            case MTTBL:
-            case MTRTBL:    return tbl_or(a, b);
+            case MTTBL:     return tbl_or(a, b);
             default:        break;
         }
     }
@@ -781,8 +778,7 @@ mu_t mu_xor(mu_t a, mu_t b) {
     if (mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
             case MTNUM:     return num_xor(a, b);
-            case MTTBL:
-            case MTRTBL:    return tbl_xor(a, b);
+            case MTTBL:     return tbl_xor(a, b);
             default:        break;
         }
     }
@@ -802,8 +798,7 @@ mu_t mu_diff(mu_t a, mu_t b) {
     if (mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
             case MTNUM:     return num_xor(a, num_not(b));
-            case MTTBL:
-            case MTRTBL:    return tbl_diff(a, b);
+            case MTTBL:     return tbl_diff(a, b);
             default:        break;
         }
     }
@@ -876,8 +871,7 @@ mu_t mu_addr(mu_t m) {
         case MTNIL:     mstr_concat(&s, &len, MU_KW_NIL);   break;
         case MTNUM:     mstr_concat(&s, &len, MU_NUM_KEY);  break;
         case MTSTR:     mstr_concat(&s, &len, MU_STR_KEY);  break;
-        case MTTBL:
-        case MTRTBL:    mstr_concat(&s, &len, MU_TBL_KEY);  break;
+        case MTTBL:     mstr_concat(&s, &len, MU_TBL_KEY);  break;
         case MTFN:
         case MTBFN:
         case MTSBFN:    mstr_concat(&s, &len, MU_KW_FN);    break;
@@ -906,8 +900,7 @@ mu_t mu_dump(mu_t m, mu_t indent, mu_t depth) {
         case MTNIL:     return MU_KW_NIL;
         case MTNUM:     return num_repr(m);
         case MTSTR:     return str_repr(m);
-        case MTTBL:
-        case MTRTBL:    return tbl_dump(m, indent, depth);
+        case MTTBL:     return tbl_dump(m, indent, depth);
         case MTFN:
         case MTBFN:
         case MTSBFN:    return mu_addr(m);
@@ -978,8 +971,7 @@ static mc_t mu_len_thunk(mu_t *frame) {
 mlen_t mu_len(mu_t m) {
     switch (mu_type(m)) {
         case MTSTR:     return str_len(m);
-        case MTTBL:     
-        case MTRTBL:    return tbl_len(m);
+        case MTTBL:     return tbl_len(m);
         default:        mu_error_arg1(MU_LEN_KEY, m);
     }
 }
@@ -996,24 +988,8 @@ static mc_t mu_tail_thunk(mu_t *frame) {
 
 mu_t mu_tail(mu_t m) {
     switch (mu_type(m)) {
-        case MTTBL:
-        case MTRTBL:    return tbl_tail(m);
+        case MTTBL:     return tbl_tail(m);
         default:        mu_error_arg1(MU_TAIL_KEY, m);
-    }
-}
-
-static mc_t mu_const_thunk(mu_t *frame);
-MSTR(mu_const_key, "const")
-MBFN(mu_const_bfn, 0x1, mu_const_thunk)
-static mc_t mu_const_thunk(mu_t *frame) {
-    frame[0] = mu_const(frame[0]);
-    return 1;
-}
-
-mu_t mu_const(mu_t m) {
-    switch (mu_type(m)) {
-        case MTTBL:     return tbl_const(m);
-        default:        return m;
     }
 }
 
@@ -1029,8 +1005,7 @@ static mc_t mu_push_thunk(mu_t *frame) {
 void mu_push(mu_t m, mu_t v, mu_t i) {
     if (!i || mu_isnum(i)) {
         switch (mu_type(m)) {
-            case MTTBL:
-            case MTRTBL:    return tbl_push(m, v, i);
+            case MTTBL:     return tbl_push(m, v, i);
             default:        break;
         }
     }
@@ -1051,8 +1026,7 @@ static mc_t mu_pop_thunk(mu_t *frame) {
 mu_t mu_pop(mu_t m, mu_t i) {
     if (!i || mu_isnum(i)) {
         switch (mu_type(m)) {
-            case MTTBL:
-            case MTRTBL:    return tbl_pop(m, i);
+            case MTTBL:     return tbl_pop(m, i);
             default:        break;
         }
     }
@@ -1075,8 +1049,7 @@ mu_t mu_concat(mu_t a, mu_t b, mu_t offset) {
     if (mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
             case MTSTR:     return str_concat(a, b);
-            case MTTBL:
-            case MTRTBL:    return tbl_concat(a, b, offset);
+            case MTTBL:     return tbl_concat(a, b, offset);
             default:        break;
         }
     }
@@ -1096,8 +1069,7 @@ mu_t mu_subset(mu_t m, mu_t lower, mu_t upper) {
     if (mu_isnum(lower) && (!upper || mu_isnum(upper))) {
         switch (mu_type(m)) {
             case MTSTR:     return str_subset(m, lower, upper);
-            case MTTBL:     
-            case MTRTBL:    return tbl_subset(m, lower, upper);
+            case MTTBL:     return tbl_subset(m, lower, upper);
             default:        break;
         }
     }
@@ -1329,8 +1301,7 @@ static mc_t mu_iter_thunk(mu_t *frame) {
 mu_t mu_iter(mu_t m) {
     switch (mu_type(m)) {
         case MTSTR:     return str_iter(m);
-        case MTTBL:
-        case MTRTBL:    return tbl_iter(m);
+        case MTTBL:     return tbl_iter(m);
         case MTFN:
         case MTBFN:
         case MTSBFN:    return m;
@@ -1350,8 +1321,7 @@ static mc_t mu_pairs_thunk(mu_t *frame) {
 
 mu_t mu_pairs(mu_t m) {
     switch (mu_type(m)) {
-        case MTTBL:
-        case MTRTBL:    return tbl_pairs(m);
+        case MTTBL:     return tbl_pairs(m);
         default:        return mu_zip(mlist({
                             mu_range(0, 0, 0), mu_iter(m)
                         }));
@@ -1709,7 +1679,6 @@ MTBL(mu_builtins, {
     // Data structure operations
     { mu_len_key,       mu_len_bfn },
     { mu_tail_key,      mu_tail_bfn },
-    { mu_const_key,     mu_const_bfn },
 
     { mu_push_key,      mu_push_bfn },
     { mu_pop_key,       mu_pop_bfn },

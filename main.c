@@ -119,7 +119,7 @@ static mlen_t prompt(mbyte_t *input) {
 }
 
 static void genscope() {
-    scope = mu_tbl(MU_BUILTINS, 0);
+    scope = tbl_extend(0, MU_BUILTINS);
 }
 
 static int genargs(int i, int argc, const char **argv) {

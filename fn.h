@@ -74,11 +74,10 @@ struct code {
     mlen_t fcount;  // number of code objects
     mlen_t bcount;  // number of bytecode instructions
 
-    union {               // data that follows code header
-        mu_t imms;        // immediate values
-        struct code *fns; // code objects
-        mbyte_t bcode;    // bytecode
-    } data[];
+    // data that follows code header
+    // immediate values
+    // nested code objects
+    // bytecode
 };
 
 // Code reference counting
@@ -95,15 +94,15 @@ mu_inline void code_dec(struct code *c) {
 
 // Code access functions
 mu_inline mu_t *code_imms(struct code *c) {
-    return &c->data[0].imms;
+    return (mu_t *)(c + 1);
 }
 
 mu_inline struct code **code_fns(struct code *c) {
-    return &c->data[c->icount].fns;
+    return (struct code **)((mu_t *)(c + 1) + c->icount);
 }
 
 mu_inline void *code_bcode(struct code *c) {
-    return (void *)&c->data[c->icount+c->fcount].bcode;
+    return (void *)((struct code **)((mu_t *)(c + 1) + c->icount) + c->fcount);
 }
 
 

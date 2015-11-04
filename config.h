@@ -52,6 +52,7 @@ typedef muinth_t mlen_t;
 #define MU_MALLOC
 //#define MU_DEBUG
 #define MU_COMPUTED_GOTO
+#define MU_CONSTRUCTOR
 
 
 // Definition of macro-like inlined functions
@@ -71,9 +72,6 @@ typedef muinth_t mlen_t;
 
 // Definition of alignment for Mu types
 #define mu_aligned __attribute__((aligned(8)))
-
-// Determine offset of struct member
-#define mu_offset(x, m) __builtin_offsetof(x, m)
 
 // Builtins for the likelyness of branches
 #define mu_likely(x) __builtin_expect((x) != 0, 1)

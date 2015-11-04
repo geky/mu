@@ -17,9 +17,8 @@
 enum mtype {
     MTNIL   = 0, // nil
     MTNUM   = 1, // number
-    MTSTR   = 4, // string
-    MTTBL   = 2, // table
-    MTRTBL  = 3, // readonly table
+    MTSTR   = 2, // string
+    MTTBL   = 4, // table
     MTFN    = 5, // function
     MTBFN   = 6, // builtin function
     MTSBFN  = 7, // scoped builtin function
@@ -39,11 +38,10 @@ mu_inline mref_t mu_ref(mu_t m) { return *(mref_t *)(~7 & (muint_t)m); }
 mu_inline bool mu_isnil(mu_t m) { return !m; }
 mu_inline bool mu_isnum(mu_t m) { return mu_type(m) == MTNUM; }
 mu_inline bool mu_isstr(mu_t m) { return mu_type(m) == MTSTR; }
-mu_inline bool mu_istbl(mu_t m) { return (6 & (muint_t)m) == MTTBL; }
+mu_inline bool mu_istbl(mu_t m) { return mu_type(m) == MTTBL; }
 mu_inline bool mu_isfn(mu_t m)  { return mu_type(m) >= MTFN;  }
 
 mu_inline bool mu_isref(mu_t m)   { return 6 & (muint_t)m; }
-mu_inline bool mu_isconst(mu_t m) { return mu_type(m) != MTTBL; }
 
 
 // Reference counting
@@ -192,8 +190,6 @@ void mu_push(mu_t m, mu_t v, mu_t i);
 mu_t mu_pop(mu_t m, mu_t i);
 
 // consume their target
-mu_t mu_const(mu_t m);
-
 mu_t mu_concat(mu_t a, mu_t b, mu_t offset);
 mu_t mu_subset(mu_t a, mu_t lower, mu_t upper);
 
@@ -433,10 +429,6 @@ mu_pure mu_t mu_len_bfn(void);
 #define MU_TAIL_BFN mu_tail_bfn()
 mu_pure mu_t mu_tail_key(void);
 mu_pure mu_t mu_tail_bfn(void);
-#define MU_CONST_KEY mu_const_key()
-#define MU_CONST_BFN mu_const_bfn()
-mu_pure mu_t mu_const_key(void);
-mu_pure mu_t mu_const_bfn(void);
 #define MU_PUSH_KEY mu_push_key()
 #define MU_PUSH_BFN mu_push_bfn()
 mu_pure mu_t mu_push_key(void);

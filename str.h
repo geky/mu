@@ -17,7 +17,7 @@ void mstr_ncat(mbyte_t **s, muint_t *i, const mbyte_t *c, muint_t len);
 void mstr_zcat(mbyte_t **s, muint_t *i, const char *c);
 
 // Conversion operations
-mu_t str_fromnstr(const mbyte_t *s, muint_t len);
+mu_t str_fromnstr(const mbyte_t *s, muint_t n);
 mu_t str_fromcstr(const char *s);
 mu_t str_frombyte(mbyte_t c);
 mu_t str_fromnum(mu_t n);
@@ -58,7 +58,8 @@ mu_t str_hex(mu_t s);
 struct str {
     mref_t ref;     // reference count
     mlen_t len;     // length of string
-    mbyte_t data[]; // string data
+
+    // data follows string header
 };
 
 
@@ -73,13 +74,13 @@ mu_inline mu_t mcstr(const char *s) {
 
 // Reference counting
 mu_inline mbyte_t *mstr_inc(mbyte_t *s) {
-    ref_inc(s - mu_offset(struct str, data));
+    ref_inc(s - sizeof(struct str));
     return s;
 }
 
 mu_inline void mstr_dec(mbyte_t *s) {
     extern void mstr_destroy(mbyte_t *);
-    if (ref_dec(s - mu_offset(struct str, data)))
+    if (ref_dec(s - sizeof(struct str)))
         mstr_destroy(s);
 }
 
@@ -102,45 +103,43 @@ mu_inline mlen_t str_len(mu_t m) {
 }
 
 mu_inline const mbyte_t *str_bytes(mu_t m) {
-    return ((struct str *)((muint_t)m - MTSTR))->data;
+    return (mbyte_t *)((struct str *)((muint_t)m - MTSTR) + 1);
 }
 
 // String constant macro
-#ifdef mu_constructor
-#define MSTR(name, str)                                         \
-static mu_t _mu_ref_##name = 0;                                 \
-static const struct {                                           \
-    mref_t ref; mlen_t len;                                     \
-    mbyte_t data[(sizeof str)-1];                               \
-} _mu_val_##name = {0, (sizeof str)-1, str};                    \
-                                                                \
-mu_constructor void _mu_init_##name(void) {                     \
-    _mu_ref_##name = mstr_intern(                               \
-        (mbyte_t*)_mu_val_##name.data,                          \
-        _mu_val_##name.len);                                    \
-}                                                               \
-                                                                \
-mu_pure mu_t name(void) {                                       \
-    return _mu_ref_##name;                                      \
+#ifdef MU_CONSTRUCTOR
+#define MSTR(name, s)                                       \
+static mu_t _mu_ref_##name = 0;                             \
+static const struct {                                       \
+    struct str str;                                         \
+    mbyte_t data[(sizeof s)-1];                             \
+} _mu_struct_##name = {{0, (sizeof s)-1}, s};               \
+                                                            \
+mu_constructor void _mu_init_##name(void) {                 \
+    extern mu_t str_init(const struct str *);               \
+    _mu_ref_##name = str_init(                              \
+            (const struct str *)&_mu_struct_##name);        \
+}                                                           \
+                                                            \
+mu_pure mu_t name(void) {                                   \
+    return _mu_ref_##name;                                  \
 }
 #else
-#define MSTR(name, str)                                         \
-static mu_t _mu_ref_##name = 0;                                 \
-static const struct {                                           \
-    mref_t ref; mlen_t len;                                     \
-    mbyte_t data[(sizeof str)-1];                               \
-} _mu_val_##name = {0, (sizeof str)-1, str};                    \
-                                                                \
-mu_pure mu_t name(void) {                                       \
-    if (!_mu_ref_##name) {                                      \
-        _mu_ref_##name = mstr_intern(                           \
-            (mbyte_t *)_mu_val_##name.data,                     \
-            _mu_val_##name.len);                                \
-        if (*(mref_t *)((muint_t)_mu_ref_##name - MTSTR))       \
-            *(mref_t *)((muint_t)_mu_ref_##name - MTSTR) = 0;   \
-    }                                                           \
-                                                                \
-    return _mu_ref_##name;                                      \
+#define MSTR(name, s)                                       \
+static mu_t _mu_ref_##name = 0;                             \
+static const struct {                                       \
+    struct str str;                                         \
+    mbyte_t data[(sizeof s)-1];                             \
+} _mu_val_##name = {{0, (sizeof s)-1}, s};                  \
+                                                            \
+mu_pure mu_t name(void) {                                   \
+    extern mu_t str_init(const struct str *);               \
+    if (!_mu_ref_##name) {                                  \
+        _mu_ref_##name = str_init(                          \
+                (const struct str *)&_mu_struct_##name);    \
+    }                                                       \
+                                                            \
+    return _mu_ref_##name;                                  \
 }
 #endif
 
