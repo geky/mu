@@ -223,33 +223,26 @@ mu_t num_shr(mu_t a, mu_t b) {
 #endif
 
 static mc_t num_random(mu_t scope, mu_t *frame) {
-    muint_t x = (num_uint(tbl_lookup(scope, muint(0))) << sizeof(muinth_t)) |
-                 num_uint(tbl_lookup(scope, muint(1)));
-    muint_t y = (num_uint(tbl_lookup(scope, muint(2))) << sizeof(muinth_t)) |
-                 num_uint(tbl_lookup(scope, muint(3)));
+    muint_t *a = buf_data(scope);
+    muint_t x = a[0];
+    muint_t y = a[1];
 
     x ^= x << XORSHIFT1;
     x ^= x >> XORSHIFT2;
     x ^= y ^ (y >> XORSHIFT3);
 
-    tbl_insert(scope, muint(0), muint(y >> sizeof(muinth_t)));
-    tbl_insert(scope, muint(1), muint(y & (muinth_t)-1));
-    tbl_insert(scope, muint(2), muint(x >> sizeof(muinth_t)));
-    tbl_insert(scope, muint(3), muint(x & (muinth_t)-1));
-
+    a[0] = y;
+    a[1] = x;
     frame[0] = num_div(muint(x + y), num_add(muint((muint_t)-1), muint(1)));
     return 1;
 }
 
 mu_t num_seed(mu_t m) {
-    muint_t x = (muint_t)m;
+    mu_assert(!m || mu_isnum(m));
+    if (!m) m = muint(0);
 
-    return msbfn(0x0, num_random, mlist({
-        muint(x >> sizeof(muinth_t)),
-        muint(x & (muinth_t)-1),
-        muint(x & (muinth_t)-1),
-        muint(x >> sizeof(muinth_t)),
-    }));
+    return msbfn(0x0, num_random, mnbuf(
+            (mu_t[]){m, m}, 2*sizeof(muint_t)));
 }
 
 
@@ -324,17 +317,17 @@ mu_t num_parse(const mbyte_t **ppos, const mbyte_t *end) {
 }
 
 // Obtains a string representation of a number
-static void num_base_ipart(mbyte_t **s, muint_t *i, mu_t n, mu_t base) {
+static void num_base_ipart(mu_t *s, muint_t *i, mu_t n, mu_t base) {
     muint_t j = *i;
 
     while (num_cmp(n, muint(0)) > 0) {
         mu_t d = num_mod(n, base);
-        mstr_insert(s, i, mu_toascii(num_uint(d)));
+        buf_push(s, i, mu_toascii(num_uint(d)));
         n = num_idiv(n, base);
     }
 
-    mbyte_t *a = &(*s)[j];
-    mbyte_t *b = &(*s)[*i - 1];
+    mbyte_t *a = (mbyte_t *)buf_data(*s) + j;
+    mbyte_t *b = (mbyte_t *)buf_data(*s) + *i - 1;
 
     while (a < b) {
         mbyte_t t = *a;
@@ -344,7 +337,7 @@ static void num_base_ipart(mbyte_t **s, muint_t *i, mu_t n, mu_t base) {
     }
 }
 
-static void num_base_fpart(mbyte_t **s, muint_t *i, mu_t n, 
+static void num_base_fpart(mu_t *s, muint_t *i, mu_t n, 
                            mu_t base, muint_t digits) {
     mu_t error = num_pow(base, mint(-digits));
     mu_t digit = mint(-1);
@@ -355,11 +348,11 @@ static void num_base_fpart(mbyte_t **s, muint_t *i, mu_t n,
             break;
 
         if (digit == mint(-1))
-            mstr_insert(s, i, '.');
+            buf_push(s, i, '.');
 
         mu_t p = num_pow(base, digit);
         mu_t d = num_idiv(n, p);
-        mstr_insert(s, i, mu_toascii(num_uint(d)));
+        buf_push(s, i, mu_toascii(num_uint(d)));
 
         n = num_mod(n, p);
         digit = num_sub(digit, muint(1));
@@ -375,16 +368,16 @@ static mu_t num_base(mu_t n, char c, mu_t base, char expc, mu_t expbase) {
     } else if (n == MU_NINF) {
         return mcstr("-inf");
     } else {
-        mbyte_t *s = mstr_create(0);
+        mu_t s = buf_create(0);
         muint_t i = 0;
 
         if (num_cmp(n, muint(0)) < 0) {
             n = num_neg(n);
-            mstr_insert(&s, &i, '-');
+            buf_push(&s, &i, '-');
         }
 
         if (c) {
-            mstr_ncat(&s, &i, (mbyte_t[2]){'0', c}, 2);
+            buf_append(&s, &i, (mbyte_t[2]){'0', c}, 2);
         }
 
         mu_t exp = num_floor(num_log(n, expbase));
@@ -403,17 +396,17 @@ static mu_t num_base(mu_t n, char c, mu_t base, char expc, mu_t expbase) {
         num_base_fpart(&s, &i, n, base, num_uint(digits) - (i-j));
 
         if (scientific) {
-            mstr_insert(&s, &i, expc);
+            buf_push(&s, &i, expc);
 
             if (num_cmp(exp, muint(0)) < 0) {
                 exp = num_neg(exp);
-                mstr_insert(&s, &i, '-');
+                buf_push(&s, &i, '-');
             }
 
             num_base_ipart(&s, &i, exp, muint(10));
         }
 
-        return mstr_intern(s, i);
+        return str_intern(s, i);
     }
 }
 

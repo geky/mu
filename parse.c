@@ -240,7 +240,7 @@ struct parse {
     mu_t imms;
     mu_t fns;
 
-    mbyte_t *bcode;
+    mu_t bcode;
     mlen_t bcount;
 
     mlen_t bchain;
@@ -313,42 +313,42 @@ static mu_noreturn mu_error_parse(struct lex *l, mu_t message) {
 }
 
 static mu_noreturn mu_error_character(struct lex *l) {
-    mbyte_t *s = mstr_create(0);
-    muint_t len = 0;
-    mstr_zcat(&s, &len, "unexpected ");
-    mstr_concat(&s, &len, mu_repr(mnstr(l->pos, 1)));
+    mu_t b = buf_create(0);
+    muint_t n = 0;
+    buf_appendz(&b, &n, "unexpected ");
+    buf_concat(&b, &n, mu_repr(mnstr(l->pos, 1)));
 
-    mu_error_parse(l, mstr_intern(s, len));
+    mu_error_parse(l, str_intern(b, n));
 }
 
 static mu_noreturn mu_error_token(struct lex *l) {
-    mbyte_t *s = mstr_create(0);
-    muint_t len = 0;
-    mstr_zcat(&s, &len, "unexpected ");
+    mu_t b = buf_create(0);
+    muint_t n = 0;
+    buf_appendz(&b, &n, "unexpected ");
 
     if (l->tok & T_ANY_VAL) {
-        mstr_concat(&s, &len, mu_repr(mu_inc(l->val)));
+        buf_concat(&b, &n, mu_repr(mu_inc(l->val)));
     } else if (l->tok & T_TERM) {
-        mstr_zcat(&s, &len, "terminator");
+        buf_appendz(&b, &n, "terminator");
     } else if (l->tok & T_SEP) {
-        mstr_zcat(&s, &len, "','");
+        buf_appendz(&b, &n, "','");
     } else if (l->tok & T_LPAREN) {
-        mstr_zcat(&s, &len, "'('");
+        buf_appendz(&b, &n, "'('");
     } else if (l->tok & T_RPAREN) {
-        mstr_zcat(&s, &len, "')'");
+        buf_appendz(&b, &n, "')'");
     } else if (l->tok & T_LTABLE) {
-        mstr_zcat(&s, &len, "'['");
+        buf_appendz(&b, &n, "'['");
     } else if (l->tok & T_RTABLE) {
-        mstr_zcat(&s, &len, "']'");
+        buf_appendz(&b, &n, "']'");
     } else if (l->tok & T_LBLOCK) {
-        mstr_zcat(&s, &len, "'{'");
+        buf_appendz(&b, &n, "'{'");
     } else if (l->tok & T_RBLOCK) {
-        mstr_zcat(&s, &len, "'}'");
+        buf_appendz(&b, &n, "'}'");
     } else {
-        mstr_zcat(&s, &len, "end");
+        buf_appendz(&b, &n, "end");
     }
 
-    mu_error_parse(l, mstr_intern(s, len));
+    mu_error_parse(l, str_intern(b, n));
 }
 
 static mu_noreturn mu_error_assignment(struct lex *l) {
@@ -356,13 +356,13 @@ static mu_noreturn mu_error_assignment(struct lex *l) {
 }
 
 static mu_noreturn mu_error_expression(mbyte_t c) {
-    mbyte_t *s = mstr_create(0);
-    muint_t len = 0;
-    mstr_zcat(&s, &len, "unexpected ");
-    mstr_concat(&s, &len, mu_repr(mnstr(&c, 1)));
-    mstr_zcat(&s, &len, " in expression");
+    mu_t b = buf_create(0);
+    muint_t n = 0;
+    buf_appendz(&b, &n, "unexpected ");
+    buf_concat(&b, &n, mu_repr(mnstr(&c, 1)));
+    buf_appendz(&b, &n, " in expression");
 
-    mu_error(mstr_intern(s, len));
+    mu_error(str_intern(b, n));
 }
 
 extern mu_noreturn mu_error_args(const char *name, mc_t count, mu_t *args);
@@ -550,7 +550,7 @@ static bool lookahead(struct parse *p, mtok_t a, mtok_t b) {
 // Actual encoding is defered to virtual machine
 static void emit(struct parse *p, mbyte_t byte) {
     muint_t bcount = p->bcount;
-    mstr_insert(&p->bcode, &bcount, byte);
+    buf_push(&p->bcode, &bcount, byte);
     p->bcount = bcount;
 }
 
@@ -566,15 +566,17 @@ static void encode(struct parse *p, enum op op,
 }
 
 static void patch(struct parse *p, mlen_t offset, mint_t j) {
-    mu_patch(&p->bcode[offset], j);
+    mbyte_t *bcode = buf_data(p->bcode);
+    mu_patch(&bcode[offset], j);
 }
 
 static void patch_all(struct parse *p, mint_t chain, mint_t offset) {
     muint_t current = 0;
+    mbyte_t *bcode = buf_data(p->bcode);
 
     while (chain) {
         current += chain;
-        chain = mu_patch(&p->bcode[current], offset - current);
+        chain = mu_patch(&bcode[current], offset - current);
     }
 }
 
@@ -678,11 +680,11 @@ static struct code *compile(struct parse *p) {
         mu_dec(v);
     }
 
-    memcpy(bcode, p->bcode, p->bcount);
+    memcpy(bcode, buf_data(p->bcode), p->bcount);
 
     tbl_dec(p->imms);
     tbl_dec(p->fns);
-    mstr_dec(p->bcode);
+    buf_dec(p->bcode);
     mu_dec(p->m.val);
 
     return code;
@@ -799,7 +801,7 @@ static void p_block(struct parse *p, bool root);
 
 static void p_fn(struct parse *p) {
     struct parse q = {
-        .bcode = mstr_create(0),
+        .bcode = buf_create(0),
         .bcount = 0,
 
         .imms = tbl_create(0),
@@ -1484,7 +1486,7 @@ struct code *mu_compile(mu_t source) {
 
 struct code *mu_ncompile(const mbyte_t *pos, const mbyte_t *end) {
     struct parse p = {
-        .bcode = mstr_create(0),
+        .bcode = buf_create(0),
         .imms = tbl_create(0),
         .fns = tbl_create(0),
         .bchain = -1,

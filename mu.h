@@ -12,16 +12,13 @@
 
 // Three bit type specifier located in lowest bits of each variable
 // 3b00x indicates type is not reference counted
-// 3b100 is the only mutable variable
-// 3b11x are currently reserved
 enum mtype {
     MTNIL   = 0, // nil
     MTNUM   = 1, // number
-    MTSTR   = 2, // string
+    MTSTR   = 7, // string
+    MTBUF   = 6, // buffer
     MTTBL   = 4, // table
     MTFN    = 5, // function
-    MTBFN   = 6, // builtin function
-    MTSBFN  = 7, // scoped builtin function
 };
 
 // Declaration of mu type
@@ -38,10 +35,11 @@ mu_inline mref_t mu_ref(mu_t m) { return *(mref_t *)(~7 & (muint_t)m); }
 mu_inline bool mu_isnil(mu_t m) { return !m; }
 mu_inline bool mu_isnum(mu_t m) { return mu_type(m) == MTNUM; }
 mu_inline bool mu_isstr(mu_t m) { return mu_type(m) == MTSTR; }
+mu_inline bool mu_isbuf(mu_t m) { return mu_type(m) == MTBUF; }
 mu_inline bool mu_istbl(mu_t m) { return mu_type(m) == MTTBL; }
-mu_inline bool mu_isfn(mu_t m)  { return mu_type(m) >= MTFN;  }
+mu_inline bool mu_isfn(mu_t m)  { return mu_type(m) == MTFN;  }
 
-mu_inline bool mu_isref(mu_t m)   { return 6 & (muint_t)m; }
+mu_inline bool mu_isref(mu_t m)   { return 4 & (muint_t)m; }
 
 
 // Reference counting
@@ -53,10 +51,10 @@ mu_inline mu_t mu_inc(mu_t m) {
 }
 
 mu_inline void mu_dec(mu_t m) {
-    extern void (*const mu_destroy_table[6])(mu_t);
+    extern void (*const mu_destroy_table[4])(mu_t);
 
     if (mu_isref(m) && ref_dec(m))
-        mu_destroy_table[mu_type(m)-2](m);
+        mu_destroy_table[mu_type(m)-4](m);
 }
 
 

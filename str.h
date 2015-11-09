@@ -5,16 +5,12 @@
 #ifndef MU_STR_H
 #define MU_STR_H
 #include "mu.h"
+#include "buf.h"
 
 
-// Functions for handling temporary mutable strings
-mbyte_t *mstr_create(muint_t len);
-mu_t mstr_intern(mbyte_t *s, muint_t len);
-
-void mstr_insert(mbyte_t **s, muint_t *i, mbyte_t c);
-void mstr_concat(mbyte_t **s, muint_t *i, mu_t c);
-void mstr_ncat(mbyte_t **s, muint_t *i, const mbyte_t *c, muint_t len);
-void mstr_zcat(mbyte_t **s, muint_t *i, const char *c);
+// String creation functions
+mu_t str_create(const mbyte_t *s, muint_t n);
+mu_t str_intern(mu_t buf, muint_t n);
 
 // Conversion operations
 mu_t str_fromnstr(const mbyte_t *s, muint_t n);
@@ -51,39 +47,26 @@ mu_t str_hex(mu_t s);
 
 
 // Definition of Mu's string types
-// Each string is stored as a length and array of data.
-//
+// Storage follows identical layout of buf type.
 // Strings must be interned before use in tables, and once interned,
 // strings cannot be mutated without breaking things.
 struct str {
     mref_t ref;     // reference count
     mlen_t len;     // length of string
-
-    // data follows string header
+    // data follows
 };
 
 
 // String creation functions
-mu_inline mu_t mnstr(const mbyte_t *s, muint_t len) {
-    return str_fromnstr(s, len);
+mu_inline mu_t mnstr(const mbyte_t *s, muint_t n) {
+    return str_create(s, n);
 }
 
 mu_inline mu_t mcstr(const char *s) {
-    return str_fromcstr(s);
+    return str_create((const mbyte_t *)s, strlen(s));
 }
 
 // Reference counting
-mu_inline mbyte_t *mstr_inc(mbyte_t *s) {
-    ref_inc(s - sizeof(struct str));
-    return s;
-}
-
-mu_inline void mstr_dec(mbyte_t *s) {
-    extern void mstr_destroy(mbyte_t *);
-    if (ref_dec(s - sizeof(struct str)))
-        mstr_destroy(s);
-}
-
 mu_inline mu_t str_inc(mu_t m) {
     mu_assert(mu_isstr(m));
     ref_inc(m);
@@ -98,6 +81,7 @@ mu_inline void str_dec(mu_t m) {
 }
 
 // String access functions
+// we don't define a string struct 
 mu_inline mlen_t str_len(mu_t m) {
     return ((struct str *)((muint_t)m - MTSTR))->len;
 }

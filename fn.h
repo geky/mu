@@ -61,6 +61,13 @@ mu_t fn_reverse(mu_t iter);
 mu_t fn_sort(mu_t iter);
 
 
+// Function tags
+enum fn_type {
+    FTMFN,  // Mu function
+    FTBFN,  // C builtin function
+    FTSBFN, // C scoped builtin function
+};
+
 // Definition of code structure used to represent the
 // executable component of Mu functions.
 struct code {
@@ -162,10 +169,10 @@ mu_inline mu_t fn_closure(mu_t m) {
 // Function constant macro
 #define MBFN(name, args, bfn)                           \
 static const struct fn _mu_val_##name =                 \
-    {0, args, MTBFN - MTFN, 0, {bfn}};                  \
+    {0, args, FTBFN, 0, {bfn}};                         \
                                                         \
 mu_pure mu_t name(void) {                               \
-    return (mu_t)((muint_t)&_mu_val_##name + MTBFN);    \
+    return (mu_t)((muint_t)&_mu_val_##name + MTFN);     \
 }
 
 

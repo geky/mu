@@ -1,5 +1,6 @@
 #include "str.h"
 
+#include "buf.h"
 #include "num.h"
 #include "tbl.h"
 #include "fn.h"
@@ -10,20 +11,6 @@
 #define MU_SPACE_STR mu_space_str()
 MSTR(mu_empty_str, "")
 MSTR(mu_space_str, " ")
-
-
-// Mutable string access
-mu_inline mu_t mstr(mbyte_t *s) {
-    return (mu_t)(s - sizeof(struct str) + MTSTR);
-}
-
-mu_inline struct str *str(mu_t s) {
-    return (struct str *)((muint_t)s - MTSTR);
-}
-
-mu_inline struct str *wstr(mbyte_t *s) {
-    return (struct str *)(s - sizeof(struct str));
-}
 
 
 // Common errors
@@ -59,9 +46,9 @@ static mint_t str_table_find(const mbyte_t *s, mlen_t len) {
     // strings are sorted first by length to avoid comparisons
     while (min <= max) {
         mint_t mid = (max + min) / 2;
-        mint_t cmp = len > str(str_table[mid])->len ? +1 :
-                     len < str(str_table[mid])->len ? -1 :
-                     memcmp(s, str(str_table[mid])+1, len);
+        mint_t cmp = len > str_len(str_table[mid]) ? +1 :
+                     len < str_len(str_table[mid]) ? -1 :
+                     memcmp(s, str_bytes(str_table[mid]), len);
 
         if (cmp == 0) {
             return mid;
@@ -113,136 +100,75 @@ static void str_table_remove(mint_t i) {
 
 
 // String management
-static mu_t str_intern(const mbyte_t *s, muint_t len) {
-    if (len > (mlen_t)-1)
+// This can avoid unnecessary allocations sometimes since
+// buf's internal structure is reused for interned strings
+mu_t str_intern(mu_t b, muint_t n) {
+    mint_t i = str_table_find(buf_data(b), n);
+    if (i >= 0) {
+        buf_dec(b);
+        return str_inc(str_table[i]);
+    }
+
+    if (buf_len(b) != n)
+        buf_resize(&b, n);
+
+    mu_t s = (mu_t)((muint_t)b - MTBUF + MTSTR);
+    str_table_insert(~i, s);
+    return str_inc(s);
+}
+
+mu_t str_create(const mbyte_t *s, muint_t n) {
+    if (n > (mlen_t)-1)
         mu_error_length();
 
-    mint_t i = str_table_find(s, len);
-    if (i >= 0)
+    mint_t i = str_table_find(s, n);
+    if (i >= 0) {
         return str_inc(str_table[i]);
+    }
 
     // create new string and insert
-    mbyte_t *ns = mstr_create(len);
-    memcpy(ns, s, len);
-    str_table_insert(~i, mstr(ns));
-    return str_inc(mstr(ns));
+    mu_t b = buf_create(n);
+    memcpy(buf_data(b), s, n);
+
+    mu_t ns = (mu_t)((muint_t)b - MTBUF + MTSTR);
+    str_table_insert(~i, ns);
+    return str_inc(ns);
 }
 
 void str_destroy(mu_t s) {
-    mint_t i = str_table_find((const mbyte_t *)(str(s)+1), str(s)->len);
+    mint_t i = str_table_find(str_bytes(s), str_len(s));
+    mu_assert(i >= 0);
+    str_table_remove(i);
 
-    if (i >= 0)
-        str_table_remove(i);
-
-    ref_dealloc(s, sizeof(struct str) + str(s)->len);
-}
-
-
-// Functions for creating mutable temporary strings
-// these can avoid unnecessary allocations when interning
-// since mstr_intern can reuse their internal structure
-mbyte_t *mstr_create(muint_t len) {
-    if (len > (mlen_t)-1)
-        mu_error_length();
-
-    struct str *s = ref_alloc(sizeof(struct str) + len);
-    s->len = len;
-    return (mbyte_t *)(s+1);
-}
-
-void mstr_destroy(mbyte_t *b) {
-    ref_dealloc(b - sizeof(struct str), sizeof(struct str) + wstr(b)->len);
-}
-
-mu_t mstr_intern(mbyte_t *b, muint_t len) {
-    if (len > (mlen_t)-1)
-        mu_error_length();
-
-    // unfortunately, reusing the mstr struct only
-    // works with exact length currently
-    if (wstr(b)->len != len) {
-        mu_t m = str_intern(b, len);
-        mstr_dec(b);
-        return m;
-    }
-
-    mint_t i = str_table_find(b, len);
-    if (i >= 0) {
-        mstr_dec(b);
-        return str_inc(str_table[i]);
-    }
-
-    str_table_insert(~i, mstr(b));
-    return str_inc(mstr(b));
-}
-
-// Functions to modify mutable strings
-void mstr_insert(mbyte_t **b, muint_t *i, mbyte_t c) {
-    mstr_ncat(b, i, &c, 1);
-}
-
-void mstr_concat(mbyte_t **b, muint_t *i, mu_t c) {
-    mstr_ncat(b, i, str_bytes(c), str_len(c));
-    str_dec(c);
-}
-
-void mstr_zcat(mbyte_t **b, muint_t *i, const char *c) {
-    mstr_ncat(b, i, (mbyte_t *)c, strlen(c));
-}
-
-void mstr_ncat(mbyte_t **b, muint_t *i, const mbyte_t *c, muint_t len) {
-    muint_t size = wstr(*b)->len;
-    muint_t nsize = *i + len;
-
-    if (size < nsize) {
-        size += sizeof(struct str);
-
-        if (size < MU_MINALLOC)
-            size = MU_MINALLOC;
-
-        while (size < nsize + sizeof(struct str))
-            size <<= 1;
-
-        size -= sizeof(struct str);
-
-        if (len > (mlen_t)-1)
-            mu_error_length();
-
-        mbyte_t *nb = mstr_create(size);
-        memcpy(nb, *b, wstr(*b)->len);
-        mstr_dec(*b);
-        *b = nb;
-    }
-
-    memcpy(&(*b)[*i], c, len);
-    *i += len;
+    ref_dealloc(s, sizeof(struct str) + str_len(s));
 }
 
 
 // String creating functions
 mu_t str_init(const struct str *s) {
-    mu_t m = mstr_intern((mbyte_t *)(s + 1), s->len);
-    if (str(m)->ref)
-        str(m)->ref = 0;
+    mu_t m = str_intern((mu_t)((muint_t)s + MTBUF), s->len);
+
+    if (*(mref_t *)((muint_t)m - MTSTR) != 0)
+        *(mref_t *)((muint_t)m - MTSTR) = 0;
 
     return m;
 }
 
 mu_t str_fromnstr(const mbyte_t *s, muint_t n) {
-    return str_intern(s, n);
+    return str_create(s, n);
 }
 
 mu_t str_fromcstr(const char *s) {
-    return str_intern((const mbyte_t *)s, strlen(s));
+    return str_create((const mbyte_t *)s, strlen(s));
 }
 
 mu_t str_frombyte(mbyte_t c) {
-    return str_intern(&c, 1);
+    return str_create(&c, 1);
 }
 
 mu_t str_fromnum(mu_t n) {
     mu_assert(n == muint((mbyte_t)num_uint(n)));
-    return str_frombyte((mbyte_t)num_uint(n));
+    return str_create((mbyte_t[]){num_uint(n)}, 1);
 }
 
 mu_t str_fromiter(mu_t iter) {
@@ -269,16 +195,16 @@ mint_t str_cmp(mu_t a, mu_t b) {
 // String operations
 mu_t str_concat(mu_t a, mu_t b) {
     mu_assert(mu_isstr(a) && mu_isstr(b));
-    mlen_t alen = str_len(a);
-    mlen_t blen = str_len(b);
-    mbyte_t *d = mstr_create(alen + blen);
+    muint_t an = str_len(a);
+    muint_t bn = str_len(b);
+    mu_t d = buf_create(an + bn);
 
-    memcpy(d, str_bytes(a), alen);
-    memcpy(d+alen, str_bytes(b), blen);
+    memcpy((mbyte_t *)buf_data(d), str_bytes(a), an);
+    memcpy((mbyte_t *)buf_data(d)+an, str_bytes(b), bn);
 
     str_dec(a);
     str_dec(b);
-    return mstr_intern(d, alen + blen);
+    return str_intern(d, an + bn);
 }
 
 mu_t str_subset(mu_t s, mu_t lower, mu_t upper) {
@@ -311,8 +237,7 @@ mu_t str_subset(mu_t s, mu_t lower, mu_t upper) {
     if (a > b)
         return MU_EMPTY_STR;
 
-    mu_t d = mnstr(str_bytes(s) + a, b - a);
-
+    mu_t d = str_create(str_bytes(s) + a, b - a);
     str_dec(s);
     return d;
 }
@@ -355,15 +280,15 @@ mu_t str_replace(mu_t a, mu_t s, mu_t r, mu_t mmax) {
     else
         max = num_uint(mmax);
 
-    mbyte_t *db = mstr_create(alen);
-    muint_t dlen = 0;
+    mu_t d = buf_create(alen);
+    muint_t n = 0;
     muint_t i = 0;
 
     while (i+slen <= alen && count < max) {
         bool match = memcmp(&ab[i], sb, slen) == 0;
 
         if (match) {
-            mstr_concat(&db, &dlen, str_inc(r));
+            buf_concat(&d, &n, str_inc(r));
             count++;
             i += slen;
         }
@@ -372,17 +297,17 @@ mu_t str_replace(mu_t a, mu_t s, mu_t r, mu_t mmax) {
             if (i >= alen)
                 break;
 
-            mstr_insert(&db, &dlen, ab[i]);
+            buf_push(&d, &n, ab[i]);
             i += 1;
         }
     }
 
-    mstr_ncat(&db, &dlen, &ab[i], alen-i);
+    buf_append(&d, &n, &ab[i], alen-i);
 
     str_dec(a);
     str_dec(s);
     str_dec(r);
-    return mstr_intern(db, dlen);
+    return str_intern(d, n);
 }
 
 static mc_t str_split_step(mu_t scope, mu_t *frame) {
@@ -406,7 +331,7 @@ static mc_t str_split_step(mu_t scope, mu_t *frame) {
             break;
     }
 
-    frame[0] = mnstr(ab+i, j-i);
+    frame[0] = str_create(ab+i, j-i);
     tbl_insert(scope, muint(2), muint(j+slen));
     str_dec(a);
     str_dec(s);
@@ -429,8 +354,8 @@ mu_t str_split(mu_t s, mu_t delim) {
 mu_t str_join(mu_t i, mu_t delim) {
     mu_assert(mu_isfn(i) && (!delim || mu_isstr(delim)));
     mu_t frame[MU_FRAME];
-    mbyte_t *b = mstr_create(0);
-    muint_t len = 0;
+    mu_t b = buf_create(0);
+    muint_t n = 0;
     bool first = true;
 
     if (!delim)
@@ -446,14 +371,14 @@ mu_t str_join(mu_t i, mu_t delim) {
         if (first)
             first = false;
         else
-            mstr_concat(&b, &len, str_inc(delim));
+            buf_concat(&b, &n, str_inc(delim));
 
-        mstr_concat(&b, &len, frame[0]);
+        buf_concat(&b, &n, frame[0]);
     }
 
     fn_dec(i);
     str_dec(delim);
-    return mstr_intern(b, len);
+    return str_intern(b, n);
 }
 
 mu_t str_pad(mu_t s, mu_t mlen, mu_t pad) {
@@ -479,21 +404,21 @@ mu_t str_pad(mu_t s, mu_t mlen, mu_t pad) {
         return s;
     }
 
-    mbyte_t *db = mstr_create(len);
-    muint_t dlen = 0;
+    mu_t d = buf_create(len);
+    muint_t n = 0;
     muint_t count = (len - str_len(s)) / str_len(pad);
 
     if (left)
-        mstr_concat(&db, &dlen, s);
+        buf_concat(&d, &n, s);
 
     for (muint_t i = 0; i < count; i++)
-        mstr_concat(&db, &dlen, str_inc(pad));
+        buf_concat(&d, &n, str_inc(pad));
     
     if (!left)
-        mstr_concat(&db, &dlen, s);
+        buf_concat(&d, &n, s);
 
     mu_dec(pad);
-    return mstr_intern(db, dlen);
+    return str_intern(d, n);
 }
 
 mu_t str_strip(mu_t s, mu_t dir, mu_t pad) {
@@ -560,11 +485,11 @@ mu_t str_parse(const mbyte_t **ppos, const mbyte_t *end) {
     const mbyte_t *pos = *ppos;
 
     mbyte_t quote = *pos++;
-    if (quote != '\'' && quote != '"')
+    if (quote != '\'' && quote != '\"')
         mu_error_unterminated();
 
-    mbyte_t *s = mstr_create(0);
-    muint_t len = 0;
+    mu_t b = buf_create(0);
+    muint_t n = 0;
 
     while (pos < end-1 && *pos != quote) {
         if (*pos == '\\') {
@@ -577,60 +502,64 @@ mu_t str_parse(const mbyte_t **ppos, const mbyte_t *end) {
                  mu_fromascii(pos[7]) < 2 &&
                  mu_fromascii(pos[8]) < 2 &&
                  mu_fromascii(pos[9]) < 2)) {
-                mstr_insert(&s, &len, mu_fromascii(pos[2])*2*2*2*2*2*2*2 +
-                                      mu_fromascii(pos[3])*2*2*2*2*2*2 +
-                                      mu_fromascii(pos[4])*2*2*2*2*2 +
-                                      mu_fromascii(pos[5])*2*2*2*2 +
-                                      mu_fromascii(pos[6])*2*2*2 +
-                                      mu_fromascii(pos[7])*2*2 +
-                                      mu_fromascii(pos[8])*2 +
-                                      mu_fromascii(pos[9]));
+                buf_push(&b, &n,
+                        mu_fromascii(pos[2])*2*2*2*2*2*2*2 +
+                        mu_fromascii(pos[3])*2*2*2*2*2*2 +
+                        mu_fromascii(pos[4])*2*2*2*2*2 +
+                        mu_fromascii(pos[5])*2*2*2*2 +
+                        mu_fromascii(pos[6])*2*2*2 +
+                        mu_fromascii(pos[7])*2*2 +
+                        mu_fromascii(pos[8])*2 +
+                        mu_fromascii(pos[9]));
                 pos += 10;
             } else if (pos[1] == 'o' && pos < end-4 &&
                 (mu_fromascii(pos[2]) < 8 &&
                  mu_fromascii(pos[3]) < 8 &&
                  mu_fromascii(pos[4]) < 8)) {
-                mstr_insert(&s, &len, mu_fromascii(pos[2])*8*8 +
-                                      mu_fromascii(pos[3])*8 +
-                                      mu_fromascii(pos[4]));
+                buf_push(&b, &n,
+                        mu_fromascii(pos[2])*8*8 +
+                        mu_fromascii(pos[3])*8 +
+                        mu_fromascii(pos[4]));
                 pos += 5;
             } else if (pos[1] == 'd' && pos < end-4 &&
                        (mu_fromascii(pos[2]) < 10 &&
                         mu_fromascii(pos[3]) < 10 &&
                         mu_fromascii(pos[4]) < 10)) {
-                mstr_insert(&s, &len, mu_fromascii(pos[2])*10*10 +
-                                      mu_fromascii(pos[3])*10 +
-                                      mu_fromascii(pos[4]));
+                buf_push(&b, &n,
+                        mu_fromascii(pos[2])*10*10 +
+                        mu_fromascii(pos[3])*10 +
+                        mu_fromascii(pos[4]));
                 pos += 5;
             } else if (pos[1] == 'x' && pos < end-3 &&
                        (mu_fromascii(pos[2]) < 16 &&
                         mu_fromascii(pos[3]) < 16)) {
-                mstr_insert(&s, &len, mu_fromascii(pos[2])*16 +
-                                      mu_fromascii(pos[3]));
+                buf_push(&b, &n,
+                        mu_fromascii(pos[2])*16 +
+                        mu_fromascii(pos[3]));
                 pos += 4;
             } else if (pos[1] == '\\') {
-                mstr_insert(&s, &len, '\\'); pos += 2;
+                buf_push(&b, &n, '\\'); pos += 2;
             } else if (pos[1] == '\'') {
-                mstr_insert(&s, &len, '\''); pos += 2;
-            } else if (pos[1] == '"') {
-                mstr_insert(&s, &len,  '"'); pos += 2;
+                buf_push(&b, &n, '\''); pos += 2;
+            } else if (pos[1] == '\"') {
+                buf_push(&b, &n, '\"'); pos += 2;
             } else if (pos[1] == 'f') {
-                mstr_insert(&s, &len, '\f'); pos += 2;
+                buf_push(&b, &n, '\f'); pos += 2;
             } else if (pos[1] == 'n') {
-                mstr_insert(&s, &len, '\n'); pos += 2;
+                buf_push(&b, &n, '\n'); pos += 2;
             } else if (pos[1] == 'r') {
-                mstr_insert(&s, &len, '\r'); pos += 2;
+                buf_push(&b, &n, '\r'); pos += 2;
             } else if (pos[1] == 't') {
-                mstr_insert(&s, &len, '\t'); pos += 2;
+                buf_push(&b, &n, '\t'); pos += 2;
             } else if (pos[1] == 'v') {
-                mstr_insert(&s, &len, '\v'); pos += 2;
+                buf_push(&b, &n, '\v'); pos += 2;
             } else if (pos[1] == '0') {
-                mstr_insert(&s, &len, '\0'); pos += 2;
+                buf_push(&b, &n, '\0'); pos += 2;
             } else {
-                mstr_insert(&s, &len, '\\'); pos += 1;
+                buf_push(&b, &n, '\\'); pos += 1;
             }
         } else {
-            mstr_insert(&s, &len, *pos++);
+            buf_push(&b, &n, *pos++);
         }
     }
 
@@ -638,7 +567,7 @@ mu_t str_parse(const mbyte_t **ppos, const mbyte_t *end) {
         mu_error_unterminated();
 
     *ppos = pos;
-    return mstr_intern(s, len);
+    return str_intern(b, n);
 }
 
 // Returns a string representation of a string
@@ -646,40 +575,41 @@ mu_t str_repr(mu_t m) {
     mu_assert(mu_isstr(m));
     const mbyte_t *pos = str_bytes(m);
     const mbyte_t *end = pos + str_len(m);
-    mbyte_t *s = mstr_create(2 + str_len(m));
-    muint_t len = 0;
+    mu_t b = buf_create(2 + str_len(m));
+    muint_t n = 0;
 
-    mstr_insert(&s, &len, '\'');
+    buf_push(&b, &n, '\'');
 
     for (; pos < end; pos++) {
         if (*pos < ' ' || *pos > '~' ||
             *pos == '\\' || *pos == '\'') {
-            if (*pos == '\\') mstr_zcat(&s, &len, "\\\\");
-            else if (*pos == '\'') mstr_zcat(&s, &len, "\\'");
-            else if (*pos == '\f') mstr_zcat(&s, &len, "\\f");
-            else if (*pos == '\n') mstr_zcat(&s, &len, "\\n");
-            else if (*pos == '\r') mstr_zcat(&s, &len, "\\r");
-            else if (*pos == '\t') mstr_zcat(&s, &len, "\\t");
-            else if (*pos == '\v') mstr_zcat(&s, &len, "\\v");
-            else if (*pos == '\0') mstr_zcat(&s, &len, "\\0");
-            else mstr_ncat(&s, &len, (mbyte_t[]){
+            if (*pos == '\\') buf_appendz(&b, &n, "\\\\");
+            else if (*pos == '\'') buf_appendz(&b, &n, "\\'");
+            else if (*pos == '\f') buf_appendz(&b, &n, "\\f");
+            else if (*pos == '\n') buf_appendz(&b, &n, "\\n");
+            else if (*pos == '\r') buf_appendz(&b, &n, "\\r");
+            else if (*pos == '\t') buf_appendz(&b, &n, "\\t");
+            else if (*pos == '\v') buf_appendz(&b, &n, "\\v");
+            else if (*pos == '\0') buf_appendz(&b, &n, "\\0");
+            else buf_append(&b, &n, (mbyte_t[]){
                     '\\', 'x', mu_toascii(*pos / 16),
                                mu_toascii(*pos % 16)}, 4);
         } else {
-            mstr_insert(&s, &len, *pos);
+            buf_push(&b, &n, *pos);
         }
     }
 
     str_dec(m);
-    mstr_insert(&s, &len, '\'');
-    return mstr_intern(s, len);
+    buf_push(&b, &n, '\'');
+    return str_intern(b, n);
 }
 
 static mu_t str_base(mu_t m, char b, muint_t size, muint_t mask, muint_t shift) {
     const mbyte_t *s = str_bytes(m);
     mlen_t len = str_len(m);
 
-    mbyte_t *d = mstr_create(2 + (2+size)*len);
+    mu_t buf = buf_create(2 + (2+size)*len);
+    mbyte_t *d = buf_data(buf);
     d[0] = '\'';
 
     for (muint_t i = 0; i < len; i++) {
@@ -695,7 +625,7 @@ static mu_t str_base(mu_t m, char b, muint_t size, muint_t mask, muint_t shift) 
 
     d[1 + (2+size)*len] = '\'';
     str_dec(m);
-    return mstr_intern(d, 2 + (2+size)*len);
+    return str_intern(buf, 2 + (2+size)*len);
 }
 
 mu_t str_bin(mu_t s) {

@@ -735,7 +735,7 @@ mu_t tbl_parse(const mbyte_t **ppos, const mbyte_t *end) {
     return t;    
 }
 
-static void tbl_dump_nested(mu_t t, mbyte_t **s, muint_t *slen, 
+static void tbl_dump_nested(mu_t t, mu_t *s, muint_t *n, 
                             mu_t depth, mu_t indent, muint_t nest) {
     bool linear = tbl(t)->linear;
     for (muint_t i = 0; linear && i < tbl_len(t); i++) {
@@ -743,47 +743,47 @@ static void tbl_dump_nested(mu_t t, mbyte_t **s, muint_t *slen,
             linear = false;
     }
 
-    mstr_insert(s, slen, '[');
+    buf_push(s, n, '[');
 
     mu_t k, v;
     for (muint_t i = 0; tbl_next(t, &i, &k, &v);) {
         if (indent) {
             muint_t nest_indent = nest * num_uint(indent);
-            mstr_insert(s, slen, '\n');
+            buf_push(s, n, '\n');
             for (muint_t j = 0; j < nest_indent; j++)
-                mstr_insert(s, slen, ' ');
+                buf_push(s, n, ' ');
         }
 
         if (!linear) {
-            mstr_concat(s, slen, mu_repr(k));
-            mstr_zcat(s, slen, ": ");
+            buf_concat(s, n, mu_repr(k));
+            buf_appendz(s, n, ": ");
         } else {
             mu_dec(k);
         }
 
         if (mu_istbl(v) && num_cmp(depth, muint(0)) > 0) {
-            tbl_dump_nested(v, s, slen,
+            tbl_dump_nested(v, s, n,
                             num_sub(depth, muint(1)),
                             indent, nest + 1);
         } else {
-            mstr_concat(s, slen, mu_repr(v));
+            buf_concat(s, n, mu_repr(v));
         }
 
-        mstr_zcat(s, slen, indent ? "," : ", ");
+        buf_appendz(s, n, indent ? "," : ", ");
     }
 
     if (tbl_len(t) > 0) {
-        *slen -= indent ? 1 : 2;
+        *n -= indent ? 1 : 2;
 
         if (indent) {
             muint_t nest_indent = (nest-1) * num_uint(indent);
-            mstr_insert(s, slen, '\n');
+            buf_push(s, n, '\n');
             for (muint_t j = 0; j < nest_indent; j++)
-                mstr_insert(s, slen, ' ');
+                buf_push(s, n, ' ');
         }
     }
 
-    mstr_insert(s, slen, ']');
+    buf_push(s, n, ']');
     tbl_dec(t);
 }
 
@@ -794,12 +794,12 @@ mu_t tbl_dump(mu_t t, mu_t depth, mu_t indent) {
     if (!depth || num_cmp(depth, muint(0)) <= 0)
         return mu_addr(t);
 
-    mbyte_t *s = mstr_create(0);
-    muint_t slen = 0;
+    mu_t s = buf_create(0);
+    muint_t n = 0;
 
-    tbl_dump_nested(t, &s, &slen, 
+    tbl_dump_nested(t, &s, &n, 
                     num_sub(depth, muint(1)), 
                     indent, 1);
 
-    return mstr_intern(s, slen);
+    return str_intern(s, n);
 }

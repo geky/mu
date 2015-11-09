@@ -14,22 +14,22 @@ MUINT(mu_true,      1)
 
 // Common errors
 mu_noreturn mu_error_args(mu_t name, mc_t count, mu_t *args) {
-    mbyte_t *message = mstr_create(0);
-    muint_t len = 0;
-    mstr_zcat(&message, &len, "invalid argument in ");
-    mstr_concat(&message, &len, name);
-    mstr_zcat(&message, &len, "(");
+    mu_t message = buf_create(0);
+    muint_t n = 0;
+    buf_appendz(&message, &n, "invalid argument in ");
+    buf_concat(&message, &n, name);
+    buf_appendz(&message, &n, "(");
 
     for (muint_t i = 0; i < count; i++) {
-        mstr_concat(&message, &len, mu_repr(args[i]));
+        buf_concat(&message, &n, mu_repr(args[i]));
 
         if (i != count-1)
-            mstr_zcat(&message, &len, ", ");
+            buf_appendz(&message, &n, ", ");
         else
-            mstr_zcat(&message, &len, ")");
+            buf_appendz(&message, &n, ")");
     }
 
-    mu_error(mstr_intern(message, len));
+    mu_error(str_intern(message, n));
 }
 
 #define mu_error_arg1(name, ...) mu_error_args(name, 1, (mu_t[1]){__VA_ARGS__})
@@ -38,35 +38,35 @@ mu_noreturn mu_error_args(mu_t name, mc_t count, mu_t *args) {
 #define mu_error_arg4(name, ...) mu_error_args(name, 4, (mu_t[4]){__VA_ARGS__})
 
 static mu_noreturn mu_error_ops(mu_t name, mc_t count, mu_t *args) {
-    mbyte_t *message = mstr_create(0);
-    muint_t len = 0;
-    mstr_zcat(&message, &len, "unsupported operation ");
+    mu_t message = buf_create(0);
+    muint_t n = 0;
+    buf_appendz(&message, &n, "unsupported operation ");
 
     if (count == 1) {
-        mstr_concat(&message, &len, name);
-        mstr_concat(&message, &len, mu_repr(args[0]));
+        buf_concat(&message, &n, name);
+        buf_concat(&message, &n, mu_repr(args[0]));
     } else {
-        mstr_concat(&message, &len, mu_repr(args[0]));
-        mstr_zcat(&message, &len, " ");
-        mstr_concat(&message, &len, name);
-        mstr_zcat(&message, &len, " ");
-        mstr_concat(&message, &len, mu_repr(args[1]));
+        buf_concat(&message, &n, mu_repr(args[0]));
+        buf_appendz(&message, &n, " ");
+        buf_concat(&message, &n, name);
+        buf_appendz(&message, &n, " ");
+        buf_concat(&message, &n, mu_repr(args[1]));
     }
 
-    mu_error(mstr_intern(message, len));
+    mu_error(str_intern(message, n));
 }
 
 #define mu_error_op1(name, ...) mu_error_ops(name, 1, (mu_t[1]){__VA_ARGS__})
 #define mu_error_op2(name, ...) mu_error_ops(name, 2, (mu_t[2]){__VA_ARGS__})
 
 static mu_noreturn mu_error_convert(mu_t name, mu_t m) {
-    mbyte_t *message = mstr_create(0);
-    muint_t len = 0;
-    mstr_zcat(&message, &len, "unable to convert ");
-    mstr_concat(&message, &len, mu_repr(m));
-    mstr_zcat(&message, &len, " to ");
-    mstr_concat(&message, &len, name);
-    mu_error(mstr_intern(message, len));
+    mu_t message = buf_create(0);
+    muint_t n = 0;
+    buf_appendz(&message, &n, "unable to convert ");
+    buf_concat(&message, &n, mu_repr(m));
+    buf_appendz(&message, &n, " to ");
+    buf_concat(&message, &n, name);
+    mu_error(str_intern(message, n));
 }
 
 
@@ -99,15 +99,15 @@ void mu_fconvert(mc_t dc, mc_t sc, mu_t *frame) {
 
 // Destructor table
 extern void str_destroy(mu_t);
+extern void buf_destroy(mu_t);
 extern void tbl_destroy(mu_t);
 extern void fn_destroy(mu_t);
 
-void (*const mu_destroy_table[6])(mu_t) = {
-    [MTSTR-2]  = str_destroy,
-    [MTTBL-2]  = tbl_destroy,
-    [MTFN-2]   = fn_destroy,
-    [MTBFN-2]  = fn_destroy,
-    [MTSBFN-2] = fn_destroy,
+void (*const mu_destroy_table[4])(mu_t) = {
+    [MTSTR-4]  = str_destroy,
+    [MTBUF-4]  = buf_destroy,
+    [MTTBL-4]  = tbl_destroy,
+    [MTFN-4]   = fn_destroy,
 };
 
 
@@ -154,18 +154,13 @@ void mu_assign(mu_t m, mu_t k, mu_t v) {
 
 // Function calls performed on variables
 mc_t mu_tcall(mu_t m, mc_t fc, mu_t *frame) {
-    extern mc_t bfn_tcall(mu_t f, mc_t fc, mu_t *frame);
-    extern mc_t sbfn_tcall(mu_t f, mc_t fc, mu_t *frame);
-    extern mc_t mfn_tcall(mu_t f, mc_t fc, mu_t *frame);
-
-    switch (mu_type(m)) {
-        case MTFN:      return mfn_tcall(m, fc, frame);
-        case MTBFN:     return bfn_tcall(m, fc, frame);
-        case MTSBFN:    return sbfn_tcall(m, fc, frame);
-        default:        mu_error(mlist({
-                            mcstr("unable to call "),
-                            mu_repr(m)}));
+    if (!mu_isfn(m)) {
+        mu_error(mlist({
+            mcstr("unable to call "),
+            mu_repr(m)}));
     }
+
+    return fn_tcall(m, fc, frame);
 }
 
 void mu_fcall(mu_t m, mc_t fc, mu_t *frame) {
@@ -234,9 +229,7 @@ mu_t mu_str(mu_t m) {
                         break;
         case MTSTR:     return m;
         case MTTBL:
-        case MTFN:
-        case MTBFN:
-        case MTSBFN:    return str_fromiter(mu_iter(m));
+        case MTFN:      return str_fromiter(mu_iter(m));
         default:        mu_unreachable;
     }
 
@@ -261,9 +254,7 @@ mu_t mu_tbl(mu_t m, mu_t tail) {
         case MTNUM:     t = tbl_fromnum(m); break;
         case MTSTR:     t = tbl_fromiter(mu_iter(m)); break;
         case MTTBL:     t = tbl_fromiter(mu_pairs(m)); break;
-        case MTFN:
-        case MTBFN:
-        case MTSBFN:    t = tbl_fromiter(m); break;
+        case MTFN:      t = tbl_fromiter(m); break;
         default:        mu_unreachable;
     }
 
@@ -282,9 +273,7 @@ static mc_t mu_fn_thunk(mu_t *frame) {
 mu_t mu_fn(mu_t m) {
     switch (mu_type(m)) {
         case MTNIL:     return MU_ID;
-        case MTFN:
-        case MTBFN:
-        case MTSBFN:    return m;
+        case MTFN:      return m;
         default:        break;
     }
 
@@ -318,9 +307,7 @@ bool mu_is(mu_t a, mu_t type) {
         case MTNUM:     return type == MU_NUM_BFN;
         case MTSTR:     return type == MU_STR_BFN;
         case MTTBL:     return type == MU_TBL_BFN;
-        case MTFN:
-        case MTBFN:
-        case MTSBFN:    return type == MU_FN_BFN;
+        case MTFN:      return type == MU_FN_BFN;
         default:        mu_unreachable;
     }
 }
@@ -863,29 +850,28 @@ static mc_t mu_repr_thunk(mu_t *frame) {
 }
 
 mu_t mu_addr(mu_t m) {
-    mbyte_t *s = mstr_create(8 + 2*sizeof(muint_t));
-    muint_t len = 0;
-    mstr_insert(&s, &len, '<');
+    mu_t b = buf_create(8 + 2*sizeof(muint_t));
+    muint_t n = 0;
+    buf_push(&b, &n, '<');
 
     switch (mu_type(m)) {
-        case MTNIL:     mstr_concat(&s, &len, MU_KW_NIL);   break;
-        case MTNUM:     mstr_concat(&s, &len, MU_NUM_KEY);  break;
-        case MTSTR:     mstr_concat(&s, &len, MU_STR_KEY);  break;
-        case MTTBL:     mstr_concat(&s, &len, MU_TBL_KEY);  break;
-        case MTFN:
-        case MTBFN:
-        case MTSBFN:    mstr_concat(&s, &len, MU_KW_FN);    break;
+        case MTNIL:     buf_concat(&b, &n, MU_KW_NIL);       break;
+        case MTNUM:     buf_concat(&b, &n, MU_NUM_KEY);      break;
+        case MTSTR:     buf_concat(&b, &n, MU_STR_KEY);      break;
+        case MTBUF:     buf_concat(&b, &n, mcstr("buf"));    break;
+        case MTTBL:     buf_concat(&b, &n, MU_TBL_KEY);      break;
+        case MTFN:      buf_concat(&b, &n, MU_KW_FN);        break;
         default:        mu_unreachable;
     }
 
-    mstr_zcat(&s, &len, " 0x");
+    buf_appendz(&b, &n, " 0x");
 
     for (muint_t i = 0; i < 2*sizeof(muint_t); i++)
-        mstr_insert(&s, &len,
-            mu_toascii(0xf & ((muint_t)m >> 4*(2*sizeof(muint_t)-1 - i))));
+        buf_push(&b, &n, mu_toascii(
+                0xf & ((muint_t)m >> 4*(2*sizeof(muint_t)-1 - i))));
 
-    mstr_insert(&s, &len, '>');
-    return mstr_intern(s, len);
+    buf_push(&b, &n, '>');
+    return str_intern(b, n);
 }
 
 mu_t mu_repr(mu_t m) {
@@ -901,9 +887,7 @@ mu_t mu_dump(mu_t m, mu_t indent, mu_t depth) {
         case MTNUM:     return num_repr(m);
         case MTSTR:     return str_repr(m);
         case MTTBL:     return tbl_dump(m, indent, depth);
-        case MTFN:
-        case MTBFN:
-        case MTSBFN:    return mu_addr(m);
+        case MTFN:      return mu_addr(m);
         default:        mu_unreachable;
     }
 }
@@ -1302,9 +1286,7 @@ mu_t mu_iter(mu_t m) {
     switch (mu_type(m)) {
         case MTSTR:     return str_iter(m);
         case MTTBL:     return tbl_iter(m);
-        case MTFN:
-        case MTBFN:
-        case MTSBFN:    return m;
+        case MTFN:      return m;
         default:        break;
     }
 
@@ -1374,7 +1356,7 @@ static mc_t mu_seed_thunk(mu_t *frame) {
 }
 
 mu_t mu_seed(mu_t m) {
-    if (mu_isnum(m))
+    if (!m || mu_isnum(m))
         return num_seed(m);
 
     mu_error_arg1(MU_SEED_KEY, m);
@@ -1527,18 +1509,18 @@ mu_noreturn mu_error(mu_t message) {
     if (mu_isstr(message)) {
         sys_error((const char *)str_bytes(message), str_len(message));
     } else {
-        mbyte_t *m = mstr_create(0);
-        muint_t len = 0;
+        mu_t b = buf_create(0);
+        muint_t n = 0;
         mu_t v;
 
         for (muint_t i = 0; tbl_next(message, &i, 0, &v);) {
             if (!mu_isstr(v))
                 v = mu_repr(v);
 
-            mstr_concat(&m, &len, v);
+            buf_concat(&b, &n, v);
         }
 
-        sys_error((const char *)m, len);
+        sys_error(buf_data(b), n);
     }
 }
 
@@ -1557,19 +1539,19 @@ void mu_print(mu_t message) {
         sys_print((const char *)str_bytes(message), str_len(message));
         str_dec(message);
     } else {
-        mbyte_t *m = mstr_create(0);
-        muint_t len = 0;
+        mu_t b = buf_create(0);
+        muint_t n = 0;
         mu_t v;
 
         for (muint_t i = 0; tbl_next(message, &i, 0, &v);) {
             if (!mu_isstr(v))
                 v = mu_repr(v);
 
-            mstr_concat(&m, &len, v);
+            buf_concat(&b, &n, v);
         }
 
-        sys_print((const char *)m, len);
-        mstr_dec(m);
+        sys_print(buf_data(b), n);
+        buf_dec(b);
         tbl_dec(message);
     }
 }

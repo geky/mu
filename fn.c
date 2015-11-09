@@ -9,7 +9,7 @@
 
 // Function access
 mu_inline struct fn *fn(mu_t f) {
-    return (struct fn *)(~7 & (muint_t)f);
+    return (struct fn *)((muint_t)f - MTFN);
 }
 
 
@@ -17,25 +17,25 @@ mu_inline struct fn *fn(mu_t f) {
 mu_t fn_frombfn(mc_t args, mbfn_t *bfn) {
     struct fn *f = ref_alloc(sizeof(struct fn));
     f->args = args;
-    f->type = MTBFN - MTFN;
+    f->type = FTBFN;
     f->closure = 0;
     f->bfn = bfn;
-    return (mu_t)((muint_t)f + MTBFN);
+    return (mu_t)((muint_t)f + MTFN);
 }
 
 mu_t fn_fromsbfn(mc_t args, msbfn_t *sbfn, mu_t closure) {
     struct fn *f = ref_alloc(sizeof(struct fn));
     f->args = args;
-    f->type = MTSBFN - MTFN;
+    f->type = FTSBFN;
     f->closure = closure;
     f->sbfn = sbfn;
-    return (mu_t)((muint_t)f + MTSBFN);
+    return (mu_t)((muint_t)f + MTFN);
 }
 
 mu_t fn_fromcode(struct code *c, mu_t closure) {
     struct fn *f = ref_alloc(sizeof(struct fn));
     f->args = c->args;
-    f->type = MTFN - MTFN;
+    f->type = FTMFN;
     f->closure = closure;
     f->code = c;
     return (mu_t)((muint_t)f + MTFN);
@@ -44,7 +44,7 @@ mu_t fn_fromcode(struct code *c, mu_t closure) {
 
 // Called by garbage collector to clean up
 void fn_destroy(mu_t f) {
-    if (mu_type(f) == MTFN)
+    if (fn(f)->type == MTFN)
         code_dec(fn(f)->code);
 
     if (fn(f)->closure)
@@ -68,37 +68,31 @@ void code_destroy(struct code *c) {
 
 
 // C interface for calling functions
-mc_t bfn_tcall(mu_t f, mc_t fc, mu_t *frame) {
-    mu_fconvert(fn(f)->args, fc, frame);
-    mbfn_t *bfn = fn(f)->bfn;
-    fn_dec(f);
-    return bfn(frame);
-}
-
-mc_t sbfn_tcall(mu_t f, mc_t fc, mu_t *frame) {
-    mu_fconvert(fn(f)->args, fc, frame);
-    mc_t rc = fn(f)->sbfn(fn(f)->closure, frame);
-    fn_dec(f);
-    return rc;
-}
-
-mc_t mfn_tcall(mu_t f, mc_t fc, mu_t *frame) {
-    struct code *c = fn_code(f);
-    mu_fconvert(c->args, fc, frame);
-    mu_t scope = tbl_extend(c->scope, fn_closure(f));
-    fn_dec(f);
-    return mu_exec(c, scope, frame);
-}
-
 mc_t fn_tcall(mu_t f, mc_t fc, mu_t *frame) {
-    mu_assert(mu_isfn(f));
+    mu_fconvert(fn(f)->args, fc, frame);
 
-    switch (mu_type(f)) {
-        case MTFN:   return mfn_tcall(f, fc, frame);
-        case MTBFN:  return bfn_tcall(f, fc, frame);
-        case MTSBFN: return sbfn_tcall(f, fc, frame);
-        default:     mu_unreachable;
+    switch (fn(f)->type) {
+        case FTBFN: {
+            mbfn_t *bfn = fn(f)->bfn;
+            fn_dec(f);
+            return bfn(frame);
+        }
+
+        case FTSBFN: {
+            mc_t rc = fn(f)->sbfn(fn(f)->closure, frame);
+            fn_dec(f);
+            return rc;
+        }
+
+        case FTMFN: {
+            struct code *c = fn_code(f);
+            mu_t scope = tbl_extend(c->scope, fn_closure(f));
+            fn_dec(f);
+            return mu_exec(c, scope, frame);
+        }
     }
+
+    mu_unreachable;
 }
 
 void fn_fcall(mu_t f, mc_t fc, mu_t *frame) {
@@ -282,29 +276,28 @@ bool fn_all(mu_t f, mu_t iter) {
 
 // Iterators and generators
 static mc_t fn_range_step(mu_t scope, mu_t *frame) {
-    mu_t i = tbl_lookup(scope, muint(0));
-    mu_t stop = tbl_lookup(scope, muint(1));
-    mu_t step = tbl_lookup(scope, muint(2));
+    mu_t *a = buf_data(scope);
 
-    if ((num_cmp(step, muint(0)) > 0 && num_cmp(i, stop) >= 0) ||
-        (num_cmp(step, muint(0)) < 0 && num_cmp(i, stop) <= 0))
+    if ((num_cmp(a[2], muint(0)) > 0 && num_cmp(a[0], a[1]) >= 0) ||
+        (num_cmp(a[2], muint(0)) < 0 && num_cmp(a[0], a[1]) <= 0))
         return 0;
 
-    frame[0] = i;
-    tbl_insert(scope, muint(0), num_add(i, step));
+    frame[0] = a[0];
+    a[0] = num_add(a[0], a[2]);
     return 1;
 }
 
 mu_t fn_range(mu_t start, mu_t stop, mu_t step) {
-    mu_assert((!start || mu_isnum(start)) && 
-              (!stop || mu_isnum(stop)) && 
+    mu_assert((!start || mu_isnum(start)) &&
+              (!stop || mu_isnum(stop)) &&
               (!step || mu_isnum(step)));
 
-    return msbfn(0x0, fn_range_step, mlist({
-        start ? start : muint(0),
-        stop ? stop : MU_INF,
-        step ? step : muint(1)
-    }));
+    if (!start) start = muint(0);
+    if (!stop) stop = MU_INF;
+    if (!step) step = mint(num_cmp(start, stop) < 0 ? 1 : -1);
+
+    return msbfn(0x0, fn_range_step, mnbuf(
+            (mu_t[]){start, stop, step}, 3*sizeof(mu_t)));
 }
 
 static mc_t fn_repeat_step(mu_t scope, mu_t *frame) {
@@ -320,10 +313,9 @@ static mc_t fn_repeat_step(mu_t scope, mu_t *frame) {
 mu_t fn_repeat(mu_t m, mu_t times) {
     mu_assert(!times || mu_isnum(times));
 
-    return msbfn(0x0, fn_repeat_step, mlist({
-        m, 
-        times ? times : MU_INF
-    }));
+    if (!times) times = MU_INF;
+
+    return msbfn(0x0, fn_repeat_step, mlist({m, times}));
 }
 
 // Iterator manipulation

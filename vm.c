@@ -321,7 +321,8 @@ mc_t mu_exec(struct code *code, mu_t scope, mu_t *frame) {
     register mu_t scratch;
 
 reenter:
-    {   // Setup the registers and scope
+    {   mu_dis(code);
+        // Setup the registers and scope
         mu_t regs[code->regs];
         regs[0] = scope;
         mu_fcopy(code->args, &regs[1], frame);
@@ -412,7 +413,7 @@ reenter:
                 // Use a direct goto to garuntee a tail call when the target
                 // is another mu function. Otherwise, we just try our hardest
                 // to get a tail call emitted.
-                if (mu_type(scratch) == MTFN) {
+                if (((struct fn *)((muint_t)scratch - MTFN))->type == FTMFN) {
                     code = fn_code(scratch);
                     mu_fconvert(code->args, a, frame);
                     scope = tbl_extend(code->scope, fn_closure(scratch));
