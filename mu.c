@@ -858,9 +858,10 @@ mu_t mu_addr(mu_t m) {
         case MTNIL:     buf_concat(&b, &n, MU_KW_NIL);       break;
         case MTNUM:     buf_concat(&b, &n, MU_NUM_KEY);      break;
         case MTSTR:     buf_concat(&b, &n, MU_STR_KEY);      break;
-        case MTBUF:     buf_concat(&b, &n, mcstr("buf"));    break;
         case MTTBL:     buf_concat(&b, &n, MU_TBL_KEY);      break;
         case MTFN:      buf_concat(&b, &n, MU_KW_FN);        break;
+        case MTBUF:
+        case MTCD:      buf_concat(&b, &n, mcstr("cdata"));  break;
         default:        mu_unreachable;
     }
 

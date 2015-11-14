@@ -602,7 +602,7 @@ static muint_t imm(struct parse *p, mu_t m) {
 
 static muint_t fn(struct parse *p, struct code *code) {
     muint_t index = tbl_len(p->fns);
-    tbl_insert(p->fns, muint(index), mcode(code, 0));
+    tbl_insert(p->fns, muint(index), mu_wrap(code));
     return index;
 }
 
@@ -676,8 +676,7 @@ static struct code *compile(struct parse *p) {
     }
 
     for (muint_t i = 0; tbl_next(p->fns, &i, &k, &v);) {
-        fns[num_uint(k)] = fn_code(v);
-        mu_dec(v);
+        fns[num_uint(k)] = mu_unwrap(v);
     }
 
     memcpy(bcode, buf_data(p->bcode), p->bcount);
