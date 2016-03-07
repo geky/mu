@@ -13,7 +13,16 @@ mu_inline struct fn *fn(mu_t f) {
 }
 
 
-// Conversion functions
+// Creation functions
+mu_t fn_create(struct code *c, mu_t closure) {
+    struct fn *f = ref_alloc(sizeof(struct fn));
+    f->args = c->args;
+    f->type = FTMFN;
+    f->closure = closure;
+    f->code = c;
+    return (mu_t)((muint_t)f + MTFN);
+}
+
 mu_t fn_frombfn(mc_t args, mbfn_t *bfn) {
     struct fn *f = ref_alloc(sizeof(struct fn));
     f->args = args;
@@ -29,15 +38,6 @@ mu_t fn_fromsbfn(mc_t args, msbfn_t *sbfn, mu_t closure) {
     f->type = FTSBFN;
     f->closure = closure;
     f->sbfn = sbfn;
-    return (mu_t)((muint_t)f + MTFN);
-}
-
-mu_t fn_fromcode(struct code *c, mu_t closure) {
-    struct fn *f = ref_alloc(sizeof(struct fn));
-    f->args = c->args;
-    f->type = FTMFN;
-    f->closure = closure;
-    f->code = c;
     return (mu_t)((muint_t)f + MTFN);
 }
 

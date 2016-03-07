@@ -541,7 +541,7 @@ static void emit(struct parse *p, mbyte_t byte) {
 }
 
 static void encode(struct parse *p, enum op op,
-                   muint_t d, muint_t a, muint_t b,
+                   minth_t d, minth_t a, minth_t b,
                    mint_t sdiff) {
     p->sp += sdiff;
 
@@ -551,12 +551,12 @@ static void encode(struct parse *p, enum op op,
     mu_encode((void (*)(void *, mbyte_t))emit, p, op, d, a, b);
 }
 
-static void patch(struct parse *p, mlen_t offset, mint_t j) {
+static void patch(struct parse *p, mlen_t offset, minth_t j) {
     mbyte_t *bcode = buf_data(p->bcode);
     mu_patch(&bcode[offset], j);
 }
 
-static void patch_all(struct parse *p, mint_t chain, mint_t offset) {
+static void patch_all(struct parse *p, mlen_t chain, minth_t offset) {
     muint_t current = 0;
     mbyte_t *bcode = buf_data(p->bcode);
 

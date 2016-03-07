@@ -10,7 +10,7 @@
 
 // Emitted jump size in bytes (7 bits per byte)
 #ifndef MU_JUMP_SIZE
-#if MU64
+#ifdef MU64
 #define MU_JUMP_SIZE 3
 #else
 #define MU_JUMP_SIZE 2
@@ -71,7 +71,7 @@ mint_t mu_patch(void *c, mint_t nj) {
     mbyte_t *p = c;
     mu_assert((p[0] >> 4) >= OP_JFALSE && (p[0] >> 4) <= OP_JUMP);
 
-    int16_t pj = (0x40 & *p) ? -1 : 0;
+    mint_t pj = (0x40 & *p) ? -1 : 0;
     for (muint_t i = 0; i < MU_JUMP_SIZE; i++) {
         pj = (pj << 7) | (0x7f & p[i+1]);
     }
@@ -334,7 +334,7 @@ reenter:
             VM_ENTRY_END
 
             VM_ENTRY_DI(OP_FN, d, i)
-                regs[d] = mcode(code_inc(fns[i]), mu_inc(regs[0]));
+                regs[d] = fn_create(code_inc(fns[i]), mu_inc(regs[0]));
             VM_ENTRY_END
 
             VM_ENTRY_DI(OP_TBL, d, i)
@@ -408,7 +408,7 @@ reenter:
                 // Use a direct goto to garuntee a tail call when the target
                 // is another mu function. Otherwise, we just try our hardest
                 // to get a tail call emitted.
-                if (((struct fn *)((muint_t)scratch - MTFN))->type == FTMFN) {
+                if (mu_type(scratch) == MTFN && fn_type(scratch) == FTMFN) {
                     code = fn_code(scratch);
                     mu_fconvert(code->args, a, frame);
                     scope = tbl_extend(code->scope, fn_closure(scratch));

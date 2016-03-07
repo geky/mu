@@ -17,8 +17,10 @@ typedef mc_t mbfn_t(mu_t *frame);
 typedef mc_t msbfn_t(mu_t closure, mu_t *frame);
 
 
+// Creation functions
+mu_t fn_create(struct code *c, mu_t closure);
+
 // Conversion operations
-mu_t fn_fromcode(struct code *c, mu_t closure);
 mu_t fn_frombfn(mc_t args, mbfn_t *bfn);
 mu_t fn_fromsbfn(mc_t args, msbfn_t *sbfn, mu_t closure);
 
@@ -133,10 +135,6 @@ struct fn {
 };
 
 // Function creating functions
-mu_inline mu_t mcode(struct code *c, mu_t closure) {
-    return fn_fromcode(c, closure);
-}
-
 mu_inline mu_t mbfn(mc_t args, mbfn_t *bfn) {
     return fn_frombfn(args, bfn);
 }
@@ -158,6 +156,10 @@ mu_inline void fn_dec(mu_t f) {
 }
 
 // Function access
+mu_inline enum fn_type fn_type(mu_t m) {
+    return ((struct fn *)((muint_t)m - MTFN))->type;
+}
+
 mu_inline struct code *fn_code(mu_t m) {
     return code_inc(((struct fn *)((muint_t)m - MTFN))->code);
 }

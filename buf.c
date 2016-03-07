@@ -87,7 +87,7 @@ static void buf_append_unsigned(mu_t *b, muint_t *i, muint_t u) {
 static void buf_append_signed(mu_t *b, muint_t *i, mint_t d) {
     if (d < 0) {
         buf_push(b, i, '-');
-        d = -1;
+        d = -d;
     }
 
     buf_append_unsigned(b, i, d);
