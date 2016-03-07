@@ -126,7 +126,7 @@ static int genargs(int i, int argc, const char **argv) {
     mu_t args = tbl_create(argc-i);
 
     for (muint_t j = 0; j < argc-i; j++) {
-        tbl_insert(args, muint(j), mcstr(argv[i]));
+        tbl_insert(args, muint(j), mstr(argv[i]));
     }
 
     // TODO use this?
@@ -136,7 +136,7 @@ static int genargs(int i, int argc, const char **argv) {
 
 
 static void execute(const char *input) {
-    struct code *c = mu_compile(mcstr(input));
+    struct code *c = mu_compile(mstr(input));
     mu_t frame[MU_FRAME];
     mc_t rets = mu_exec(c, tbl_create(c->scope), frame);
     mu_fconvert(0, rets, frame);
@@ -149,10 +149,10 @@ static void load_file(FILE *file) {
     size_t len = fread(buffer, 1, BUFFER_SIZE, file);
 
     if (ferror(file)) {
-        mu_error(mcstr("io error reading file"));
+        mu_errorf("io error reading file");
     }
 
-    struct code *c = mu_compile(mnstr(buffer+off, len-off));
+    struct code *c = mu_compile(str_create(buffer+off, len-off));
     mu_dealloc(buffer, BUFFER_SIZE);
 
     mu_t s = tbl_extend(c->scope, mu_inc(scope));
@@ -165,7 +165,7 @@ static void load(const char *name) {
     FILE *file;
 
     if (!(file = fopen(name, "r"))) {
-        mu_error(mcstr("io error opening file"));
+        mu_errorf("io error opening file");
     }
 
     load_file(file);
@@ -178,7 +178,7 @@ static mu_noreturn interpret() {
 
     while (1) {
         mlen_t len = prompt(buffer);
-        mu_t code = mnstr(buffer, len);
+        mu_t code = str_create(buffer, len);
 
         struct error_handler old_eh = eh;
         if (!setjmp(eh.buf)) {
@@ -197,7 +197,7 @@ static mu_noreturn interpret() {
 }
 
 static int run() {
-    mu_t mainfn = tbl_lookup(scope, mcstr("main"));
+    mu_t mainfn = tbl_lookup(scope, mstr("main"));
 
     if (!mainfn)
         return 0;

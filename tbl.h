@@ -73,20 +73,12 @@ struct tbl {
 
 
 // Table creating functions
-mu_inline mu_t mntbl(muint_t n, mu_t (*pairs)[2]) {
-    return tbl_fromntbl(pairs, n);
-}
-
 #define mtbl(...)                                           \
-    mntbl((mu_t[][2])__VA_ARGS__,                           \
+    tbl_fromntbl((mu_t[][2])__VA_ARGS__,                    \
         sizeof (mu_t[][2])__VA_ARGS__ / sizeof(mu_t[2]))
 
-mu_inline mu_t mnlist(mu_t *list, muint_t n) {
-    return tbl_fromnlist(list, n);
-}
-
 #define mlist(...)                                  \
-    mnlist((mu_t[])__VA_ARGS__,                     \
+    tbl_fromnlist((mu_t[])__VA_ARGS__,              \
         sizeof (mu_t[])__VA_ARGS__ / sizeof(mu_t))
 
 // Table reference counting

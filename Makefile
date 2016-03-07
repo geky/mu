@@ -24,7 +24,6 @@ ifdef WORD
 CFLAGS += -m$(WORD)
 endif
 CFLAGS += -std=c99
-CFLAGS += -include stdio.h
 CFLAGS += -Wall -Winline
 
 LFLAGS += -lm

@@ -18,8 +18,11 @@ void buf_expand(mu_t *b, muint_t n);
 // Adding to buffers with amortized doubling
 void buf_push(mu_t *b, muint_t *i, mbyte_t byte);
 void buf_append(mu_t *b, muint_t *i, const void *c, muint_t n);
-void buf_appendz(mu_t *b, muint_t *i, const char *c);
 void buf_concat(mu_t *b, muint_t *i, mu_t c);
+
+// Formatting buffers with format strings
+void buf_vformat(mu_t *b, muint_t *i, const char *f, va_list args);
+void buf_format(mu_t *b, muint_t *i, const char *fmt, ...);
 
 
 // Definition of internal Mu buffers

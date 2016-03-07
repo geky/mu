@@ -9,27 +9,26 @@
 
 
 // Constants
-MUINT(mu_true,      1)
+MUINT(mu_true, 1)
 
 
 // Common errors
 mu_noreturn mu_error_args(mu_t name, mc_t count, mu_t *args) {
     mu_t message = buf_create(0);
     muint_t n = 0;
-    buf_appendz(&message, &n, "invalid argument in ");
-    buf_concat(&message, &n, name);
-    buf_appendz(&message, &n, "(");
+    buf_format(&message, &n, "invalid argument in %m(", name);
 
     for (muint_t i = 0; i < count; i++) {
         buf_concat(&message, &n, mu_repr(args[i]));
 
-        if (i != count-1)
-            buf_appendz(&message, &n, ", ");
-        else
-            buf_appendz(&message, &n, ")");
+        if (i != count-1) {
+            buf_format(&message, &n, ", ");
+        } else {
+            buf_format(&message, &n, ")");
+        }
     }
 
-    mu_error(str_intern(message, n));
+    mu_errorf("%ns", buf_data(message), n);
 }
 
 #define mu_error_arg1(name, ...) mu_error_args(name, 1, (mu_t[1]){__VA_ARGS__})
@@ -38,35 +37,18 @@ mu_noreturn mu_error_args(mu_t name, mc_t count, mu_t *args) {
 #define mu_error_arg4(name, ...) mu_error_args(name, 4, (mu_t[4]){__VA_ARGS__})
 
 static mu_noreturn mu_error_ops(mu_t name, mc_t count, mu_t *args) {
-    mu_t message = buf_create(0);
-    muint_t n = 0;
-    buf_appendz(&message, &n, "unsupported operation ");
-
     if (count == 1) {
-        buf_concat(&message, &n, name);
-        buf_concat(&message, &n, mu_repr(args[0]));
+        mu_errorf("unsupported operation %m%r", name, args[0]);
     } else {
-        buf_concat(&message, &n, mu_repr(args[0]));
-        buf_appendz(&message, &n, " ");
-        buf_concat(&message, &n, name);
-        buf_appendz(&message, &n, " ");
-        buf_concat(&message, &n, mu_repr(args[1]));
+        mu_errorf("unsupported operation %r %m %r", args[0], name, args[1]);
     }
-
-    mu_error(str_intern(message, n));
 }
 
 #define mu_error_op1(name, ...) mu_error_ops(name, 1, (mu_t[1]){__VA_ARGS__})
 #define mu_error_op2(name, ...) mu_error_ops(name, 2, (mu_t[2]){__VA_ARGS__})
 
 static mu_noreturn mu_error_convert(mu_t name, mu_t m) {
-    mu_t message = buf_create(0);
-    muint_t n = 0;
-    buf_appendz(&message, &n, "unable to convert ");
-    buf_concat(&message, &n, mu_repr(m));
-    buf_appendz(&message, &n, " to ");
-    buf_concat(&message, &n, name);
-    mu_error(str_intern(message, n));
+    mu_errorf("unable to convert %r to %m", m, name);
 }
 
 
@@ -114,11 +96,7 @@ void (*const mu_destroy_table[4])(mu_t) = {
 // Table related functions performed on variables
 mu_t mu_lookup(mu_t m, mu_t k) {
     if (!mu_istbl(m)) {
-        mu_error(mlist({
-            mcstr("unable to lookup "),
-            mu_repr(k),
-            mcstr(" in "),
-            mu_repr(m)}));
+        mu_errorf("unable to lookup %r in %r", k, m);
     }
 
     return tbl_lookup(m, k);
@@ -126,13 +104,7 @@ mu_t mu_lookup(mu_t m, mu_t k) {
 
 void mu_insert(mu_t m, mu_t k, mu_t v) {
     if (!mu_istbl(m)) {
-        mu_error(mlist({
-            mcstr("unable to insert "),
-            mu_repr(v),
-            mcstr(" to "),
-            mu_repr(k),
-            mcstr(" in "),
-            mu_repr(m)}));
+        mu_errorf("unable to insert %r to %r in %r", v, k, m);
     }
 
     return tbl_insert(m, k, v);
@@ -140,13 +112,7 @@ void mu_insert(mu_t m, mu_t k, mu_t v) {
 
 void mu_assign(mu_t m, mu_t k, mu_t v) {
     if (!mu_istbl(m)) {
-        mu_error(mlist({
-            mcstr("unable to assign "),
-            mu_repr(v),
-            mcstr(" to "),
-            mu_repr(k),
-            mcstr(" in "),
-            mu_repr(m)}));
+        mu_errorf("unable to assign %r to %r in %r", v, k, m);
     }
 
     return tbl_assign(m, k, v);
@@ -155,9 +121,7 @@ void mu_assign(mu_t m, mu_t k, mu_t v) {
 // Function calls performed on variables
 mc_t mu_tcall(mu_t m, mc_t fc, mu_t *frame) {
     if (!mu_isfn(m)) {
-        mu_error(mlist({
-            mcstr("unable to call "),
-            mu_repr(m)}));
+        mu_errorf("unable to call %r", m);
     }
 
     return fn_tcall(m, fc, frame);
@@ -223,7 +187,7 @@ static mc_t mu_str_thunk(mu_t *frame) {
 
 mu_t mu_str(mu_t m) {
     switch (mu_type(m)) {
-        case MTNIL:     return mcstr("");
+        case MTNIL:     return mstr("");
         case MTNUM:     if (m == muint((mbyte_t)num_uint(m)))
                             return str_fromnum(m);
                         break;
@@ -386,11 +350,7 @@ mint_t mu_cmp(mu_t a, mu_t b) {
         }
     }
 
-    mu_error(mlist({
-        mcstr("unable to compare "),
-        mu_repr(a),
-        mcstr(" and "),
-        mu_repr(b)}));
+    mu_errorf("unable to compare %r and %r", a, b);
 }
 
 
@@ -850,29 +810,17 @@ static mc_t mu_repr_thunk(mu_t *frame) {
 }
 
 mu_t mu_addr(mu_t m) {
-    mu_t b = buf_create(8 + 2*sizeof(muint_t));
-    muint_t n = 0;
-    buf_push(&b, &n, '<');
+    mu_t names[8] = {
+        [MTNIL] = MU_KW_NIL,
+        [MTNUM] = MU_NUM_KEY,
+        [MTSTR] = MU_STR_KEY,
+        [MTTBL] = MU_TBL_KEY,
+        [MTFN]  = MU_KW_FN,
+        [MTBUF] = mstr("cdata"),
+        [MTCD]  = mstr("cdata"),
+    };
 
-    switch (mu_type(m)) {
-        case MTNIL:     buf_concat(&b, &n, MU_KW_NIL);       break;
-        case MTNUM:     buf_concat(&b, &n, MU_NUM_KEY);      break;
-        case MTSTR:     buf_concat(&b, &n, MU_STR_KEY);      break;
-        case MTTBL:     buf_concat(&b, &n, MU_TBL_KEY);      break;
-        case MTFN:      buf_concat(&b, &n, MU_KW_FN);        break;
-        case MTBUF:
-        case MTCD:      buf_concat(&b, &n, mcstr("cdata"));  break;
-        default:        mu_unreachable;
-    }
-
-    buf_appendz(&b, &n, " 0x");
-
-    for (muint_t i = 0; i < 2*sizeof(muint_t); i++)
-        buf_push(&b, &n, mu_toascii(
-                0xf & ((muint_t)m >> 4*(2*sizeof(muint_t)-1 - i))));
-
-    buf_push(&b, &n, '>');
-    return str_intern(b, n);
+    return mstr("<%m 0x%wx>", names[mu_type(m)], m);
 }
 
 mu_t mu_repr(mu_t m) {
@@ -1370,7 +1318,7 @@ MSTR(mu_zip_key, "zip")
 MBFN(mu_zip_bfn, 0xf, mu_zip_thunk)
 static mc_t mu_zip_thunk(mu_t *frame) {
     if (tbl_len(frame[0]) == 0) {
-        mu_error(mcstr("no arguments passed to zip"));
+        mu_errorf("no arguments passed to zip");
     } else if (tbl_len(frame[0]) == 1) {
         mu_t iter = tbl_lookup(frame[0], muint(0));
         mu_dec(frame[0]);
@@ -1391,7 +1339,7 @@ MSTR(mu_chain_key, "chain")
 MBFN(mu_chain_bfn, 0xf, mu_chain_thunk)
 static mc_t mu_chain_thunk(mu_t *frame) {
     if (tbl_len(frame[0]) == 0) {
-        mu_error(mcstr("no arguments passed to chain"));
+        mu_errorf("no arguments passed to chain");
     } else if (tbl_len(frame[0]) == 1) {
         mu_t iter = tbl_lookup(frame[0], muint(0));
         mu_dec(frame[0]);
@@ -1505,24 +1453,35 @@ static mc_t mu_error_thunk(mu_t *frame) {
 }
 
 mu_noreturn mu_error(mu_t message) {
-    mu_assert(mu_isstr(message) || mu_istbl(message));
+    mu_assert(mu_istbl(message));
+    mu_t b = buf_create(0);
+    muint_t n = 0;
+    mu_t v;
 
-    if (mu_isstr(message)) {
-        sys_error((const char *)str_bytes(message), str_len(message));
-    } else {
-        mu_t b = buf_create(0);
-        muint_t n = 0;
-        mu_t v;
+    for (muint_t i = 0; tbl_next(message, &i, 0, &v);) {
+        if (!mu_isstr(v))
+            v = mu_repr(v);
 
-        for (muint_t i = 0; tbl_next(message, &i, 0, &v);) {
-            if (!mu_isstr(v))
-                v = mu_repr(v);
-
-            buf_concat(&b, &n, v);
-        }
-
-        sys_error(buf_data(b), n);
+        buf_concat(&b, &n, v);
     }
+
+    sys_error(buf_data(b), n);
+    mu_unreachable;
+}
+
+mu_noreturn mu_verrorf(const char *f, va_list args) {
+    mu_t b = buf_create(0);
+    muint_t n = 0;
+    buf_vformat(&b, &n, f, args);
+    sys_error(buf_data(b), n);
+    mu_unreachable;
+}
+
+mu_noreturn mu_errorf(const char *f, ...) {
+    va_list args;
+    va_start(args, f);
+    mu_verrorf(f, args);
+    mu_unreachable;
 }
 
 static mc_t mu_print_thunk(mu_t *frame);
@@ -1534,27 +1493,36 @@ static mc_t mu_print_thunk(mu_t *frame) {
 }
 
 void mu_print(mu_t message) {
-    mu_assert(mu_isstr(message) || mu_istbl(message));
+    mu_assert(mu_istbl(message));
+    mu_t b = buf_create(0);
+    muint_t n = 0;
+    mu_t v;
 
-    if (mu_isstr(message)) {
-        sys_print((const char *)str_bytes(message), str_len(message));
-        str_dec(message);
-    } else {
-        mu_t b = buf_create(0);
-        muint_t n = 0;
-        mu_t v;
+    for (muint_t i = 0; tbl_next(message, &i, 0, &v);) {
+        if (!mu_isstr(v))
+            v = mu_repr(v);
 
-        for (muint_t i = 0; tbl_next(message, &i, 0, &v);) {
-            if (!mu_isstr(v))
-                v = mu_repr(v);
-
-            buf_concat(&b, &n, v);
-        }
-
-        sys_print(buf_data(b), n);
-        buf_dec(b);
-        tbl_dec(message);
+        buf_concat(&b, &n, v);
     }
+
+    sys_print(buf_data(b), n);
+    buf_dec(b);
+    tbl_dec(message);
+}
+
+void mu_vprintf(const char *f, va_list args) {
+    mu_t b = buf_create(0);
+    muint_t n = 0;
+    buf_vformat(&b, &n, f, args);
+    sys_print(buf_data(b), n);
+    buf_dec(b);
+}
+
+void mu_printf(const char *f, ...) {
+    va_list args;
+    va_start(args, f);
+    mu_vprintf(f, args);
+    va_end(args);
 }
 
 static mc_t mu_import_thunk(mu_t *frame);

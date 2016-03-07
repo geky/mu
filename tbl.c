@@ -12,16 +12,6 @@ mu_inline struct tbl *tbl(mu_t t) {
 }
 
 
-// Common errors
-static mu_noreturn mu_error_length(void) {
-    mu_error(mcstr("exceeded max length in table"));
-}
-
-static mu_noreturn mu_error_unterminated(void) {
-    mu_error(mcstr("unterminated table literal"));
-}
-
-
 // General purpose hash for mu types
 mu_inline muint_t tbl_hash(mu_t m) {
     // Mu garuntees bitwise equality for Mu types, which has the very
@@ -134,7 +124,7 @@ mu_t tbl_lookup(mu_t t, mu_t k) {
 // Modify table info according to placement/replacement
 static void tbl_place(mu_t t, mu_t *dp, mu_t v) {
     if ((muint_t)tbl(t)->len + 1 > (mlen_t)-1)
-        mu_error_length();
+        mu_errorf("exceeded max length in table");
 
     tbl(t)->len += 1;
     *dp = v;
@@ -145,7 +135,7 @@ static void tbl_replace(mu_t t, mu_t *dp, mu_t v) {
 
     if (v && !d) {
         if ((muint_t)tbl(t)->len + 1 > (mlen_t)-1)
-            mu_error_length();
+            mu_errorf("exceeded max length in table");
 
         tbl(t)->len += 1;
         tbl(t)->nils -= 1;
@@ -703,10 +693,6 @@ mu_t tbl_diff(mu_t a, mu_t b) {
 // String representation
 mu_t tbl_parse(const mbyte_t **ppos, const mbyte_t *end) {
     const mbyte_t *pos = *ppos;
-
-    if (pos == end || *pos++ != '[')
-        mu_error_unterminated();
-
     mu_t t = tbl_create(0);
     mu_t i = muint(0);
 
@@ -729,7 +715,7 @@ mu_t tbl_parse(const mbyte_t **ppos, const mbyte_t *end) {
     }
 
     if (pos == end || *pos++ != ']')
-        mu_error_unterminated();
+        mu_errorf("unterminated table literal");
 
     *ppos = pos;
     return t;    
@@ -756,7 +742,7 @@ static void tbl_dump_nested(mu_t t, mu_t *s, muint_t *n,
 
         if (!linear) {
             buf_concat(s, n, mu_repr(k));
-            buf_appendz(s, n, ": ");
+            buf_format(s, n, ": ");
         } else {
             mu_dec(k);
         }
@@ -769,7 +755,7 @@ static void tbl_dump_nested(mu_t t, mu_t *s, muint_t *n,
             buf_concat(s, n, mu_repr(v));
         }
 
-        buf_appendz(s, n, indent ? "," : ", ");
+        buf_format(s, n, indent ? "," : ", ");
     }
 
     if (tbl_len(t) > 0) {

@@ -22,9 +22,7 @@ mc_t mu_exec(struct code *c, mu_t scope, mu_t *frame);
 
 
 // Disassemble bytecode for debugging and introspection
-// currently just outputs to stdout
-// Unsure if this should be kept as is, returned as string
-// or just dropped completely.
+// currently outputs to stdout
 void mu_dis(struct code *code);
 
 

@@ -13,11 +13,13 @@ mu_t str_create(const mbyte_t *s, muint_t n);
 mu_t str_intern(mu_t buf, muint_t n);
 
 // Conversion operations
-mu_t str_fromnstr(const mbyte_t *s, muint_t n);
-mu_t str_fromcstr(const char *s);
 mu_t str_frombyte(mbyte_t c);
 mu_t str_fromnum(mu_t n);
 mu_t str_fromiter(mu_t iter);
+
+// Formatting
+mu_t str_vformat(const char *f, va_list args);
+mu_t str_format(const char *f, ...);
 
 // Comparison operation
 mint_t str_cmp(mu_t a, mu_t b);
@@ -58,13 +60,8 @@ struct str {
 
 
 // String creation functions
-mu_inline mu_t mnstr(const mbyte_t *s, muint_t n) {
-    return str_create(s, n);
-}
+#define mstr(...) str_format(__VA_ARGS__)
 
-mu_inline mu_t mcstr(const char *s) {
-    return str_create((const mbyte_t *)s, strlen(s));
-}
 
 // Reference counting
 mu_inline mu_t str_inc(mu_t m) {

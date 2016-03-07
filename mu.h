@@ -242,8 +242,14 @@ mu_t mu_reverse(mu_t iter);
 mu_t mu_sort(mu_t iter);
 
 // System operations
+mu_noreturn mu_verrorf(const char *f, va_list args);
+mu_noreturn mu_errorf(const char *f, ...);
 mu_noreturn mu_error(mu_t message);
+
+void mu_vprintf(const char *f, va_list args);
+void mu_printf(const char *f, ...);
 void mu_print(mu_t message);
+
 mu_t mu_import(mu_t name);
 
 

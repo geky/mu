@@ -505,7 +505,7 @@ mu_t fn_min(mu_t iter) {
     mu_t min_frame = frame[0];
     mu_t min = tbl_lookup(min_frame, muint(0));
     if (!min)
-        mu_error(mcstr("no elements passed to min"));
+        mu_errorf("no elements passed to min");
 
     while (fn_next(iter, 0xf, frame)) {
         mu_t m = tbl_lookup(frame[0], muint(0));
@@ -534,7 +534,7 @@ mu_t fn_max(mu_t iter) {
     mu_t max_frame = frame[0];
     mu_t max = tbl_lookup(max_frame, muint(0));
     if (!max)
-        mu_error(mcstr("no elements passed to max"));
+        mu_errorf("no elements passed to max");
 
     while (fn_next(iter, 0xf, frame)) {
         mu_t m = tbl_lookup(frame[0], muint(0));

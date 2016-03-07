@@ -13,16 +13,6 @@ MSTR(mu_empty_str, "")
 MSTR(mu_space_str, " ")
 
 
-// Common errors
-static mu_noreturn mu_error_length(void) {
-    mu_error(mcstr("exceeded max length in string"));
-}
-
-static mu_noreturn mu_error_unterminated(void) {
-    mu_error(mcstr("unterminated string literal"));
-}
-
-
 // String interning
 //
 // Currently interning is implemented using a sorted array with a
@@ -119,7 +109,7 @@ mu_t str_intern(mu_t b, muint_t n) {
 
 mu_t str_create(const mbyte_t *s, muint_t n) {
     if (n > (mlen_t)-1)
-        mu_error_length();
+        mu_errorf("exceeded max length in string");
 
     mint_t i = str_table_find(s, n);
     if (i >= 0) {
@@ -154,14 +144,6 @@ mu_t str_init(const struct str *s) {
     return m;
 }
 
-mu_t str_fromnstr(const mbyte_t *s, muint_t n) {
-    return str_create(s, n);
-}
-
-mu_t str_fromcstr(const char *s) {
-    return str_create((const mbyte_t *)s, strlen(s));
-}
-
 mu_t str_frombyte(mbyte_t c) {
     return str_create(&c, 1);
 }
@@ -173,6 +155,21 @@ mu_t str_fromnum(mu_t n) {
 
 mu_t str_fromiter(mu_t iter) {
     return str_join(iter, MU_EMPTY_STR);
+}
+
+mu_t str_vformat(const char *f, va_list args) {
+    mu_t b = buf_create(0);
+    muint_t n = 0;
+    buf_vformat(&b, &n, f, args);
+    return str_intern(b, n);
+}
+
+mu_t str_format(const char *f, ...) {
+    va_list args;
+    va_start(args, f);
+    mu_t m = str_vformat(f, args);
+    va_end(args);
+    return m;
 }
 
 
@@ -363,10 +360,7 @@ mu_t str_join(mu_t i, mu_t delim) {
 
     while (fn_next(i, 0x1, frame)) {
         if (!mu_isstr(frame[0]))
-            mu_error(mlist({
-                mcstr("invalid value "),
-                mu_repr(frame[0]),
-                mcstr(" passed to join")}));
+            mu_errorf("invalid value %r passed to join", frame[0]);
 
         if (first)
             first = false;
@@ -444,7 +438,7 @@ mu_t str_strip(mu_t s, mu_t dir, mu_t pad) {
             end -= plen;
     }
 
-    mu_t d = mnstr(pos, end-pos);
+    mu_t d = str_create(pos, end-pos);
     str_dec(s);
     str_dec(pad);
     return d;
@@ -483,11 +477,7 @@ mu_t str_iter(mu_t s) {
 // String representation
 mu_t str_parse(const mbyte_t **ppos, const mbyte_t *end) {
     const mbyte_t *pos = *ppos;
-
     mbyte_t quote = *pos++;
-    if (quote != '\'' && quote != '\"')
-        mu_error_unterminated();
-
     mu_t b = buf_create(0);
     muint_t n = 0;
 
@@ -564,7 +554,7 @@ mu_t str_parse(const mbyte_t **ppos, const mbyte_t *end) {
     }
 
     if (quote != *pos++)
-        mu_error_unterminated();
+        mu_errorf("unterminated string literal");
 
     *ppos = pos;
     return str_intern(b, n);
@@ -583,17 +573,15 @@ mu_t str_repr(mu_t m) {
     for (; pos < end; pos++) {
         if (*pos < ' ' || *pos > '~' ||
             *pos == '\\' || *pos == '\'') {
-            if (*pos == '\\') buf_appendz(&b, &n, "\\\\");
-            else if (*pos == '\'') buf_appendz(&b, &n, "\\'");
-            else if (*pos == '\f') buf_appendz(&b, &n, "\\f");
-            else if (*pos == '\n') buf_appendz(&b, &n, "\\n");
-            else if (*pos == '\r') buf_appendz(&b, &n, "\\r");
-            else if (*pos == '\t') buf_appendz(&b, &n, "\\t");
-            else if (*pos == '\v') buf_appendz(&b, &n, "\\v");
-            else if (*pos == '\0') buf_appendz(&b, &n, "\\0");
-            else buf_append(&b, &n, (mbyte_t[]){
-                    '\\', 'x', mu_toascii(*pos / 16),
-                               mu_toascii(*pos % 16)}, 4);
+            if (*pos == '\\')      buf_format(&b, &n, "\\\\");
+            else if (*pos == '\'') buf_format(&b, &n, "\\'");
+            else if (*pos == '\f') buf_format(&b, &n, "\\f");
+            else if (*pos == '\n') buf_format(&b, &n, "\\n");
+            else if (*pos == '\r') buf_format(&b, &n, "\\r");
+            else if (*pos == '\t') buf_format(&b, &n, "\\t");
+            else if (*pos == '\v') buf_format(&b, &n, "\\v");
+            else if (*pos == '\0') buf_format(&b, &n, "\\0");
+            else                   buf_format(&b, &n, "\\x%bx", *pos);
         } else {
             buf_push(&b, &n, *pos);
         }

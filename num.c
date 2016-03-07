@@ -33,7 +33,7 @@ mu_inline mu_t mnum(mfloat_t n) {
 // Number cannot be NaNs or negative zero to garuntee bitwise equality
 mu_t num_fromfloat(mfloat_t n) {
     if (n != n)
-        mu_error(mcstr("operation resulted in nan"));
+        mu_errorf("operation resulted in nan");
 
     if (n == 0)
         n = 0;
@@ -361,12 +361,12 @@ static void num_base_fpart(mu_t *s, muint_t *i, mu_t n,
 
 static mu_t num_base(mu_t n, char c, mu_t base, char expc, mu_t expbase) {
     if (n == muint(0)) {
-        if (c) return mnstr((mbyte_t[3]){'0', c, '0'}, 3);
-        else   return mcstr("0");
+        if (c) return mstr("0%bc0", c);
+        else   return mstr("0");
     } else if (n == MU_INF) {
-        return mcstr("+inf");
+        return mstr("+inf");
     } else if (n == MU_NINF) {
-        return mcstr("-inf");
+        return mstr("-inf");
     } else {
         mu_t s = buf_create(0);
         muint_t i = 0;

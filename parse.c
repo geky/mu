@@ -304,65 +304,51 @@ static mu_noreturn mu_error_parse(struct lex *l, mu_t message) {
     }
 
     if (lines == 1)
-        mu_error(message);
+        mu_errorf("%m", message);
     else
-        mu_error(mlist({
-            message,
-            mcstr(" on line "),
-            mu_repr(muint(lines))}));
+        mu_errorf("%m on line %wu", message, lines);
 }
 
 static mu_noreturn mu_error_character(struct lex *l) {
-    mu_t b = buf_create(0);
-    muint_t n = 0;
-    buf_appendz(&b, &n, "unexpected ");
-    buf_concat(&b, &n, mu_repr(mnstr(l->pos, 1)));
-
-    mu_error_parse(l, str_intern(b, n));
+    mu_error_parse(l, str_format("unexpected %r", str_create(l->pos, 1)));
 }
 
 static mu_noreturn mu_error_token(struct lex *l) {
     mu_t b = buf_create(0);
     muint_t n = 0;
-    buf_appendz(&b, &n, "unexpected ");
+    buf_format(&b, &n, "unexpected ");
 
     if (l->tok & T_ANY_VAL) {
         buf_concat(&b, &n, mu_repr(mu_inc(l->val)));
     } else if (l->tok & T_TERM) {
-        buf_appendz(&b, &n, "terminator");
+        buf_format(&b, &n, "terminator");
     } else if (l->tok & T_SEP) {
-        buf_appendz(&b, &n, "','");
+        buf_format(&b, &n, "','");
     } else if (l->tok & T_LPAREN) {
-        buf_appendz(&b, &n, "'('");
+        buf_format(&b, &n, "'('");
     } else if (l->tok & T_RPAREN) {
-        buf_appendz(&b, &n, "')'");
+        buf_format(&b, &n, "')'");
     } else if (l->tok & T_LTABLE) {
-        buf_appendz(&b, &n, "'['");
+        buf_format(&b, &n, "'['");
     } else if (l->tok & T_RTABLE) {
-        buf_appendz(&b, &n, "']'");
+        buf_format(&b, &n, "']'");
     } else if (l->tok & T_LBLOCK) {
-        buf_appendz(&b, &n, "'{'");
+        buf_format(&b, &n, "'{'");
     } else if (l->tok & T_RBLOCK) {
-        buf_appendz(&b, &n, "'}'");
+        buf_format(&b, &n, "'}'");
     } else {
-        buf_appendz(&b, &n, "end");
+        buf_format(&b, &n, "end");
     }
 
     mu_error_parse(l, str_intern(b, n));
 }
 
 static mu_noreturn mu_error_assignment(struct lex *l) {
-    mu_error_parse(l, mcstr("invalid assignment"));
+    mu_error_parse(l, mstr("invalid assignment"));
 }
 
 static mu_noreturn mu_error_expression(mbyte_t c) {
-    mu_t b = buf_create(0);
-    muint_t n = 0;
-    buf_appendz(&b, &n, "unexpected ");
-    buf_concat(&b, &n, mu_repr(mnstr(&c, 1)));
-    buf_appendz(&b, &n, " in expression");
-
-    mu_error(str_intern(b, n));
+    mu_errorf("unexpected %r in expression", str_create(&c, 1));
 }
 
 extern mu_noreturn mu_error_args(const char *name, mc_t count, mu_t *args);
@@ -406,7 +392,7 @@ static void l_op(struct lex *l) {
     while (l->pos < l->end && class[*l->pos] == L_OP)
         l->pos++;
 
-    l->val = mnstr(begin, l->pos-begin);
+    l->val = str_create(begin, l->pos-begin);
     mu_t tok = tbl_lookup(MU_KEYWORDS, mu_inc(l->val));
     l->tok = tok ? num_uint(tok) : T_OP;
 }
@@ -418,7 +404,7 @@ static void l_kw(struct lex *l) {
                                class[*l->pos] == L_NUM))
         l->pos++;
 
-    l->val = mnstr(begin, l->pos-begin);
+    l->val = str_create(begin, l->pos-begin);
     mu_t tok = tbl_lookup(MU_KEYWORDS, mu_inc(l->val));
     l->tok = tok ? num_uint(tok) : T_SYM;
 }
@@ -1356,7 +1342,7 @@ static void p_stmt(struct parse *p) {
 
     } else if (match(p, T_BREAK)) {
         if (p->bchain == (mlen_t)-1)
-            mu_error_parse(&p->l, mcstr("break outside of loop"));
+            mu_error_parse(&p->l, mstr("break outside of loop"));
 
         mlen_t offset = p->bcount;
         encode(p, OP_JUMP, 0, p->bchain ? p->bchain-p->bcount : 0, 0, 0);
@@ -1364,7 +1350,7 @@ static void p_stmt(struct parse *p) {
 
     } else if (match(p, T_CONTINUE)) {
         if (p->cchain == (mlen_t)-1)
-            mu_error_parse(&p->l, mcstr("continue outside of loop"));
+            mu_error_parse(&p->l, mstr("continue outside of loop"));
 
         mlen_t offset = p->bcount;
         encode(p, OP_JUMP, 0, p->cchain ? p->cchain-p->bcount : 0, 0, 0);
@@ -1446,7 +1432,7 @@ mu_t mu_nparse(const mbyte_t **ppos, const mbyte_t *end) {
                                  class[*pos] == L_NUM))
                 pos++;
 
-            val = mnstr(start, pos-start);
+            val = str_create(start, pos-start);
             sym = true;
         } break;
 
