@@ -29,7 +29,7 @@ mu_t str_concat(mu_t a, mu_t b);
 mu_t str_subset(mu_t s, mu_t lower, mu_t upper);
 
 mu_t str_find(mu_t s, mu_t sub);
-mu_t str_replace(mu_t s, mu_t sub, mu_t rep, mu_t max);
+mu_t str_replace(mu_t s, mu_t sub, mu_t rep);
 mu_t str_split(mu_t s, mu_t delim);
 mu_t str_join(mu_t iter, mu_t delim);
 mu_t str_pad(mu_t s, mu_t len, mu_t pad);

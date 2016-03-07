@@ -37,8 +37,7 @@ mu_t tbl_pairs(mu_t t);
 
 // Table representation
 mu_t tbl_parse(const mbyte_t **pos, const mbyte_t *end);
-mu_t tbl_repr(mu_t t);
-mu_t tbl_dump(mu_t t, mu_t depth, mu_t indent);
+mu_t tbl_dump(mu_t t, mu_t depth);
 
 // Array-like manipulations
 void tbl_push(mu_t t, mu_t v, mu_t i);

@@ -721,8 +721,11 @@ mu_t tbl_parse(const mbyte_t **ppos, const mbyte_t *end) {
     return t;    
 }
 
-static void tbl_dump_nested(mu_t t, mu_t *s, muint_t *n, 
-                            mu_t depth, mu_t indent, muint_t nest) {
+static void tbl_dump_nested(mu_t t, mu_t *s, muint_t *n, mu_t depth) {
+    if (num_cmp(depth, muint(0)) <= 0) {
+        return buf_concat(s, n, mu_addr(t));
+    }
+
     bool linear = tbl(t)->linear;
     for (muint_t i = 0; linear && i < tbl_len(t); i++) {
         if (!tbl(t)->array[i])
@@ -733,59 +736,41 @@ static void tbl_dump_nested(mu_t t, mu_t *s, muint_t *n,
 
     mu_t k, v;
     for (muint_t i = 0; tbl_next(t, &i, &k, &v);) {
-        if (indent) {
-            muint_t nest_indent = nest * num_uint(indent);
-            buf_push(s, n, '\n');
-            for (muint_t j = 0; j < nest_indent; j++)
-                buf_push(s, n, ' ');
-        }
-
         if (!linear) {
-            buf_concat(s, n, mu_repr(k));
+            buf_concat(s, n, mu_dump(k, muint(0)));
             buf_format(s, n, ": ");
         } else {
             mu_dec(k);
         }
 
-        if (mu_istbl(v) && num_cmp(depth, muint(0)) > 0) {
-            tbl_dump_nested(v, s, n,
-                            num_sub(depth, muint(1)),
-                            indent, nest + 1);
+        if (mu_istbl(v)) {
+            tbl_dump_nested(v, s, n, num_sub(depth, muint(1)));
         } else {
             buf_concat(s, n, mu_repr(v));
         }
 
-        buf_format(s, n, indent ? "," : ", ");
+        buf_format(s, n, ", ");
     }
 
     if (tbl_len(t) > 0) {
-        *n -= indent ? 1 : 2;
-
-        if (indent) {
-            muint_t nest_indent = (nest-1) * num_uint(indent);
-            buf_push(s, n, '\n');
-            for (muint_t j = 0; j < nest_indent; j++)
-                buf_push(s, n, ' ');
-        }
+        *n -= 2;
     }
 
     buf_push(s, n, ']');
     tbl_dec(t);
 }
 
-mu_t tbl_dump(mu_t t, mu_t depth, mu_t indent) {
-    mu_assert(mu_istbl(t) && (!depth || mu_isnum(depth))
-                          && (!indent || mu_isnum(indent)));
+mu_t tbl_dump(mu_t t, mu_t depth) {
+    mu_assert(mu_istbl(t) && (!depth || mu_isnum(depth)));
 
-    if (!depth || num_cmp(depth, muint(0)) <= 0)
-        return mu_addr(t);
+    if (!depth) {
+        depth = muint(1);
+    }
 
     mu_t s = buf_create(0);
     muint_t n = 0;
 
-    tbl_dump_nested(t, &s, &n, 
-                    num_sub(depth, muint(1)), 
-                    indent, 1);
+    tbl_dump_nested(t, &s, &n, depth);
 
     return str_intern(s, n);
 }

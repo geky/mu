@@ -177,7 +177,7 @@ mu_t mu_shr(mu_t a, mu_t b);
 mu_t mu_parse(mu_t m);
 mu_t mu_addr(mu_t m);
 mu_t mu_repr(mu_t m);
-mu_t mu_dump(mu_t m, mu_t depth, mu_t indent);
+mu_t mu_dump(mu_t m, mu_t depth);
 
 mu_t mu_bin(mu_t m);
 mu_t mu_oct(mu_t m);
@@ -185,7 +185,7 @@ mu_t mu_hex(mu_t m);
 
 // String operations
 mu_t mu_find(mu_t m, mu_t sub);
-mu_t mu_replace(mu_t m, mu_t sub, mu_t rep, mu_t max);
+mu_t mu_replace(mu_t m, mu_t sub, mu_t rep);
 
 mu_t mu_split(mu_t m, mu_t delim);
 mu_t mu_join(mu_t iter, mu_t delim);

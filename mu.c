@@ -803,9 +803,9 @@ static mc_t mu_parse_thunk(mu_t *frame) {
 
 static mc_t mu_repr_thunk(mu_t *frame);
 MSTR(mu_repr_key, "repr")
-MBFN(mu_repr_bfn, 0x3, mu_repr_thunk)
+MBFN(mu_repr_bfn, 0x2, mu_repr_thunk)
 static mc_t mu_repr_thunk(mu_t *frame) {
-    frame[0] = mu_dump(frame[0], frame[1], frame[2]);
+    frame[0] = mu_dump(frame[0], frame[1]);
     return 1;
 }
 
@@ -824,18 +824,18 @@ mu_t mu_addr(mu_t m) {
 }
 
 mu_t mu_repr(mu_t m) {
-    return mu_dump(m, 0, 0);
+    return mu_dump(m, 0);
 }
 
-mu_t mu_dump(mu_t m, mu_t indent, mu_t depth) {
-    if ((indent && !mu_isnum(indent)) || (depth && !mu_isnum(depth)))
-        mu_error_arg3(MU_REPR_KEY, m, indent, depth);
+mu_t mu_dump(mu_t m, mu_t depth) {
+    if (depth && !mu_isnum(depth))
+        mu_error_arg2(MU_REPR_KEY, m, depth);
 
     switch (mu_type(m)) {
         case MTNIL:     return MU_KW_NIL;
         case MTNUM:     return num_repr(m);
         case MTSTR:     return str_repr(m);
-        case MTTBL:     return tbl_dump(m, indent, depth);
+        case MTTBL:     return tbl_dump(m, depth);
         case MTFN:      return mu_addr(m);
         default:        mu_unreachable;
     }
@@ -1016,38 +1016,40 @@ static mc_t mu_find_thunk(mu_t *frame);
 MSTR(mu_find_key, "find")
 MBFN(mu_find_bfn, 0x2, mu_find_thunk)
 static mc_t mu_find_thunk(mu_t *frame) {
+    mu_t len = muint(mu_len(frame[0]));
     frame[0] = mu_find(frame[0], frame[1]);
-    return 1;
+    frame[1] = len;
+    return 2;
 }
 
-mu_t mu_find(mu_t m, mu_t sub) {
-    if (mu_isstr(sub)) {
+mu_t mu_find(mu_t m, mu_t s) {
+    if (mu_type(m) == mu_type(s)) {
         switch (mu_type(m)) {
-            case MTSTR:     return str_find(m, sub);
+            case MTSTR:     return str_find(m, s);
             default:        break;
         }
     }
 
-    mu_error_arg2(MU_FIND_KEY, m, sub);
+    mu_error_arg2(MU_FIND_KEY, m, s);
 }
 
 static mc_t mu_replace_thunk(mu_t *frame);
 MSTR(mu_replace_key, "replace")
-MBFN(mu_replace_bfn, 0x4, mu_replace_thunk)
+MBFN(mu_replace_bfn, 0x3, mu_replace_thunk)
 static mc_t mu_replace_thunk(mu_t *frame) {
-    frame[0] = mu_replace(frame[0], frame[1], frame[2], frame[3]);
+    frame[0] = mu_replace(frame[0], frame[1], frame[2]);
     return 1;
 }
 
-mu_t mu_replace(mu_t m, mu_t sub, mu_t rep, mu_t max) {
-    if (mu_isstr(sub) && mu_isstr(rep) && (!max || mu_isnum(max))) {
+mu_t mu_replace(mu_t m, mu_t r, mu_t s) {
+    if (mu_type(m) == mu_type(r) && mu_type(m) == mu_type(s)) {
         switch (mu_type(m)) {
-            case MTSTR:     return str_replace(m, sub, rep, max);
+            case MTSTR:     return str_replace(m, r, s);
             default:        break;
         }
     }
 
-    mu_error_arg4(MU_REPLACE_KEY, m, sub, rep, max);
+    mu_error_arg3(MU_REPLACE_KEY, m, r, s);
 }
 
 static mc_t mu_split_thunk(mu_t *frame);

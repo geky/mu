@@ -72,7 +72,7 @@ static void printvar(mu_t v) {
 }
 
 static void printrepr(mu_t v) {
-    printvar(mu_dump(v, MU_INF, 0));
+    printvar(mu_repr(v));
 }
 
 static void printerr(void) {

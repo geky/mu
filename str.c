@@ -239,71 +239,56 @@ mu_t str_subset(mu_t s, mu_t lower, mu_t upper) {
     return d;
 }
 
-mu_t str_find(mu_t a, mu_t s) {
-    mu_assert(mu_isstr(a) && mu_isstr(s));
-    const mbyte_t *ab = str_bytes(a);
-    mlen_t alen = str_len(a);
+mu_t str_find(mu_t m, mu_t s) {
+    mu_assert(mu_isstr(m) && mu_isstr(s));
+    const mbyte_t *mb = str_bytes(m);
+    mlen_t mlen = str_len(m);
     const mbyte_t *sb = str_bytes(s);
     mlen_t slen = str_len(s);
 
-    for (muint_t i = 0; i+slen <= alen; i++) {
-        if (memcmp(&ab[i], sb, slen) == 0) {
-            str_dec(a);
+    for (muint_t i = 0; i+mlen <= slen; i++) {
+        if (memcmp(&sb[i], mb, mlen) == 0) {
+            str_dec(m);
             str_dec(s);
             return mint(i);
         }
     }
 
-    str_dec(a);
+    str_dec(m);
     str_dec(s);
     return 0;
 }
 
-mu_t str_replace(mu_t a, mu_t s, mu_t r, mu_t mmax) {
-    mu_assert(mu_isstr(a) && mu_isstr(s) && mu_isstr(r) 
-              && (!mmax || mu_isnum(mmax)));
-    const mbyte_t *ab = str_bytes(a);
-    mlen_t alen = str_len(a);
+mu_t str_replace(mu_t m, mu_t r, mu_t s) {
+    mu_assert(mu_isstr(m) && mu_isstr(r) && mu_isstr(s));
+    const mbyte_t *mb = str_bytes(m);
+    mlen_t mlen = str_len(m);
     const mbyte_t *sb = str_bytes(s);
     mlen_t slen = str_len(s);
 
-    muint_t count = 0;
-    muint_t max;
-
-    if (!mmax || num_cmp(mmax, muint(alen+1)) >= 0)
-        max = alen+1;
-    else if (num_cmp(mmax, muint(0)) <= 0)
-        max = 0;
-    else
-        max = num_uint(mmax);
-
-    mu_t d = buf_create(alen);
+    mu_t d = buf_create(slen);
     muint_t n = 0;
     muint_t i = 0;
 
-    while (i+slen <= alen && count < max) {
-        bool match = memcmp(&ab[i], sb, slen) == 0;
+    while (i+mlen <= slen) {
+        bool match = memcmp(&sb[i], mb, mlen) == 0;
 
         if (match) {
             buf_concat(&d, &n, str_inc(r));
-            count++;
-            i += slen;
+            i += mlen;
         }
 
-        if (!match || slen == 0) {
-            if (i >= alen)
-                break;
-
-            buf_push(&d, &n, ab[i]);
+        if (!match || mlen == 0) {
+            buf_push(&d, &n, sb[i]);
             i += 1;
         }
     }
 
-    buf_append(&d, &n, &ab[i], alen-i);
+    buf_append(&d, &n, &sb[i], slen-i);
 
-    str_dec(a);
-    str_dec(s);
+    str_dec(m);
     str_dec(r);
+    str_dec(s);
     return str_intern(d, n);
 }
 
