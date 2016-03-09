@@ -27,6 +27,7 @@ CFLAGS += -std=c99
 CFLAGS += -Wall -Winline
 
 LFLAGS += -lm
+LFLAGS += -lreadline
 
 
 all: $(TARGET)
