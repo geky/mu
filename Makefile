@@ -1,15 +1,11 @@
-TARGET = mu
-LIBTARGET = libmu.a
+TARGET = libmu.a
+
 
 CC = gcc
 AR = ar
 SIZE = size
 
-SRC += main.c
-SRC += mu.c
-SRC += mem.c
-SRC += num.c str.c buf.c tbl.c fn.c
-SRC += vm.c parse.c
+SRC += $(wildcard *.c)
 OBJ := $(SRC:.c=.o)
 DEP := $(SRC:.c=.d)
 ASM := $(SRC:.c=.s)
@@ -26,26 +22,17 @@ endif
 CFLAGS += -std=c99
 CFLAGS += -Wall -Winline
 
-LFLAGS += -lm
-LFLAGS += -lreadline
-
 
 all: $(TARGET)
 
-lib: $(LIBTARGET)
-
 asm: $(ASM)
 
-size: $(OBJ) $(TARGET)
-	$(SIZE) $^
+size: $(OBJ)
+	$(SIZE) -t $^
 
 -include $(DEP)
 
-
-$(TARGET): $(OBJ)
-	$(CC) $(CFLAGS) $^ $(LFLAGS) -o $@
-
-$(LIBTARGET): $(OBJ)
+%.a: $(OBJ)
 	$(AR) rcs $@ $^
 
 %.o: %.c
@@ -54,9 +41,8 @@ $(LIBTARGET): $(OBJ)
 %.s: %.c
 	$(CC) -S $(CFLAGS) $< -o $@
 
-
 clean:
-	rm -f $(TARGET) $(LIBTARGET)
+	rm -f $(TARGET)
 	rm -f $(OBJ)
 	rm -f $(DEP)
 	rm -f $(ASM)
