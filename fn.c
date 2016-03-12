@@ -192,8 +192,8 @@ static mc_t fn_map_step(mu_t scope, mu_t *frame) {
 }
 
 mu_t fn_map(mu_t f, mu_t iter) {
-    mu_assert(mu_isfn(f) && mu_isfn(iter));
-    return msbfn(0, fn_map_step, mlist({f, iter}));
+    mu_assert(mu_isfn(f));
+    return msbfn(0, fn_map_step, mlist({f, mu_iter(iter)}));
 }
 
 static mc_t fn_filter_step(mu_t scope, mu_t *frame) {
@@ -219,14 +219,14 @@ static mc_t fn_filter_step(mu_t scope, mu_t *frame) {
 }
 
 mu_t fn_filter(mu_t f, mu_t iter) {
-    mu_assert(mu_isfn(f) && mu_isfn(iter));
-    return msbfn(0, fn_filter_step, mlist({f, iter}));
+    mu_assert(mu_isfn(f));
+    return msbfn(0, fn_filter_step, mlist({f, mu_iter(iter)}));
 }
 
 mu_t fn_reduce(mu_t f, mu_t iter, mu_t acc) {
-    mu_assert(mu_isfn(f) && mu_isfn(iter) && 
-              (!acc || mu_istbl(acc)));
+    mu_assert(mu_isfn(f) && (!acc || mu_istbl(acc)));
     mu_t frame[MU_FRAME];
+    iter = mu_iter(iter);
 
     if (!acc || tbl_len(acc) == 0) {
         mu_dec(acc);
@@ -246,8 +246,9 @@ mu_t fn_reduce(mu_t f, mu_t iter, mu_t acc) {
 }
 
 bool fn_any(mu_t f, mu_t iter) {
-    mu_assert(mu_isfn(f) && mu_isfn(iter));
+    mu_assert(mu_isfn(f));
     mu_t frame[MU_FRAME];
+    iter = mu_iter(iter);
 
     while (fn_next(iter, 0xf, frame)) {
         fn_fcall(f, 0xf1, frame);
@@ -263,8 +264,9 @@ bool fn_any(mu_t f, mu_t iter) {
 }
 
 bool fn_all(mu_t f, mu_t iter) {
-    mu_assert(mu_isfn(f) && mu_isfn(iter));
+    mu_assert(mu_isfn(f));
     mu_t frame[MU_FRAME];
+    iter = mu_iter(iter);
 
     while (fn_next(iter, 0xf, frame)) {
         fn_fcall(f, 0xf1, frame);

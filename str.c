@@ -210,9 +210,8 @@ mu_t str_concat(mu_t a, mu_t b) {
 }
 
 mu_t str_subset(mu_t s, mu_t lower, mu_t upper) {
-    mu_assert(mu_isstr(s) && mu_isnum(lower) 
-              && (!upper || mu_isnum(upper)));
-    mlen_t len = str_len(s);
+    mu_assert(mu_isstr(s) && mu_isnum(lower) && (!upper || mu_isnum(upper)));
+    mint_t len = str_len(s);
     muint_t a;
     muint_t b;
 

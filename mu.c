@@ -817,18 +817,21 @@ static mc_t mu_repr_thunk(mu_t *frame) {
     return 1;
 }
 
+MSTR(mu_cdata_key, "cdata")
+
 mu_t mu_addr(mu_t m) {
-    mu_t names[8] = {
-        [MTNIL] = MU_KW_NIL,
-        [MTNUM] = MU_NUM_KEY,
-        [MTSTR] = MU_STR_KEY,
-        [MTTBL] = MU_TBL_KEY,
-        [MTFN]  = MU_KW_FN,
-        [MTBUF] = mstr("cdata"),
-        [MTCD]  = mstr("cdata"),
+    static mu_t (*const names[8])(void) = {
+        [MTNIL] = mu_kw_nil,
+        [MTNUM] = mu_num_key,
+        [MTSTR] = mu_str_key,
+        [MTTBL] = mu_tbl_key,
+        [MTFN]  = mu_kw_fn,
+        [MTBUF] = mu_cdata_key,
+        [MTCD]  = mu_cdata_key
     };
 
-    return mstr("<%m 0x%wx>", names[mu_type(m)], m);
+    mu_dec(m);
+    return mstr("<%m 0x%wx>", names[mu_type(m)](), m);
 }
 
 mu_t mu_repr(mu_t m) {
@@ -1155,7 +1158,6 @@ static mc_t mu_bind_thunk(mu_t *frame) {
 }
 
 mu_t mu_bind(mu_t m, mu_t args) {
-    mu_assert(mu_istbl(args));
     return fn_bind(m, args);
 }
 
@@ -1180,7 +1182,12 @@ static mc_t mu_map_thunk(mu_t *frame) {
 }
 
 mu_t mu_map(mu_t m, mu_t iter) {
-    return fn_map(m, mu_iter(iter));
+    switch (mu_type(m)) {
+        case MTFN:      return fn_map(m, iter);
+        default:        break;
+    }
+
+    mu_error_arg2(MU_MAP_KEY, m, iter);
 }
 
 static mc_t mu_filter_thunk(mu_t *frame);
@@ -1192,7 +1199,12 @@ static mc_t mu_filter_thunk(mu_t *frame) {
 }
 
 mu_t mu_filter(mu_t m, mu_t iter) {
-    return fn_filter(m, mu_iter(iter));
+    switch (mu_type(m)) {
+        case MTFN:      return fn_filter(m, iter);
+        default:        break;
+    }
+
+    mu_error_arg2(MU_FILTER_KEY, m, iter);
 }
 
 static mc_t mu_reduce_thunk(mu_t *frame);
@@ -1206,8 +1218,12 @@ static mc_t mu_reduce_thunk(mu_t *frame) {
 }
 
 mu_t mu_reduce(mu_t m, mu_t iter, mu_t inits) {
-    mu_assert(mu_istbl(inits));
-    return fn_reduce(m, mu_iter(iter), inits);
+    switch (mu_type(m)) {
+        case MTFN:      return fn_reduce(m, iter, inits);
+        default:        break;
+    }
+
+    mu_error_arg3(MU_REDUCE_KEY, m, iter, inits);
 }
 
 static mc_t mu_any_thunk(mu_t *frame);
@@ -1219,7 +1235,12 @@ static mc_t mu_any_thunk(mu_t *frame) {
 }
 
 bool mu_any(mu_t m, mu_t iter) {
-    return fn_any(m, mu_iter(iter));
+    switch (mu_type(m)) {
+        case MTFN:      return fn_any(m, iter);
+        default:        break;
+    }
+
+    mu_error_arg2(MU_ANY_KEY, m, iter);
 }
 
 static mc_t mu_all_thunk(mu_t *frame);
@@ -1231,7 +1252,12 @@ static mc_t mu_all_thunk(mu_t *frame) {
 }
 
 bool mu_all(mu_t m, mu_t iter) {
-    return fn_all(m, mu_iter(iter));
+    switch (mu_type(m)) {
+        case MTFN:      return fn_all(m, iter);
+        default:        break;
+    }
+
+    mu_error_arg2(MU_ALL_KEY, m, iter);
 }
 
 

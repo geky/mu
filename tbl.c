@@ -479,7 +479,7 @@ void tbl_push(mu_t t, mu_t v, mu_t i) {
             muint_t j = num_uint(i);
 
             memmove(&tbl(t)->array[j+1], &tbl(t)->array[j], 
-                    (size-j)*sizeof(mu_t));
+                    (size-j-1)*sizeof(mu_t));
             tbl(t)->array[j] = 0;
         }
     } else {
