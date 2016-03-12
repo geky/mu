@@ -41,7 +41,7 @@ mu_inline bool mu_isbuf(mu_t m) { return mu_type(m) == MTBUF; }
 mu_inline bool mu_istbl(mu_t m) { return mu_type(m) == MTTBL; }
 mu_inline bool mu_isfn(mu_t m)  { return mu_type(m) == MTFN;  }
 
-mu_inline bool mu_isref(mu_t m)   { return 4 & (muint_t)m; }
+mu_inline bool mu_isref(mu_t m) { return 4 & (muint_t)m; }
 
 
 // Reference counting
@@ -88,7 +88,6 @@ mu_inline void *mu_unwrap(mu_t data) {
 // nibbles for arguments and return values, in that order.
 typedef uint8_t mc_t;
 
-
 // Conversion between different frame types
 void mu_fconvert(mc_t dc, mc_t sc, mu_t *frame);
 
@@ -99,6 +98,10 @@ mu_inline muint_t mu_fcount(mc_t fc) {
 mu_inline void mu_fcopy(mc_t fc, mu_t *dframe, mu_t *sframe) {
     memcpy(dframe, sframe, sizeof(mu_t)*mu_fcount(fc));
 }
+
+
+// Type for constant generating functions
+typedef mu_t mgen_t(void);
 
 
 // Constants
@@ -113,12 +116,12 @@ mu_inline void mu_fcopy(mc_t fc, mu_t *dframe, mu_t *sframe) {
 #define MU_PI       mu_pi()
 #define MU_ID       mu_id()
 
-mu_pure mu_t mu_true(void);
-mu_pure mu_t mu_inf(void);
-mu_pure mu_t mu_ninf(void);
-mu_pure mu_t mu_e(void);
-mu_pure mu_t mu_pi(void);
-mu_pure mu_t mu_id(void);
+mgen_t mu_true;
+mgen_t mu_inf;
+mgen_t mu_ninf;
+mgen_t mu_e;
+mgen_t mu_pi;
+mgen_t mu_id;
 
 
 // Type casts
@@ -176,7 +179,6 @@ mu_t mu_shl(mu_t a, mu_t b);
 mu_t mu_shr(mu_t a, mu_t b);
 
 // String representation
-mu_t mu_parse(mu_t m);
 mu_t mu_addr(mu_t m);
 mu_t mu_repr(mu_t m);
 mu_t mu_dump(mu_t m, mu_t depth);
@@ -184,6 +186,9 @@ mu_t mu_dump(mu_t m, mu_t depth);
 mu_t mu_bin(mu_t m);
 mu_t mu_oct(mu_t m);
 mu_t mu_hex(mu_t m);
+
+// Parsing and evaluation
+mu_t mu_parse(const char *s, muint_t n);
 
 // String operations
 mu_t mu_find(mu_t m, mu_t sub);
@@ -246,11 +251,11 @@ mu_t mu_sort(mu_t iter);
 // System operations
 mu_noreturn mu_verrorf(const char *f, va_list args);
 mu_noreturn mu_errorf(const char *f, ...);
-mu_noreturn mu_error(mu_t message);
+mu_noreturn mu_error(const char *s, muint_t n);
 
 void mu_vprintf(const char *f, va_list args);
 void mu_printf(const char *f, ...);
-void mu_print(mu_t message);
+void mu_print(const char *s, muint_t n);
 
 mu_t mu_import(mu_t name);
 
@@ -258,335 +263,335 @@ mu_t mu_import(mu_t name);
 // Standard functions are provided as C functions as well as
 // Mu functions in readonly builtins table
 #define MU_BUILTINS mu_builtins()
-mu_pure mu_t mu_builtins(void);
+mgen_t mu_builtins;
 
 
 // Function keys and variables
 #define MU_TRUE_KEY mu_true_key()
-mu_pure mu_t mu_true_key(void);
+mgen_t mu_true_key;
 #define MU_FALSE_KEY mu_false_key()
-mu_pure mu_t mu_false_key(void);
+mgen_t mu_false_key;
 #define MU_INF_KEY mu_inf_key()
-mu_pure mu_t mu_inf_key(void);
+mgen_t mu_inf_key;
 #define MU_E_KEY mu_e_key()
-mu_pure mu_t mu_e_key(void);
+mgen_t mu_e_key;
 #define MU_PI_KEY mu_pi_key()
-mu_pure mu_t mu_pi_key(void);
+mgen_t mu_pi_key;
 #define MU_ID_KEY mu_id_key()
-mu_pure mu_t mu_id_key(void);
+mgen_t mu_id_key;
 
 #define MU_NUM_KEY mu_num_key()
 #define MU_NUM_BFN mu_num_bfn()
-mu_pure mu_t mu_num_key(void);
-mu_pure mu_t mu_num_bfn(void);
+mgen_t mu_num_key;
+mgen_t mu_num_bfn;
 #define MU_STR_KEY mu_str_key()
 #define MU_STR_BFN mu_str_bfn()
-mu_pure mu_t mu_str_key(void);
-mu_pure mu_t mu_str_bfn(void);
+mgen_t mu_str_key;
+mgen_t mu_str_bfn;
 #define MU_TBL_KEY mu_tbl_key()
 #define MU_TBL_BFN mu_tbl_bfn()
-mu_pure mu_t mu_tbl_key(void);
-mu_pure mu_t mu_tbl_bfn(void);
+mgen_t mu_tbl_key;
+mgen_t mu_tbl_bfn;
 #define MU_FN_KEY mu_fn_key()
 #define MU_FN_BFN mu_fn_bfn()
-mu_pure mu_t mu_fn_key(void);
-mu_pure mu_t mu_fn_bfn(void);
+mgen_t mu_fn_key;
+mgen_t mu_fn_bfn;
 
 #define MU_NOT_KEY mu_not_key()
 #define MU_NOT_BFN mu_not_bfn()
-mu_pure mu_t mu_not_key(void);
-mu_pure mu_t mu_not_bfn(void);
+mgen_t mu_not_key;
+mgen_t mu_not_bfn;
 #define MU_EQ_KEY mu_eq_key()
 #define MU_EQ_BFN mu_eq_bfn()
-mu_pure mu_t mu_eq_key(void);
-mu_pure mu_t mu_eq_bfn(void);
+mgen_t mu_eq_key;
+mgen_t mu_eq_bfn;
 #define MU_NEQ_KEY mu_neq_key()
 #define MU_NEQ_BFN mu_neq_bfn()
-mu_pure mu_t mu_neq_key(void);
-mu_pure mu_t mu_neq_bfn(void);
+mgen_t mu_neq_key;
+mgen_t mu_neq_bfn;
 #define MU_IS_KEY mu_is_key()
 #define MU_IS_BFN mu_is_bfn()
-mu_pure mu_t mu_is_key(void);
-mu_pure mu_t mu_is_bfn(void);
+mgen_t mu_is_key;
+mgen_t mu_is_bfn;
 #define MU_LT_KEY mu_lt_key()
 #define MU_LT_BFN mu_lt_bfn()
-mu_pure mu_t mu_lt_key(void);
-mu_pure mu_t mu_lt_bfn(void);
+mgen_t mu_lt_key;
+mgen_t mu_lt_bfn;
 #define MU_LTE_KEY mu_lte_key()
 #define MU_LTE_BFN mu_lte_bfn()
-mu_pure mu_t mu_lte_key(void);
-mu_pure mu_t mu_lte_bfn(void);
+mgen_t mu_lte_key;
+mgen_t mu_lte_bfn;
 #define MU_GT_KEY mu_gt_key()
 #define MU_GT_BFN mu_gt_bfn()
-mu_pure mu_t mu_gt_key(void);
-mu_pure mu_t mu_gt_bfn(void);
+mgen_t mu_gt_key;
+mgen_t mu_gt_bfn;
 #define MU_GTE_KEY mu_gte_key()
 #define MU_GTE_BFN mu_gte_bfn()
-mu_pure mu_t mu_gte_key(void);
-mu_pure mu_t mu_gte_bfn(void);
+mgen_t mu_gte_key;
+mgen_t mu_gte_bfn;
 
 #define MU_ADD_KEY mu_add_key()
 #define MU_ADD_BFN mu_add_bfn()
-mu_pure mu_t mu_add_key(void);
-mu_pure mu_t mu_add_bfn(void);
+mgen_t mu_add_key;
+mgen_t mu_add_bfn;
 #define MU_SUB_KEY mu_sub_key()
 #define MU_SUB_BFN mu_sub_bfn()
-mu_pure mu_t mu_sub_key(void);
-mu_pure mu_t mu_sub_bfn(void);
+mgen_t mu_sub_key;
+mgen_t mu_sub_bfn;
 #define MU_MUL_KEY mu_mul_key()
 #define MU_MUL_BFN mu_mul_bfn()
-mu_pure mu_t mu_mul_key(void);
-mu_pure mu_t mu_mul_bfn(void);
+mgen_t mu_mul_key;
+mgen_t mu_mul_bfn;
 #define MU_DIV_KEY mu_div_key()
 #define MU_DIV_BFN mu_div_bfn()
-mu_pure mu_t mu_div_key(void);
-mu_pure mu_t mu_div_bfn(void);
+mgen_t mu_div_key;
+mgen_t mu_div_bfn;
 #define MU_ABS_KEY mu_abs_key()
 #define MU_ABS_BFN mu_abs_bfn()
-mu_pure mu_t mu_abs_key(void);
-mu_pure mu_t mu_abs_bfn(void);
+mgen_t mu_abs_key;
+mgen_t mu_abs_bfn;
 #define MU_FLOOR_KEY mu_floor_key()
 #define MU_FLOOR_BFN mu_floor_bfn()
-mu_pure mu_t mu_floor_key(void);
-mu_pure mu_t mu_floor_bfn(void);
+mgen_t mu_floor_key;
+mgen_t mu_floor_bfn;
 #define MU_CEIL_KEY mu_ceil_key()
 #define MU_CEIL_BFN mu_ceil_bfn()
-mu_pure mu_t mu_ceil_key(void);
-mu_pure mu_t mu_ceil_bfn(void);
+mgen_t mu_ceil_key;
+mgen_t mu_ceil_bfn;
 #define MU_IDIV_KEY mu_idiv_key()
 #define MU_IDIV_BFN mu_idiv_bfn()
-mu_pure mu_t mu_idiv_key(void);
-mu_pure mu_t mu_idiv_bfn(void);
+mgen_t mu_idiv_key;
+mgen_t mu_idiv_bfn;
 #define MU_MOD_KEY mu_mod_key()
 #define MU_MOD_BFN mu_mod_bfn()
-mu_pure mu_t mu_mod_key(void);
-mu_pure mu_t mu_mod_bfn(void);
+mgen_t mu_mod_key;
+mgen_t mu_mod_bfn;
 #define MU_POW_KEY mu_pow_key()
 #define MU_POW_BFN mu_pow_bfn()
-mu_pure mu_t mu_pow_key(void);
-mu_pure mu_t mu_pow_bfn(void);
+mgen_t mu_pow_key;
+mgen_t mu_pow_bfn;
 #define MU_LOG_KEY mu_log_key()
 #define MU_LOG_BFN mu_log_bfn()
-mu_pure mu_t mu_log_key(void);
-mu_pure mu_t mu_log_bfn(void);
+mgen_t mu_log_key;
+mgen_t mu_log_bfn;
 
 #define MU_COS_KEY mu_cos_key()
 #define MU_COS_BFN mu_cos_bfn()
-mu_pure mu_t mu_cos_key(void);
-mu_pure mu_t mu_cos_bfn(void);
+mgen_t mu_cos_key;
+mgen_t mu_cos_bfn;
 #define MU_ACOS_KEY mu_acos_key()
 #define MU_ACOS_BFN mu_acos_bfn()
-mu_pure mu_t mu_acos_key(void);
-mu_pure mu_t mu_acos_bfn(void);
+mgen_t mu_acos_key;
+mgen_t mu_acos_bfn;
 #define MU_SIN_KEY mu_sin_key()
 #define MU_SIN_BFN mu_sin_bfn()
-mu_pure mu_t mu_sin_key(void);
-mu_pure mu_t mu_sin_bfn(void);
+mgen_t mu_sin_key;
+mgen_t mu_sin_bfn;
 #define MU_ASIN_KEY mu_asin_key()
 #define MU_ASIN_BFN mu_asin_bfn()
-mu_pure mu_t mu_asin_key(void);
-mu_pure mu_t mu_asin_bfn(void);
+mgen_t mu_asin_key;
+mgen_t mu_asin_bfn;
 #define MU_TAN_KEY mu_tan_key()
 #define MU_TAN_BFN mu_tan_bfn()
-mu_pure mu_t mu_tan_key(void);
-mu_pure mu_t mu_tan_bfn(void);
+mgen_t mu_tan_key;
+mgen_t mu_tan_bfn;
 #define MU_ATAN_KEY mu_atan_key()
 #define MU_ATAN_BFN mu_atan_bfn()
-mu_pure mu_t mu_atan_key(void);
-mu_pure mu_t mu_atan_bfn(void);
+mgen_t mu_atan_key;
+mgen_t mu_atan_bfn;
 
 #define MU_AND_KEY mu_and_key()
 #define MU_AND_BFN mu_and_bfn()
-mu_pure mu_t mu_and_key(void);
-mu_pure mu_t mu_and_bfn(void);
+mgen_t mu_and_key;
+mgen_t mu_and_bfn;
 #define MU_OR_KEY mu_or_key()
 #define MU_OR_BFN mu_or_bfn()
-mu_pure mu_t mu_or_key(void);
-mu_pure mu_t mu_or_bfn(void);
+mgen_t mu_or_key;
+mgen_t mu_or_bfn;
 #define MU_XOR_KEY mu_xor_key()
 #define MU_XOR_BFN mu_xor_bfn()
-mu_pure mu_t mu_xor_key(void);
-mu_pure mu_t mu_xor_bfn(void);
+mgen_t mu_xor_key;
+mgen_t mu_xor_bfn;
 #define MU_DIFF_KEY mu_diff_key()
 #define MU_DIFF_BFN mu_diff_bfn()
-mu_pure mu_t mu_diff_key(void);
-mu_pure mu_t mu_diff_bfn(void);
+mgen_t mu_diff_key;
+mgen_t mu_diff_bfn;
 #define MU_SHL_KEY mu_shl_key()
 #define MU_SHL_BFN mu_shl_bfn()
-mu_pure mu_t mu_shl_key(void);
-mu_pure mu_t mu_shl_bfn(void);
+mgen_t mu_shl_key;
+mgen_t mu_shl_bfn;
 #define MU_SHR_KEY mu_shr_key()
 #define MU_SHR_BFN mu_shr_bfn()
-mu_pure mu_t mu_shr_key(void);
-mu_pure mu_t mu_shr_bfn(void);
+mgen_t mu_shr_key;
+mgen_t mu_shr_bfn;
 
 #define MU_PARSE_KEY mu_parse_key()
 #define MU_PARSE_BFN mu_parse_bfn()
-mu_pure mu_t mu_parse_key(void);
-mu_pure mu_t mu_parse_bfn(void);
+mgen_t mu_parse_key;
+mgen_t mu_parse_bfn;
 #define MU_REPR_KEY mu_repr_key()
 #define MU_REPR_BFN mu_repr_bfn()
-mu_pure mu_t mu_repr_key(void);
-mu_pure mu_t mu_repr_bfn(void);
+mgen_t mu_repr_key;
+mgen_t mu_repr_bfn;
 #define MU_BIN_KEY mu_bin_key()
 #define MU_BIN_BFN mu_bin_bfn()
-mu_pure mu_t mu_bin_key(void);
-mu_pure mu_t mu_bin_bfn(void);
+mgen_t mu_bin_key;
+mgen_t mu_bin_bfn;
 #define MU_OCT_KEY mu_oct_key()
 #define MU_OCT_BFN mu_oct_bfn()
-mu_pure mu_t mu_oct_key(void);
-mu_pure mu_t mu_oct_bfn(void);
+mgen_t mu_oct_key;
+mgen_t mu_oct_bfn;
 #define MU_HEX_KEY mu_hex_key()
 #define MU_HEX_BFN mu_hex_bfn()
-mu_pure mu_t mu_hex_key(void);
-mu_pure mu_t mu_hex_bfn(void);
+mgen_t mu_hex_key;
+mgen_t mu_hex_bfn;
 
 #define MU_LEN_KEY mu_len_key()
 #define MU_LEN_BFN mu_len_bfn()
-mu_pure mu_t mu_len_key(void);
-mu_pure mu_t mu_len_bfn(void);
+mgen_t mu_len_key;
+mgen_t mu_len_bfn;
 #define MU_TAIL_KEY mu_tail_key()
 #define MU_TAIL_BFN mu_tail_bfn()
-mu_pure mu_t mu_tail_key(void);
-mu_pure mu_t mu_tail_bfn(void);
+mgen_t mu_tail_key;
+mgen_t mu_tail_bfn;
 #define MU_PUSH_KEY mu_push_key()
 #define MU_PUSH_BFN mu_push_bfn()
-mu_pure mu_t mu_push_key(void);
-mu_pure mu_t mu_push_bfn(void);
+mgen_t mu_push_key;
+mgen_t mu_push_bfn;
 #define MU_POP_KEY mu_pop_key()
 #define MU_POP_BFN mu_pop_bfn()
-mu_pure mu_t mu_pop_key(void);
-mu_pure mu_t mu_pop_bfn(void);
+mgen_t mu_pop_key;
+mgen_t mu_pop_bfn;
 #define MU_CONCAT_KEY mu_concat_key()
 #define MU_CONCAT_BFN mu_concat_bfn()
-mu_pure mu_t mu_concat_key(void);
-mu_pure mu_t mu_concat_bfn(void);
+mgen_t mu_concat_key;
+mgen_t mu_concat_bfn;
 #define MU_SUBSET_KEY mu_subset_key()
 #define MU_SUBSET_BFN mu_subset_bfn()
-mu_pure mu_t mu_subset_key(void);
-mu_pure mu_t mu_subset_bfn(void);
+mgen_t mu_subset_key;
+mgen_t mu_subset_bfn;
 
 #define MU_FIND_KEY mu_find_key()
 #define MU_FIND_BFN mu_find_bfn()
-mu_pure mu_t mu_find_key(void);
-mu_pure mu_t mu_find_bfn(void);
+mgen_t mu_find_key;
+mgen_t mu_find_bfn;
 #define MU_REPLACE_KEY mu_replace_key()
 #define MU_REPLACE_BFN mu_replace_bfn()
-mu_pure mu_t mu_replace_key(void);
-mu_pure mu_t mu_replace_bfn(void);
+mgen_t mu_replace_key;
+mgen_t mu_replace_bfn;
 #define MU_SPLIT_KEY mu_split_key()
 #define MU_SPLIT_BFN mu_split_bfn()
-mu_pure mu_t mu_split_key(void);
-mu_pure mu_t mu_split_bfn(void);
+mgen_t mu_split_key;
+mgen_t mu_split_bfn;
 #define MU_JOIN_KEY mu_join_key()
 #define MU_JOIN_BFN mu_join_bfn()
-mu_pure mu_t mu_join_key(void);
-mu_pure mu_t mu_join_bfn(void);
+mgen_t mu_join_key;
+mgen_t mu_join_bfn;
 #define MU_PAD_KEY mu_pad_key()
 #define MU_PAD_BFN mu_pad_bfn()
-mu_pure mu_t mu_pad_key(void);
-mu_pure mu_t mu_pad_bfn(void);
+mgen_t mu_pad_key;
+mgen_t mu_pad_bfn;
 #define MU_STRIP_KEY mu_strip_key()
 #define MU_STRIP_BFN mu_strip_bfn()
-mu_pure mu_t mu_strip_key(void);
-mu_pure mu_t mu_strip_bfn(void);
+mgen_t mu_strip_key;
+mgen_t mu_strip_bfn;
 
 #define MU_BIND_KEY mu_bind_key()
 #define MU_BIND_BFN mu_bind_bfn()
-mu_pure mu_t mu_bind_key(void);
-mu_pure mu_t mu_bind_bfn(void);
+mgen_t mu_bind_key;
+mgen_t mu_bind_bfn;
 #define MU_COMP_KEY mu_comp_key()
 #define MU_COMP_BFN mu_comp_bfn()
-mu_pure mu_t mu_comp_key(void);
-mu_pure mu_t mu_comp_bfn(void);
+mgen_t mu_comp_key;
+mgen_t mu_comp_bfn;
 #define MU_MAP_KEY mu_map_key()
 #define MU_MAP_BFN mu_map_bfn()
-mu_pure mu_t mu_map_key(void);
-mu_pure mu_t mu_map_bfn(void);
+mgen_t mu_map_key;
+mgen_t mu_map_bfn;
 #define MU_FILTER_KEY mu_filter_key()
 #define MU_FILTER_BFN mu_filter_bfn()
-mu_pure mu_t mu_filter_key(void);
-mu_pure mu_t mu_filter_bfn(void);
+mgen_t mu_filter_key;
+mgen_t mu_filter_bfn;
 #define MU_REDUCE_KEY mu_reduce_key()
 #define MU_REDUCE_BFN mu_reduce_bfn()
-mu_pure mu_t mu_reduce_key(void);
-mu_pure mu_t mu_reduce_bfn(void);
+mgen_t mu_reduce_key;
+mgen_t mu_reduce_bfn;
 #define MU_ANY_KEY mu_any_key()
 #define MU_ANY_BFN mu_any_bfn()
-mu_pure mu_t mu_any_key(void);
-mu_pure mu_t mu_any_bfn(void);
+mgen_t mu_any_key;
+mgen_t mu_any_bfn;
 #define MU_ALL_KEY mu_all_key()
 #define MU_ALL_BFN mu_all_bfn()
-mu_pure mu_t mu_all_key(void);
-mu_pure mu_t mu_all_bfn(void);
+mgen_t mu_all_key;
+mgen_t mu_all_bfn;
 
 #define MU_ITER_KEY mu_iter_key()
 #define MU_ITER_BFN mu_iter_bfn()
-mu_pure mu_t mu_iter_key(void);
-mu_pure mu_t mu_iter_bfn(void);
+mgen_t mu_iter_key;
+mgen_t mu_iter_bfn;
 #define MU_PAIRS_KEY mu_pairs_key()
 #define MU_PAIRS_BFN mu_pairs_bfn()
-mu_pure mu_t mu_pairs_key(void);
-mu_pure mu_t mu_pairs_bfn(void);
+mgen_t mu_pairs_key;
+mgen_t mu_pairs_bfn;
 #define MU_RANGE_KEY mu_range_key()
 #define MU_RANGE_BFN mu_range_bfn()
-mu_pure mu_t mu_range_key(void);
-mu_pure mu_t mu_range_bfn(void);
+mgen_t mu_range_key;
+mgen_t mu_range_bfn;
 #define MU_REPEAT_KEY mu_repeat_key()
 #define MU_REPEAT_BFN mu_repeat_bfn()
-mu_pure mu_t mu_repeat_key(void);
-mu_pure mu_t mu_repeat_bfn(void);
+mgen_t mu_repeat_key;
+mgen_t mu_repeat_bfn;
 #define MU_SEED_KEY mu_seed_key()
 #define MU_SEED_BFN mu_seed_bfn()
-mu_pure mu_t mu_seed_key(void);
-mu_pure mu_t mu_seed_bfn(void);
+mgen_t mu_seed_key;
+mgen_t mu_seed_bfn;
 
 #define MU_ZIP_KEY mu_zip_key()
 #define MU_ZIP_BFN mu_zip_bfn()
-mu_pure mu_t mu_zip_key(void);
-mu_pure mu_t mu_zip_bfn(void);
+mgen_t mu_zip_key;
+mgen_t mu_zip_bfn;
 #define MU_CHAIN_KEY mu_chain_key()
 #define MU_CHAIN_BFN mu_chain_bfn()
-mu_pure mu_t mu_chain_key(void);
-mu_pure mu_t mu_chain_bfn(void);
+mgen_t mu_chain_key;
+mgen_t mu_chain_bfn;
 #define MU_TAKE_KEY mu_take_key()
 #define MU_TAKE_BFN mu_take_bfn()
-mu_pure mu_t mu_take_key(void);
-mu_pure mu_t mu_take_bfn(void);
+mgen_t mu_take_key;
+mgen_t mu_take_bfn;
 #define MU_DROP_KEY mu_drop_key()
 #define MU_DROP_BFN mu_drop_bfn()
-mu_pure mu_t mu_drop_key(void);
-mu_pure mu_t mu_drop_bfn(void);
+mgen_t mu_drop_key;
+mgen_t mu_drop_bfn;
 
 #define MU_MIN_KEY mu_min_key()
 #define MU_MIN_BFN mu_min_bfn()
-mu_pure mu_t mu_min_key(void);
-mu_pure mu_t mu_min_bfn(void);
+mgen_t mu_min_key;
+mgen_t mu_min_bfn;
 #define MU_MAX_KEY mu_max_key()
 #define MU_MAX_BFN mu_max_bfn()
-mu_pure mu_t mu_max_key(void);
-mu_pure mu_t mu_max_bfn(void);
+mgen_t mu_max_key;
+mgen_t mu_max_bfn;
 #define MU_REVERSE_KEY mu_reverse_key()
 #define MU_REVERSE_BFN mu_reverse_bfn()
-mu_pure mu_t mu_reverse_key(void);
-mu_pure mu_t mu_reverse_bfn(void);
+mgen_t mu_reverse_key;
+mgen_t mu_reverse_bfn;
 #define MU_SORT_KEY mu_sort_key()
 #define MU_SORT_BFN mu_sort_bfn()
-mu_pure mu_t mu_sort_key(void);
-mu_pure mu_t mu_sort_bfn(void);
+mgen_t mu_sort_key;
+mgen_t mu_sort_bfn;
 
 #define MU_ERROR_KEY mu_error_key()
 #define MU_ERROR_BFN mu_error_bfn()
-mu_pure mu_t mu_error_key(void);
-mu_pure mu_t mu_error_bfn(void);
+mgen_t mu_error_key;
+mgen_t mu_error_bfn;
 #define MU_PRINT_KEY mu_print_key()
 #define MU_PRINT_BFN mu_print_bfn()
-mu_pure mu_t mu_print_key(void);
-mu_pure mu_t mu_print_bfn(void);
+mgen_t mu_print_key;
+mgen_t mu_print_bfn;
 #define MU_IMPORT_KEY mu_import_key()
 #define MU_IMPORT_BFN mu_import_bfn()
-mu_pure mu_t mu_import_key(void);
-mu_pure mu_t mu_import_bfn(void);
+mgen_t mu_import_key;
+mgen_t mu_import_bfn;
 
 
 #endif

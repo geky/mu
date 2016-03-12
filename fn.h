@@ -9,7 +9,7 @@
 
 // Function constants
 #define MU_ID mu_id()
-mu_pure mu_t mu_id(void);
+mgen_t mu_id;
 
 // Definition of C Function types
 struct code;

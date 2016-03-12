@@ -13,7 +13,6 @@ mu_t str_create(const mbyte_t *s, muint_t n);
 mu_t str_intern(mu_t buf, muint_t n);
 
 // Conversion operations
-mu_t str_frombyte(mbyte_t c);
 mu_t str_fromnum(mu_t n);
 mu_t str_fromiter(mu_t iter);
 
@@ -84,7 +83,7 @@ mu_inline mlen_t str_len(mu_t m) {
     return ((struct str *)((muint_t)m - MTSTR))->len;
 }
 
-mu_inline const mbyte_t *str_bytes(mu_t m) {
+mu_inline const mbyte_t *str_data(mu_t m) {
     return (mbyte_t *)((struct str *)((muint_t)m - MTSTR) + 1);
 }
 

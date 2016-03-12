@@ -8,12 +8,12 @@
 
 
 // Parse literals without side-effects
-mu_t mu_parse(mu_t m);
+mu_t mu_parse(const char *s, muint_t n);
 mu_t mu_nparse(const mbyte_t **pos, const mbyte_t *end);
 
 // Compile Mu source code into code objects
-struct code *mu_compile(mu_t s);
-struct code *mu_ncompile(const mbyte_t *pos, const mbyte_t *end);
+struct code *mu_compile(const char *s, muint_t n);
+struct code *mu_ncompile(const mbyte_t **pos, const mbyte_t *end);
 
 
 // Conversion to/from ascii
@@ -40,46 +40,46 @@ mu_inline mbyte_t mu_toascii(muint_t c) {
 
 // Keywords
 #define MU_KEYWORDS mu_keywords()
-mu_pure mu_t mu_keywords(void);
+mgen_t mu_keywords;
 
 #define MU_KW_LET mu_kw_let()
-mu_pure mu_t mu_kw_let(void);
+mgen_t mu_kw_let;
 #define MU_KW_ELSE mu_kw_else()
-mu_pure mu_t mu_kw_else(void);
+mgen_t mu_kw_else;
 #define MU_KW_AND mu_kw_and()
-mu_pure mu_t mu_kw_and(void);
+mgen_t mu_kw_and;
 #define MU_KW_OR mu_kw_or()
-mu_pure mu_t mu_kw_or(void);
+mgen_t mu_kw_or;
 #define MU_KW_CONT mu_kw_continue()
-mu_pure mu_t mu_kw_continue(void);
+mgen_t mu_kw_continue;
 #define MU_KW_BREAK mu_kw_break()
-mu_pure mu_t mu_kw_break(void);
+mgen_t mu_kw_break;
 #define MU_KW_RETURN mu_kw_return()
-mu_pure mu_t mu_kw_return(void);
+mgen_t mu_kw_return;
 #define MU_KW_FN mu_kw_fn()
-mu_pure mu_t mu_kw_fn(void);
+mgen_t mu_kw_fn;
 #define MU_KW_TYPE mu_kw_type()
-mu_pure mu_t mu_kw_type(void);
+mgen_t mu_kw_type;
 #define MU_KW_IF mu_kw_if()
-mu_pure mu_t mu_kw_if(void);
+mgen_t mu_kw_if;
 #define MU_KW_WHILE mu_kw_while()
-mu_pure mu_t mu_kw_while(void);
+mgen_t mu_kw_while;
 #define MU_KW_FOR mu_kw_for()
-mu_pure mu_t mu_kw_for(void);
+mgen_t mu_kw_for;
 #define MU_KW_NIL mu_kw_nil()
-mu_pure mu_t mu_kw_nil(void);
+mgen_t mu_kw_nil;
 #define MU_KW_NIL2 mu_kw_nil2()
-mu_pure mu_t mu_kw_nil2(void);
+mgen_t mu_kw_nil2;
 #define MU_KW_ASSIGN mu_kw_assign()
-mu_pure mu_t mu_kw_assign(void);
+mgen_t mu_kw_assign;
 #define MU_KW_PAIR mu_kw_pair()
-mu_pure mu_t mu_kw_pair(void);
+mgen_t mu_kw_pair;
 #define MU_KW_DOT mu_kw_dot()
-mu_pure mu_t mu_kw_dot(void);
+mgen_t mu_kw_dot;
 #define MU_KW_ARROW mu_kw_arrow()
-mu_pure mu_t mu_kw_arrow(void);
+mgen_t mu_kw_arrow;
 #define MU_KW_EXPAND mu_kw_expand()
-mu_pure mu_t mu_kw_expand(void);
+mgen_t mu_kw_expand;
 
 
 #endif

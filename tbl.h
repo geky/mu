@@ -10,13 +10,14 @@
 // Table creation functions
 mu_t tbl_create(muint_t size);
 mu_t tbl_extend(muint_t size, mu_t tail);
-void tbl_inherit(mu_t t, mu_t tail);
 
 // Conversion operations
-mu_t tbl_fromntbl(mu_t (*pairs)[2], muint_t n);
-mu_t tbl_fromnlist(mu_t *list, muint_t n);
-mu_t tbl_fromnum(mu_t n);
+mu_t tbl_fromlist(mu_t *list, muint_t n);
+mu_t tbl_frompairs(mu_t (*pairs)[2], muint_t n);
 mu_t tbl_fromiter(mu_t iter);
+
+// Changing the tail of the table
+void tbl_settail(mu_t t, mu_t tail);
 
 // Recursively looks up a key in the table
 // returns either that value or nil
@@ -73,12 +74,12 @@ struct tbl {
 
 // Table creating functions
 #define mtbl(...)                                           \
-    tbl_fromntbl((mu_t[][2])__VA_ARGS__,                    \
-        sizeof (mu_t[][2])__VA_ARGS__ / sizeof(mu_t[2]))
+    tbl_frompairs(((mu_t[][2])__VA_ARGS__),                 \
+        sizeof((mu_t[][2])__VA_ARGS__) / sizeof(mu_t[2]))
 
-#define mlist(...)                                  \
-    tbl_fromnlist((mu_t[])__VA_ARGS__,              \
-        sizeof (mu_t[])__VA_ARGS__ / sizeof(mu_t))
+#define mlist(...)                                          \
+    tbl_fromlist(((mu_t[])__VA_ARGS__),                     \
+        sizeof((mu_t[])__VA_ARGS__) / sizeof(mu_t))
 
 // Table reference counting
 mu_inline mu_t tbl_inc(mu_t m) {
@@ -107,13 +108,12 @@ mu_inline mu_t tbl_tail(mu_t m) {
 // Table constant macros
 #ifdef MU_CONSTRUCTOR
 #define MLIST(name, ...)                                                \
-static mu_t (*const _mu_gen_##name[])(void) = __VA_ARGS__;              \
+static mgent_t *const _mu_gen_##name[] = __VA_ARGS__;                   \
 static struct tbl _mu_struct_##name;                                    \
                                                                         \
 mu_constructor void _mu_init_##name(void) {                             \
-    extern mu_t tbl_init_list(struct tbl *,                             \
-            mu_t (*const *)(void), muint_t);                            \
-    tbl_init_list(&_mu_struct_##name, _mu_gen_##name,                   \
+    extern mu_t tbl_initlist(struct tbl *, mgen_t *const *, muint_t);   \
+    tbl_initlist(&_mu_struct_##name, _mu_gen_##name,                    \
             sizeof _mu_gen_##name / sizeof(mu_t));                      \
 }                                                                       \
                                                                         \
@@ -123,14 +123,13 @@ mu_pure mu_t name(void) {                                               \
 #else
 #define MLIST(name, ...)                                                \
 static mu_t _mu_ref_##name = 0;                                         \
-static mu_t (*const _mu_gen_##name[])(void) = __VA_ARGS__;              \
+static mgent_t *const _mu_gen_##name[] = __VA_ARGS__;                   \
 static struct tbl _mu_struct_##name;                                    \
                                                                         \
 mu_pure mu_t name(void) {                                               \
-    extern mu_t tbl_init_list(struct tbl *,                             \
-            mu_t (*const *)(void), muint_t);                            \
+    extern mu_t tbl_initlist(struct tbl *, mgen_t *const *, muint_t);   \
     if (!_mu_ref_##name) {                                              \
-        _mu_ref_##name = tbl_init_list(&_mu_struct_##name,              \
+        _mu_ref_##name = tbl_initlist(&_mu_struct_##name,               \
                _mu_gen_##name, sizeof _mu_gen_##name / sizeof(mu_t));   \
     }                                                                   \
                                                                         \
@@ -140,13 +139,12 @@ mu_pure mu_t name(void) {                                               \
 
 #ifdef MU_CONSTRUCTOR
 #define MTBL(name, ...)                                                     \
-static mu_t (*const _mu_gen_##name[][2])(void) = __VA_ARGS__;               \
+static mgen_t *const _mu_gen_##name[][2] = __VA_ARGS__;                     \
 static struct tbl _mu_struct_##name;                                        \
                                                                             \
 mu_constructor void _mu_init_##name(void) {                                 \
-    extern mu_t tbl_init_tbl(struct tbl *,                                  \
-            mu_t (*const (*)[2])(void), muint_t);                           \
-    tbl_init_tbl(&_mu_struct_##name, _mu_gen_##name,                        \
+    extern mu_t tbl_initpairs(struct tbl *, mgen_t *const (*)[2], muint_t); \
+    tbl_initpairs(&_mu_struct_##name, _mu_gen_##name,                       \
             sizeof _mu_gen_##name / sizeof(mu_t[2]));                       \
 }                                                                           \
                                                                             \
@@ -156,14 +154,13 @@ mu_pure mu_t name(void) {                                                   \
 #else
 #define MTBL(name, ...)                                                     \
 static mu_t _mu_ref_##name = 0;                                             \
-static mu_t (*const _mu_gen_##name[][2])(void) = __VA_ARGS__;               \
+static mgen_t *const _mu_gen_##name[][2] = __VA_ARGS__;                     \
 static struct tbl _mu_struct_##name;                                        \
                                                                             \
 mu_pure mu_t name(void) {                                                   \
-    extern mu_t tbl_init_tbl(struct tbl *,                                  \
-            mu_t (*const (*)[2])(void), muint_t);                           \
+    extern mu_t tbl_initpairs(struct tbl *, mu_t *const (*)[2], muint_t);   \
     if (!_mu_ref_##name) {                                                  \
-        _mu_ref_##name = tbl_init_tbl(&_mu_struct_##name,                   \
+        _mu_ref_##name = tbl_initpairs(&_mu_struct_##name,                  \
                 _mu_gen_##name, sizeof _mu_gen_##name / sizeof(mu_t[2]));   \
     }                                                                       \
                                                                             \

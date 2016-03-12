@@ -38,14 +38,10 @@ struct buf {
 
 
 // Buffer creation functions
-mu_inline mu_t mnbuf(const void *s, muint_t n) {
+mu_inline mu_t mbuf(const void *s, muint_t n) {
     mu_t b = buf_create(n);
     memcpy((struct buf *)((muint_t)b - MTBUF) + 1, s, n);
     return b;
-}
-
-mu_inline mu_t mzbuf(const char *s) {
-    return mnbuf(s, strlen(s));
 }
 
 // Reference counting

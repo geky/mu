@@ -35,7 +35,8 @@ void *mu_alloc(muint_t size) {
     void *m = sys_alloc(size);
 
     if (m == 0) {
-        mu_error(MU_OOM);
+        const char *message = "out of memory";
+        mu_error(message, strlen(message));
     }
 
     mu_assert(sizeof m == sizeof(muint_t)); // garuntee address width

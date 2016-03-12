@@ -353,9 +353,6 @@ static mu_noreturn mu_error_expression(mbyte_t c) {
     mu_errorf("unexpected %r in expression", str_create(&c, 1));
 }
 
-extern mu_noreturn mu_error_args(const char *name, mc_t count, mu_t *args);
-#define mu_error_arg1(name, ...) mu_error_args(name, 1, (mu_t[1]){__VA_ARGS__})
-
 
 //// Lexical analysis ////
 
@@ -1413,13 +1410,9 @@ static void p_block(struct parse *p, bool root) {
 
 
 //// Parsing functions ////
-mu_t mu_parse(mu_t source) {
-    if (!mu_isstr(source)) {
-        mu_error_arg1("parse", source);
-    }
-
-    const mbyte_t *pos = str_bytes(source);
-    const mbyte_t *end = pos + str_len(source);
+mu_t mu_parse(const char *s, muint_t n) {
+    const mbyte_t *pos = (const mbyte_t *)s;
+    const mbyte_t *end = (const mbyte_t *)pos + n;
 
     mu_t v = mu_nparse(&pos, end);
 
@@ -1427,7 +1420,6 @@ mu_t mu_parse(mu_t source) {
         mu_error_expression(*pos);
     }
 
-    str_dec(source);
     return v;
 }
 
@@ -1480,27 +1472,14 @@ mu_t mu_nparse(const mbyte_t **ppos, const mbyte_t *end) {
     }
 
     if (sym && *pos != ':') {
-        mu_error_expression(str_bytes(val)[0]);
+        mu_error_expression(str_data(val)[0]);
     }
 
     *ppos = pos;
     return val;
 }
 
-struct code *mu_compile(mu_t source) {
-    if (!mu_isstr(source)) {
-        mu_error_arg1("compile", source);
-    }
-
-    const mbyte_t *pos = str_bytes(source);
-    const mbyte_t *end = pos + str_len(source);
-
-    struct code *c = mu_ncompile(pos, end);
-    str_dec(source);
-    return c;
-}
-
-struct code *mu_ncompile(const mbyte_t *pos, const mbyte_t *end) {
+struct code *mu_compile(const char *s, muint_t n) {
     struct parse p = {
         .bcode = buf_create(0),
         .imms = tbl_create(0),
@@ -1512,11 +1491,32 @@ struct code *mu_ncompile(const mbyte_t *pos, const mbyte_t *end) {
         .scope = MU_MINALLOC / sizeof(muint_t),
     };
 
-    lex_init(&p.l, pos, end);
+    lex_init(&p.l, (const mbyte_t *)s, (const mbyte_t *)s+n);
     p_block(&p, true);
     if (p.l.tok) {
         unexpected(&p);
     }
+
+    encode(&p, OP_RET, 0, 0, 0, 0);
+    lex_dec(p.l);
+    return compile(&p);
+}
+
+struct code *mu_ncompile(const mbyte_t **pos, const mbyte_t *end) {
+    struct parse p = {
+        .bcode = buf_create(0),
+        .imms = tbl_create(0),
+        .fns = tbl_create(0),
+        .bchain = -1,
+        .cchain = -1,
+
+        .regs = 1,
+        .scope = MU_MINALLOC / sizeof(muint_t),
+    };
+
+    lex_init(&p.l, *pos, end);
+    p_block(&p, true);
+    *pos = p.l.pos;
 
     encode(&p, OP_RET, 0, 0, 0, 0);
     lex_dec(p.l);

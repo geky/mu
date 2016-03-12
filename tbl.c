@@ -70,7 +70,7 @@ mu_t tbl_extend(muint_t len, mu_t tail) {
     return t;
 }
 
-void tbl_inherit(mu_t t, mu_t tail) {
+void tbl_settail(mu_t t, mu_t tail) {
     mu_assert(!tail || mu_istbl(tail));
     tbl(t)->tail = tail;
 }
@@ -382,7 +382,7 @@ mu_t tbl_pairs(mu_t t) {
 
 
 // Table creating functions
-mu_t tbl_init_list(struct tbl *t, mu_t (*const *gen)(void), muint_t n) {
+mu_t tbl_initlist(struct tbl *t, mgen_t *const *gen, muint_t n) {
     memset(t, 0, sizeof(struct tbl));
     t->npw2 = tbl_npw2(true, n);
     t->linear = true;
@@ -400,7 +400,7 @@ mu_t tbl_init_list(struct tbl *t, mu_t (*const *gen)(void), muint_t n) {
     return m;
 }
 
-mu_t tbl_init_tbl(struct tbl *t, mu_t (*const (*gen)[2])(void), muint_t n) {
+mu_t tbl_initpairs(struct tbl *t, mgen_t *const (*gen)[2], muint_t n) {
     memset(t, 0, sizeof(struct tbl));
     t->npw2 = tbl_npw2(true, n);
     t->linear = true;
@@ -418,17 +418,7 @@ mu_t tbl_init_tbl(struct tbl *t, mu_t (*const (*gen)[2])(void), muint_t n) {
     return m;
 }
 
-mu_t tbl_fromntbl(mu_t (*pairs)[2], muint_t n) {
-    mu_t t = tbl_create(n);
-
-    for (muint_t i = 0; i < n; i++) {
-        tbl_insert(t, pairs[i][0], pairs[i][1]);
-    }
-
-    return t;
-}
-
-mu_t tbl_fromnlist(mu_t *list, muint_t n) {
+mu_t tbl_fromlist(mu_t *list, muint_t n) {
     mu_t t = tbl_create(n);
 
     for (muint_t i = 0; i < n; i++) {
@@ -438,9 +428,14 @@ mu_t tbl_fromnlist(mu_t *list, muint_t n) {
     return t;
 }
 
-mu_t tbl_fromnum(mu_t n) {
-    mu_assert(mu_isnum(n));
-    return tbl_create(num_uint(n));
+mu_t tbl_frompairs(mu_t (*pairs)[2], muint_t n) {
+    mu_t t = tbl_create(n);
+
+    for (muint_t i = 0; i < n; i++) {
+        tbl_insert(t, pairs[i][0], pairs[i][1]);
+    }
+
+    return t;
 }
 
 mu_t tbl_fromiter(mu_t i) {

@@ -25,11 +25,11 @@ mu_t sys_import(mu_t name);
 
 // Allocate memory
 // Must garuntee 8-byte alignment
-void *sys_alloc(size_t size);
+void *sys_alloc(muint_t size);
 
 // Deallocate memory
 // Must not error on 0
-void sys_dealloc(void *m, size_t size);
+void sys_dealloc(void *m, muint_t size);
 
 
 #endif

@@ -38,7 +38,7 @@ static mint_t str_table_find(const mbyte_t *s, mlen_t len) {
         mint_t mid = (max + min) / 2;
         mint_t cmp = len > str_len(str_table[mid]) ? +1 :
                      len < str_len(str_table[mid]) ? -1 :
-                     memcmp(s, str_bytes(str_table[mid]), len);
+                     memcmp(s, str_data(str_table[mid]), len);
 
         if (cmp == 0) {
             return mid;
@@ -129,7 +129,7 @@ mu_t str_create(const mbyte_t *s, muint_t n) {
 }
 
 void str_destroy(mu_t s) {
-    mint_t i = str_table_find(str_bytes(s), str_len(s));
+    mint_t i = str_table_find(str_data(s), str_len(s));
     mu_assert(i >= 0);
     str_table_remove(i);
 
@@ -146,10 +146,6 @@ mu_t str_init(const struct str *s) {
     }
 
     return m;
-}
-
-mu_t str_frombyte(mbyte_t c) {
-    return str_create(&c, 1);
 }
 
 mu_t str_fromnum(mu_t n) {
@@ -187,7 +183,7 @@ mint_t str_cmp(mu_t a, mu_t b) {
 
     muint_t alen = str_len(a);
     muint_t blen = str_len(b);
-    mint_t cmp = memcmp(str_bytes(a), str_bytes(b), 
+    mint_t cmp = memcmp(str_data(a), str_data(b), 
                         alen < blen ? alen : blen);
 
     return cmp != 0 ? cmp : alen - blen;
@@ -201,8 +197,8 @@ mu_t str_concat(mu_t a, mu_t b) {
     muint_t bn = str_len(b);
     mu_t d = buf_create(an + bn);
 
-    memcpy((mbyte_t *)buf_data(d), str_bytes(a), an);
-    memcpy((mbyte_t *)buf_data(d)+an, str_bytes(b), bn);
+    memcpy((mbyte_t *)buf_data(d), str_data(a), an);
+    memcpy((mbyte_t *)buf_data(d)+an, str_data(b), bn);
 
     str_dec(a);
     str_dec(b);
@@ -241,16 +237,16 @@ mu_t str_subset(mu_t s, mu_t lower, mu_t upper) {
         return MU_EMPTY_STR;
     }
 
-    mu_t d = str_create(str_bytes(s) + a, b - a);
+    mu_t d = str_create(str_data(s) + a, b - a);
     str_dec(s);
     return d;
 }
 
 mu_t str_find(mu_t m, mu_t s) {
     mu_assert(mu_isstr(m) && mu_isstr(s));
-    const mbyte_t *mb = str_bytes(m);
+    const mbyte_t *mb = str_data(m);
     mlen_t mlen = str_len(m);
-    const mbyte_t *sb = str_bytes(s);
+    const mbyte_t *sb = str_data(s);
     mlen_t slen = str_len(s);
 
     for (muint_t i = 0; i+mlen <= slen; i++) {
@@ -268,9 +264,9 @@ mu_t str_find(mu_t m, mu_t s) {
 
 mu_t str_replace(mu_t m, mu_t r, mu_t s) {
     mu_assert(mu_isstr(m) && mu_isstr(r) && mu_isstr(s));
-    const mbyte_t *mb = str_bytes(m);
+    const mbyte_t *mb = str_data(m);
     mlen_t mlen = str_len(m);
-    const mbyte_t *sb = str_bytes(s);
+    const mbyte_t *sb = str_data(s);
     mlen_t slen = str_len(s);
 
     mu_t d = buf_create(slen);
@@ -301,7 +297,7 @@ mu_t str_replace(mu_t m, mu_t r, mu_t s) {
 
 static mc_t str_split_step(mu_t scope, mu_t *frame) {
     mu_t a = tbl_lookup(scope, muint(0));
-    const mbyte_t *ab = str_bytes(a);
+    const mbyte_t *ab = str_data(a);
     mlen_t alen = str_len(a);
     muint_t i = num_uint(tbl_lookup(scope, muint(2)));
 
@@ -311,7 +307,7 @@ static mc_t str_split_step(mu_t scope, mu_t *frame) {
     }
 
     mu_t s = tbl_lookup(scope, muint(1));
-    const mbyte_t *sb = str_bytes(s);
+    const mbyte_t *sb = str_data(s);
     mlen_t slen = str_len(s);
 
     muint_t j = i;
@@ -424,10 +420,10 @@ mu_t str_strip(mu_t s, mu_t dir, mu_t pad) {
         pad = MU_SPACE_STR;
     }
 
-    const mbyte_t *pos = str_bytes(s);
+    const mbyte_t *pos = str_data(s);
     const mbyte_t *end = pos + str_len(s);
 
-    const mbyte_t *pb = str_bytes(pad);
+    const mbyte_t *pb = str_data(pad);
     mlen_t plen = str_len(pad);
 
     if (!dir || num_cmp(dir, muint(0)) <= 0) {
@@ -458,7 +454,7 @@ bool str_next(mu_t s, muint_t *ip, mu_t *cp) {
         return false;
     }
 
-    if (cp) *cp = str_frombyte(str_bytes(s)[i]);
+    if (cp) *cp = str_create(&str_data(s)[i], 1);
     *ip = i + 1;
     return true;
 }
@@ -569,7 +565,7 @@ mu_t str_parse(const mbyte_t **ppos, const mbyte_t *end) {
 // Returns a string representation of a string
 mu_t str_repr(mu_t m) {
     mu_assert(mu_isstr(m));
-    const mbyte_t *pos = str_bytes(m);
+    const mbyte_t *pos = str_data(m);
     const mbyte_t *end = pos + str_len(m);
     mu_t b = buf_create(2 + str_len(m));
     muint_t n = 0;
@@ -599,7 +595,7 @@ mu_t str_repr(mu_t m) {
 }
 
 static mu_t str_base(mu_t m, char b, muint_t size, muint_t mask, muint_t shift) {
-    const mbyte_t *s = str_bytes(m);
+    const mbyte_t *s = str_data(m);
     mlen_t len = str_len(m);
 
     mu_t buf = buf_create(2 + (2+size)*len);

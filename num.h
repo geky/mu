@@ -12,10 +12,10 @@
 #define MU_NINF mu_ninf()
 #define MU_E    mu_e()
 #define MU_PI   mu_pi()
-mu_pure mu_t mu_inf(void);
-mu_pure mu_t mu_ninf(void);
-mu_pure mu_t mu_e(void);
-mu_pure mu_t mu_pi(void);
+mgen_t mu_inf;
+mgen_t mu_ninf;
+mgen_t mu_e;
+mgen_t mu_pi;
 
 
 // Conversion operations

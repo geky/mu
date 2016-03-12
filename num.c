@@ -49,7 +49,7 @@ mu_t num_fromint(mint_t n) { return mint(n); }
 
 mu_t num_fromstr(mu_t m) {
     mu_assert(mu_isstr(m) && str_len(m) == 1);
-    mu_t n = muint(str_bytes(m)[0]);
+    mu_t n = muint(str_data(m)[0]);
     str_dec(m);
     return n;
 }
@@ -247,7 +247,7 @@ mu_t num_seed(mu_t m) {
     mu_assert(!m || mu_isnum(m));
     if (!m) m = muint(0);
 
-    return msbfn(0x0, num_random, mnbuf(
+    return msbfn(0x0, num_random, mbuf(
             (mu_t[]){m, m}, 2*sizeof(muint_t)));
 }
 

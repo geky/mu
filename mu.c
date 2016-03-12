@@ -223,14 +223,14 @@ mu_t mu_tbl(mu_t m, mu_t tail) {
     mu_t t;
     switch (mu_type(m)) {
         case MTNIL:     t = tbl_create(0); break;
-        case MTNUM:     t = tbl_fromnum(m); break;
+        case MTNUM:     t = tbl_create(num_uint(m)); break;
         case MTSTR:     t = tbl_fromiter(mu_iter(m)); break;
         case MTTBL:     t = tbl_fromiter(mu_pairs(m)); break;
         case MTFN:      t = tbl_fromiter(m); break;
         default:        mu_unreachable;
     }
 
-    tbl_inherit(t, tail);
+    tbl_settail(t, tail);
     return t;
 }
 
@@ -805,7 +805,13 @@ static mc_t mu_parse_thunk(mu_t *frame);
 MSTR(mu_parse_key, "parse")
 MBFN(mu_parse_bfn, 0x1, mu_parse_thunk)
 static mc_t mu_parse_thunk(mu_t *frame) {
-    frame[0] = mu_parse(frame[0]);
+    if (!mu_isstr(frame[0])) {
+        mu_error_arg1(MU_PARSE_KEY, frame[0]);
+    }
+
+    mu_t v = mu_parse((const char *)str_data(frame[0]), str_len(frame[0]));
+    str_dec(frame[0]);
+    frame[0] = v;
     return 1;
 }
 
@@ -1491,24 +1497,20 @@ static mc_t mu_error_thunk(mu_t *frame);
 MSTR(mu_error_key, "error")
 MBFN(mu_error_bfn, 0xf, mu_error_thunk)
 static mc_t mu_error_thunk(mu_t *frame) {
-    mu_error(frame[0]);
-}
-
-mu_noreturn mu_error(mu_t message) {
-    mu_assert(mu_istbl(message));
     mu_t b = buf_create(0);
     muint_t n = 0;
     mu_t v;
 
-    for (muint_t i = 0; tbl_next(message, &i, 0, &v);) {
-        if (!mu_isstr(v)) {
-            v = mu_repr(v);
-        }
-
-        buf_concat(&b, &n, v);
+    for (muint_t i = 0; tbl_next(frame[0], &i, 0, &v);) {
+        buf_format(&b, &n, "%m", v);
     }
 
-    sys_error(buf_data(b), n);
+    mu_error(buf_data(b), n);
+    mu_unreachable;
+}
+
+mu_noreturn mu_error(const char *s, muint_t n) {
+    sys_error(s, n);
     mu_unreachable;
 }
 
@@ -1516,7 +1518,7 @@ mu_noreturn mu_verrorf(const char *f, va_list args) {
     mu_t b = buf_create(0);
     muint_t n = 0;
     buf_vformat(&b, &n, f, args);
-    sys_error(buf_data(b), n);
+    mu_error(buf_data(b), n);
     mu_unreachable;
 }
 
@@ -1531,34 +1533,29 @@ static mc_t mu_print_thunk(mu_t *frame);
 MSTR(mu_print_key, "print")
 MBFN(mu_print_bfn, 0xf, mu_print_thunk)
 static mc_t mu_print_thunk(mu_t *frame) {
-    mu_print(frame[0]);
-    return 0;
-}
-
-void mu_print(mu_t message) {
-    mu_assert(mu_istbl(message));
     mu_t b = buf_create(0);
     muint_t n = 0;
     mu_t v;
 
-    for (muint_t i = 0; tbl_next(message, &i, 0, &v);) {
-        if (!mu_isstr(v)) {
-            v = mu_repr(v);
-        }
-
-        buf_concat(&b, &n, v);
+    for (muint_t i = 0; tbl_next(frame[0], &i, 0, &v);) {
+        buf_format(&b, &n, "%m", v);
     }
 
-    sys_print(buf_data(b), n);
+    mu_print(buf_data(b), n);
     buf_dec(b);
-    tbl_dec(message);
+    tbl_dec(frame[0]);
+    return 0;
+}
+
+void mu_print(const char *s, muint_t n) {
+    return sys_print(s, n);
 }
 
 void mu_vprintf(const char *f, va_list args) {
     mu_t b = buf_create(0);
     muint_t n = 0;
     buf_vformat(&b, &n, f, args);
-    sys_print(buf_data(b), n);
+    mu_print(buf_data(b), n);
     buf_dec(b);
 }
 

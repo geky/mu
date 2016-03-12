@@ -305,7 +305,7 @@ mu_t fn_range(mu_t start, mu_t stop, mu_t step) {
     if (!stop) stop = MU_INF;
     if (!step) step = mint(num_cmp(start, stop) < 0 ? 1 : -1);
 
-    return msbfn(0x0, fn_range_step, mnbuf(
+    return msbfn(0x0, fn_range_step, mbuf(
             (mu_t[]){start, stop, step}, 3*sizeof(mu_t)));
 }
 
