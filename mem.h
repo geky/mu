@@ -1,5 +1,5 @@
 /*
- *  Memory management
+ * Memory management
  */
 
 #ifndef MU_MEM_H
@@ -42,8 +42,9 @@ mu_inline void ref_dealloc(void *m, muint_t size) {
 mu_inline void ref_inc(void *m) {
     mref_t *ref = (mref_t *)(~7 & (muint_t)m);
 
-    if (*ref != 0)
+    if (*ref != 0) {
         (*ref)++;
+    }
 }
 
 mu_inline bool ref_dec(void *m) {
@@ -52,8 +53,9 @@ mu_inline bool ref_dec(void *m) {
     if (*ref != 0) {
         (*ref)--;
 
-        if (*ref == 0)
+        if (*ref == 0) {
             return true;
+        }
     }
 
     return false;

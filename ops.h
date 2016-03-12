@@ -1,5 +1,5 @@
 /*
- * The definition of Mu's opcodes
+ * Mu opcodes
  */
 
 #ifndef MU_OPS_H
@@ -8,23 +8,22 @@
 #include "mu.h"
 
 
-/* Mu uses bytecode as an intermediary representation
- * during compilation. The virtual machine then converts
- * these opcodes into implementation specific instructions.
- *
- * The bytecode represents the execution of a register based 
- * machine that operates on Mu values. Operations can have from 
- * 1 to 3 operands named d, a, and b and their ranges are limited 
- * by the underlying virtual machine's implementation.
- *
- * In order to ensure correct reference counting without significantly
- * more bytecode, some operations consume their arguments. Reference
- * counting is indicated by a trailing +/-. Because of reference 
- * counting, registers may or may not contain valid Mu values, and values
- * may remain in use after decrementing.
- *
- * The special register r0 contains the scope of the current function.
- */
+// Mu uses bytecode as an intermediary representation
+// during compilation. The virtual machine then converts
+// these opcodes into implementation specific instructions.
+// 
+// The bytecode represents the execution of a register based 
+// machine that operates on Mu values. Operations can have from 
+// 1 to 3 operands named d, a, and b and their ranges are limited 
+// by the underlying virtual machine's implementation.
+// 
+// In order to ensure correct reference counting without significantly
+// more bytecode, some operations consume their arguments. Reference
+// counting is indicated by a trailing +/-. Because of reference 
+// counting, registers may or may not contain valid Mu values, and values
+// may remain in use after decrementing.
+// 
+// The special register r0 contains the scope of the current function.
 enum op {
 /*  opcode     encoding  operation                  description                         */
     OP_IMM     = 0x6, /* rd = imms[a]               loads immediate                     */

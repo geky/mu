@@ -29,19 +29,22 @@ static mu_noreturn mu_error_bytecode(void) {
 // Note: size of the jump opcodes currently can not change based on argument
 void mu_encode(void (*emit)(void *, mbyte_t), void *p,
                enum op op, mint_t d, mint_t a, mint_t b) {
-    if (op > 0xf || d > 0xf)
+    if (op > 0xf || d > 0xf) {
         mu_error_bytecode();
+    }
 
     emit(p, (op << 4) | d);
 
     if (op >= OP_RET && op <= OP_DUP) {
-        if (a > 0xff)
+        if (a > 0xff) {
             mu_error_bytecode();
+        }
 
         emit(p, a);
     } else if (op >= OP_LOOKDN && op <= OP_ASSIGN) {
-        if (a > 0xf || b > 0xf)
+        if (a > 0xf || b > 0xf) {
             mu_error_bytecode();
+        }
 
         emit(p, (a << 4) | b);
     } else if (op >= OP_IMM && op <= OP_TBL) {
@@ -376,13 +379,15 @@ reenter:
             VM_ENTRY_END
 
             VM_ENTRY_DJ(OP_JTRUE, d, j)
-                if (regs[d])
+                if (regs[d]) {
                     pc += j;
+                }
             VM_ENTRY_END
 
             VM_ENTRY_DJ(OP_JFALSE, d, j)
-                if (!regs[d])
+                if (!regs[d]) {
                     pc += j;
+                }
             VM_ENTRY_END
 
             VM_ENTRY_DA(OP_CALL, d, a)

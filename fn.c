@@ -44,21 +44,25 @@ mu_t fn_fromsbfn(mc_t args, msbfn_t *sbfn, mu_t closure) {
 
 // Called by garbage collector to clean up
 void fn_destroy(mu_t f) {
-    if (fn(f)->type == MTFN)
+    if (fn(f)->type == MTFN) {
         code_dec(fn(f)->code);
+    }
 
-    if (fn(f)->closure)
+    if (fn(f)->closure) {
         mu_dec(fn(f)->closure);
+    }
 
     ref_dealloc(fn(f), sizeof(struct fn));
 }
 
 void code_destroy(struct code *c) {
-    for (muint_t i = 0; i < c->icount; i++)
+    for (muint_t i = 0; i < c->icount; i++) {
         mu_dec(code_imms(c)[i]);
+    }
 
-    for (muint_t i = 0; i < c->fcount; i++)
+    for (muint_t i = 0; i < c->fcount; i++) {
         code_dec(code_fns(c)[i]);
+    }
 
     ref_dealloc(c, sizeof(struct code) +
                    c->icount*sizeof(mu_t) +
@@ -108,8 +112,9 @@ bool fn_next(mu_t f, mc_t fc, mu_t *frame) {
 
     if (fc != 0xf) {
         if (frame[0]) {
-            if (fc == 0)
+            if (fc == 0) {
                 mu_dec(frame[0]);
+            }
             return true;
         } else {
             mu_fconvert(0, fc, frame);
@@ -263,10 +268,11 @@ bool fn_all(mu_t f, mu_t iter) {
 
     while (fn_next(iter, 0xf, frame)) {
         fn_fcall(f, 0xf1, frame);
-        if (frame[0])
+        if (frame[0]) {
             mu_dec(frame[0]);
-        else
+        } else {
             return false;
+        }
     }
 
     fn_dec(f);
@@ -279,8 +285,9 @@ static mc_t fn_range_step(mu_t scope, mu_t *frame) {
     mu_t *a = buf_data(scope);
 
     if ((num_cmp(a[2], muint(0)) > 0 && num_cmp(a[0], a[1]) >= 0) ||
-        (num_cmp(a[2], muint(0)) < 0 && num_cmp(a[0], a[1]) <= 0))
+        (num_cmp(a[2], muint(0)) < 0 && num_cmp(a[0], a[1]) <= 0)) {
         return 0;
+    }
 
     frame[0] = a[0];
     a[0] = num_add(a[0], a[2]);
@@ -302,8 +309,9 @@ mu_t fn_range(mu_t start, mu_t stop, mu_t step) {
 
 static mc_t fn_repeat_step(mu_t scope, mu_t *frame) {
     mu_t i = tbl_lookup(scope, muint(1));
-    if (num_cmp(i, muint(0)) <= 0)
+    if (num_cmp(i, muint(0)) <= 0) {
         return 0;
+    }
 
     frame[0] = tbl_lookup(scope, muint(0));
     tbl_insert(scope, muint(1), num_sub(i, muint(1)));
@@ -396,8 +404,9 @@ mu_t fn_chain(mu_t iters) {
 
 static mc_t fn_take_count_step(mu_t scope, mu_t *frame) {
     mu_t i = tbl_lookup(scope, muint(1));
-    if (num_cmp(i, muint(0)) <= 0)
+    if (num_cmp(i, muint(0)) <= 0) {
         return 0;
+    }
 
     tbl_insert(scope, muint(1), num_sub(i, muint(1)));
     mu_t iter = tbl_lookup(scope, muint(0));
@@ -504,8 +513,9 @@ mu_t fn_min(mu_t iter) {
     fn_fcall(iter, 0x0f, frame);
     mu_t min_frame = frame[0];
     mu_t min = tbl_lookup(min_frame, muint(0));
-    if (!min)
+    if (!min) {
         mu_errorf("no elements passed to min");
+    }
 
     while (fn_next(iter, 0xf, frame)) {
         mu_t m = tbl_lookup(frame[0], muint(0));
@@ -533,8 +543,9 @@ mu_t fn_max(mu_t iter) {
     fn_fcall(iter, 0x0f, frame);
     mu_t max_frame = frame[0];
     mu_t max = tbl_lookup(max_frame, muint(0));
-    if (!max)
+    if (!max) {
         mu_errorf("no elements passed to max");
+    }
 
     while (fn_next(iter, 0xf, frame)) {
         mu_t m = tbl_lookup(frame[0], muint(0));
@@ -557,8 +568,9 @@ mu_t fn_max(mu_t iter) {
 
 static mc_t fn_reverse_step(mu_t scope, mu_t *frame) {
     mu_t i = tbl_lookup(scope, muint(1));
-    if (num_cmp(i, muint(0)) < 0)
+    if (num_cmp(i, muint(0)) < 0) {
         return 0;
+    }
 
     mu_t store = tbl_lookup(scope, muint(0));
     frame[0] = tbl_lookup(store, i);

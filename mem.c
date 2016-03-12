@@ -24,8 +24,9 @@ MSTR(mu_oom, "out of memory")
 // Currently just a wrapper over malloc and free
 // Garuntees 8 byte alignment
 void *mu_alloc(muint_t size) {
-    if (size == 0)
+    if (size == 0) {
         return 0;
+    }
 
 #ifdef MU_DEBUG
     size += sizeof(muint_t);
@@ -33,8 +34,9 @@ void *mu_alloc(muint_t size) {
 
     void *m = sys_alloc(size);
 
-    if (m == 0)
+    if (m == 0) {
         mu_error(MU_OOM);
+    }
 
     mu_assert(sizeof m == sizeof(muint_t)); // garuntee address width
     mu_assert((7 & (muint_t)m) == 0); // garuntee alignment

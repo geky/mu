@@ -1,5 +1,5 @@
 /*
- *  String Definition
+ * String type
  */
 
 #ifndef MU_STR_H
@@ -73,8 +73,9 @@ mu_inline mu_t str_inc(mu_t m) {
 mu_inline void str_dec(mu_t m) {
     mu_assert(mu_isstr(m));
     extern void str_destroy(mu_t);
-    if (ref_dec(m))
+    if (ref_dec(m)) {
         str_destroy(m);
+    }
 }
 
 // String access functions

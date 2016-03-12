@@ -1,5 +1,5 @@
 /*
- *  Number Definition
+ * Number type
  */
 
 #ifndef MU_NUM_H

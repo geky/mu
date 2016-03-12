@@ -290,8 +290,9 @@ static mu_noreturn mu_error_parse(struct lex *l, mu_t message) {
 
     while (p < l->pos) {
         if (*p == '#') {
-            while (p < l->end && *p != '\n')
+            while (p < l->end && *p != '\n') {
                 p++;
+            }
         } else if (*p == '\n') {
             nlines++;
             p++;
@@ -303,10 +304,11 @@ static mu_noreturn mu_error_parse(struct lex *l, mu_t message) {
         }
     }
 
-    if (lines == 1)
+    if (lines == 1) {
         mu_errorf("%m", message);
-    else
+    } else {
         mu_errorf("%m on line %wu", message, lines);
+    }
 }
 
 static mu_noreturn mu_error_character(struct lex *l) {
@@ -363,8 +365,9 @@ static void l_indent(struct lex *l) {
     muintq_t nindent = 0;
     while (l->pos < l->end) {
         if (*l->pos == '#') {
-            while (l->pos < l->end && *l->pos != '\n')
+            while (l->pos < l->end && *l->pos != '\n') {
                 l->pos++;
+            }
         } else if (*l->pos == '\n') {
             nl = l->pos++;
             nindent = 0;
@@ -389,8 +392,9 @@ static void l_indent(struct lex *l) {
 static void l_op(struct lex *l) {
     const mbyte_t *begin = l->pos++;
 
-    while (l->pos < l->end && class[*l->pos] == L_OP)
+    while (l->pos < l->end && class[*l->pos] == L_OP) {
         l->pos++;
+    }
 
     l->val = str_create(begin, l->pos-begin);
     mu_t tok = tbl_lookup(MU_KEYWORDS, mu_inc(l->val));
@@ -458,8 +462,9 @@ static void lex_next(struct lex *l) {
     const mbyte_t *end = l->pos;
     while (l->pos < l->end) {
         if (*l->pos == '#') {
-            while (l->pos < l->end && *l->pos != '\n')
+            while (l->pos < l->end && *l->pos != '\n') {
                 l->pos++;
+            }
         } else if (class[*l->pos] == L_WS &&
                    (l->nparen || *l->pos != '\n')) {
             l->pos++;
@@ -511,13 +516,15 @@ static bool match(struct parse *p, mtok_t tok) {
 }
 
 static void expect(struct parse *p, mtok_t tok) {
-    if (!match(p, tok))
+    if (!match(p, tok)) {
         unexpected(p);
+    }
 }
 
 static bool lookahead(struct parse *p, mtok_t a, mtok_t b) {
-    if (!next(p, a))
+    if (!next(p, a)) {
         return false;
+    }
 
     struct lex l = lex_inc(p->l);
     if (match(p, a) && next(p, b)) {
@@ -545,8 +552,9 @@ static void encode(struct parse *p, enum op op,
                    mint_t sdiff) {
     p->sp += sdiff;
 
-    if (p->sp+1 > p->regs)
+    if (p->sp+1 > p->regs) {
         p->regs = p->sp+1;
+    }
 
     mu_encode((void (*)(void *, mbyte_t))emit, p, op, d, a, b);
 }
@@ -571,8 +579,9 @@ static void patch_all(struct parse *p, mlen_t chain, minth_t offset) {
 MBFN(imm_nil, 0, 0)
 
 static muint_t imm(struct parse *p, mu_t m) {
-    if (!m)
+    if (!m) {
         m = IMM_NIL;
+    }
 
     mu_t mindex = tbl_lookup(p->imms, mu_inc(m));
 
@@ -594,12 +603,13 @@ static muint_t fn(struct parse *p, struct code *code) {
 
 // More complicated encoding operations
 static muint_t offset(struct expr *e) {
-    if (e->state == P_INDIRECT)
+    if (e->state == P_INDIRECT) {
         return 2;
-    else if (e->state == P_SCOPED)
+    } else if (e->state == P_SCOPED) {
         return 1;
-    else
+    } else {
         return 0;
+    }
 }
 
 static void encode_load(struct parse *p, struct expr *e, mint_t offset) {
@@ -610,13 +620,15 @@ static void encode_load(struct parse *p, struct expr *e, mint_t offset) {
     } else if (e->state == P_NIL) {
         encode(p, OP_IMM, p->sp+offset+1, imm(p, 0), 0, +offset+1);
     } else {
-        if (e->state == P_CALLED)
+        if (e->state == P_CALLED) {
             encode(p, OP_CALL, p->sp-(e->params == 0xf ? 1 : e->params),
                    (e->params << 4) | 1, 0,
                    -(e->params == 0xf ? 1 : e->params));
+        }
 
-        if (offset != 0)
+        if (offset != 0) {
             encode(p, OP_MOVE, p->sp+offset, p->sp, 0, +offset);
+        }
     }
 }
 
@@ -685,7 +697,7 @@ static void s_block(struct parse *p, struct frame *f) {
     muintq_t depth = p->l.paren;
     while (match(p, T_STMT & ~T_LBLOCK) ||
            (p->l.paren > p->l.depth && match(p, T_SEP)) ||
-           (p->l.paren > depth && match(p, T_RPAREN | T_RTABLE)));
+           (p->l.paren > depth && match(p, T_RPAREN | T_RTABLE))) {}
 
     if (match(p, T_LBLOCK)) {
         muintq_t block = p->l.block;
@@ -695,17 +707,17 @@ static void s_block(struct parse *p, struct frame *f) {
 }
 
 static void s_expr(struct parse *p, struct frame *f, muintq_t prec) {
-    while (match(p, T_LPAREN));
+    while (match(p, T_LPAREN)) {}
 
     while (true) {
         if (match(p, T_LPAREN)) {
             muintq_t depth = p->l.paren;
-            while (p->l.paren >= depth && match(p, T_ANY));
+            while (p->l.paren >= depth && match(p, T_ANY)) {}
             f->call = true;
 
         } else if (match(p, T_LTABLE)) {
             muintq_t depth = p->l.paren;
-            while (p->l.paren >= depth && match(p, T_ANY));
+            while (p->l.paren >= depth && match(p, T_ANY)) {}
             f->call = false;
 
         } else if (match(p, T_FN | T_TYPE | T_IF | T_WHILE | T_FOR | T_ELSE)) {
@@ -738,8 +750,9 @@ static void s_frame(struct parse *p, struct frame *f, bool update) {
 
     do {
         f->call = false;
-        if (!next(p, T_EXPR & ~T_EXPAND))
+        if (!next(p, T_EXPR & ~T_EXPAND)) {
             break;
+        }
 
         s_expr(p, f, -1);
         if (match(p, T_PAIR)) {
@@ -824,10 +837,11 @@ static void p_if(struct parse *p, bool expr) {
     encode(p, OP_JFALSE, p->sp, 0, 0, 0);
     encode(p, OP_DROP, p->sp, 0, 0, -1);
 
-    if (expr)
+    if (expr) {
         p_expr(p);
-    else
+    } else {
         p_stmt(p);
+    }
 
     if (next(p, T_ELSE) || (!expr && lookahead(p, T_TERM, T_ELSE))) {
         expect(p, T_ELSE);
@@ -835,10 +849,11 @@ static void p_if(struct parse *p, bool expr) {
         encode(p, OP_JUMP, 0, 0, 0, -expr);
         mlen_t else_offset = p->bcount;
 
-        if (expr)
+        if (expr) {
             p_expr(p);
-        else
+        } else {
             p_stmt(p);
+        }
 
         patch(p, cond_offset, else_offset - cond_offset);
         patch(p, exit_offset, p->bcount - exit_offset);
@@ -880,8 +895,9 @@ static void p_for(struct parse *p) {
     s_frame(p, &f, true);
 
     expect(p, T_ASSIGN);
-    if (f.count == 0 && !f.tabled)
+    if (f.count == 0 && !f.tabled) {
         mu_error_assignment(&p->l);
+    }
 
     encode(p, OP_IMM, p->sp+1, imm(p, MU_ITER_KEY), 0, +1);
     encode(p, OP_LOOKUP, p->sp, 0, p->sp, 0);
@@ -920,8 +936,9 @@ static void p_for(struct parse *p) {
 
     encode(p, OP_JUMP, 0, for_offset - p->bcount, 0, 0);
     patch(p, cond_offset, p->bcount - cond_offset);
-    for (muint_t i = 0; i < count; i++)
+    for (muint_t i = 0; i < count; i++) {
         encode(p, OP_DROP, p->sp+1 + i, 0, 0, 0);
+    }
 
     patch_all(p, p->bchain, p->bcount);
     patch_all(p, p->cchain, for_offset);
@@ -1143,9 +1160,10 @@ static void p_entry(struct parse *p, struct frame *f) {
                    p->sp, p->sp-1-offset(&e), p->sp, 0);
         }
     } else {
-        if (f->unpack && next(p, T_LTABLE) && f->count < f->target-1)
+        if (f->unpack && next(p, T_LTABLE) && f->count < f->target-1) {
             encode(p, OP_MOVE, p->sp+1,
                    p->sp - (f->target-1 - f->count), 0, +1);
+        }
     }
 
     if (f->unpack && match(p, T_LTABLE)) {
@@ -1197,11 +1215,12 @@ static void p_frame(struct parse *p, struct frame *f) {
     f->index = 0;
     f->depth = p->l.depth; p->l.depth = p->l.paren;
 
-    while (match(p, T_LPAREN));
+    while (match(p, T_LPAREN)) {}
 
     do {
-        if (!next(p, T_EXPR) || match(p, T_EXPAND))
+        if (!next(p, T_EXPR) || match(p, T_EXPAND)) {
             break;
+        }
 
         p_entry(p, f);
         f->index += !f->key;
@@ -1246,11 +1265,13 @@ static void p_frame(struct parse *p, struct frame *f) {
         }
     }
 
-    while (p->l.paren > p->l.depth)
+    while (p->l.paren > p->l.depth) {
         expect(p, T_RPAREN);
+    }
 
-    if (next(p, T_EXPR))
+    if (next(p, T_EXPR)) {
         unexpected(p);
+    }
 
     p->l.depth = f->depth;
 }
@@ -1296,8 +1317,9 @@ static void p_assign(struct parse *p, bool insert) {
 static void p_return(struct parse *p) {
     // Remove any leftover iterators
     muintq_t sp = p->sp;
-    while (p->sp != 0)
+    while (p->sp != 0) {
         encode(p, OP_DROP, p->sp, 0, 0, -1);
+    }
 
     struct frame f = {.unpack = false};
     s_frame(p, &f, false);
@@ -1341,16 +1363,18 @@ static void p_stmt(struct parse *p) {
         p_for(p);
 
     } else if (match(p, T_BREAK)) {
-        if (p->bchain == (mlen_t)-1)
+        if (p->bchain == (mlen_t)-1) {
             mu_error_parse(&p->l, mstr("break outside of loop"));
+        }
 
         mlen_t offset = p->bcount;
         encode(p, OP_JUMP, 0, p->bchain ? p->bchain-p->bcount : 0, 0, 0);
         p->bchain = offset;
 
     } else if (match(p, T_CONTINUE)) {
-        if (p->cchain == (mlen_t)-1)
+        if (p->cchain == (mlen_t)-1) {
             mu_error_parse(&p->l, mstr("continue outside of loop"));
+        }
 
         mlen_t offset = p->bcount;
         encode(p, OP_JUMP, 0, p->cchain ? p->cchain-p->bcount : 0, 0, 0);
@@ -1372,15 +1396,16 @@ static void p_block(struct parse *p, bool root) {
     muintq_t paren = p->l.paren; p->l.paren = 0;
     muintq_t depth = p->l.depth; p->l.depth = -1;
 
-    while (match(p, T_LBLOCK));
+    while (match(p, T_LBLOCK)) {}
 
     do {
         p_stmt(p);
     } while ((root || p->l.block > block) &&
              match(p, T_TERM | T_LBLOCK | T_RBLOCK));
 
-    if (p->l.block > block)
+    if (p->l.block > block) {
         expect(p, T_RBLOCK);
+    }
 
     p->l.paren = paren;
     p->l.depth = depth;
@@ -1389,16 +1414,18 @@ static void p_block(struct parse *p, bool root) {
 
 //// Parsing functions ////
 mu_t mu_parse(mu_t source) {
-    if (!mu_isstr(source))
+    if (!mu_isstr(source)) {
         mu_error_arg1("parse", source);
+    }
 
     const mbyte_t *pos = str_bytes(source);
     const mbyte_t *end = pos + str_len(source);
 
     mu_t v = mu_nparse(&pos, end);
 
-    if (pos < end)
+    if (pos < end) {
         mu_error_expression(*pos);
+    }
 
     str_dec(source);
     return v;
@@ -1411,8 +1438,9 @@ mu_t mu_nparse(const mbyte_t **ppos, const mbyte_t *end) {
 
     while (pos < end) {
         if (*pos == '#') {
-            while (pos < end && *pos != '\n')
+            while (pos < end && *pos != '\n') {
                 pos++;
+            }
         } else if (class[*pos] == L_WS) {
             pos++;
         } else {
@@ -1441,8 +1469,9 @@ mu_t mu_nparse(const mbyte_t **ppos, const mbyte_t *end) {
 
     while (pos < end) {
         if (*pos == '#') {
-            while (pos < end && *pos != '\n')
+            while (pos < end && *pos != '\n') {
                 pos++;
+            }
         } else if (class[*pos] == L_WS) {
             pos++;
         } else {
@@ -1450,16 +1479,18 @@ mu_t mu_nparse(const mbyte_t **ppos, const mbyte_t *end) {
         }
     }
 
-    if (sym && *pos != ':')
+    if (sym && *pos != ':') {
         mu_error_expression(str_bytes(val)[0]);
+    }
 
     *ppos = pos;
     return val;
 }
 
 struct code *mu_compile(mu_t source) {
-    if (!mu_isstr(source))
+    if (!mu_isstr(source)) {
         mu_error_arg1("compile", source);
+    }
 
     const mbyte_t *pos = str_bytes(source);
     const mbyte_t *end = pos + str_len(source);
@@ -1483,8 +1514,9 @@ struct code *mu_ncompile(const mbyte_t *pos, const mbyte_t *end) {
 
     lex_init(&p.l, pos, end);
     p_block(&p, true);
-    if (p.l.tok)
+    if (p.l.tok) {
         unexpected(&p);
+    }
 
     encode(&p, OP_RET, 0, 0, 0, 0);
     lex_dec(p.l);

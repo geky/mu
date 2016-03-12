@@ -6,8 +6,9 @@
 
 // Functions for handling buffers
 mu_t buf_create(muint_t n) {
-    if (n > (mlen_t)-1)
+    if (n > (mlen_t)-1) {
         mu_errorf("exceeded max length in buffer");
+    }
 
     struct buf *b = ref_alloc(sizeof(struct buf) + n);
     b->len = n;
@@ -27,16 +28,19 @@ void buf_resize(mu_t *b, muint_t n) {
 }
     
 void buf_expand(mu_t *b, muint_t n) {
-    if (buf_len(*b) >= n)
+    if (buf_len(*b) >= n) {
         return;
+    }
 
     muint_t size = buf_len(*b) + sizeof(struct buf);
 
-    if (size < MU_MINALLOC)
+    if (size < MU_MINALLOC) {
         size = MU_MINALLOC;
+    }
 
-    while (size < n + sizeof(struct buf))
+    while (size < n + sizeof(struct buf)) {
         size <<= 1;
+    }
 
     buf_resize(b, size - sizeof(struct buf));
 }

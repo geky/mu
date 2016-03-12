@@ -1,5 +1,5 @@
 /*
- * First class function variable type
+ * First class functions
  */
 
 #ifndef MU_FN_H
@@ -97,8 +97,9 @@ mu_inline struct code *code_inc(struct code *c) {
 
 mu_inline void code_dec(struct code *c) {
     extern void code_destroy(struct code *);
-    if (ref_dec(c))
+    if (ref_dec(c)) {
         code_destroy(c);
+    }
 }
 
 // Code access functions

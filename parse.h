@@ -1,5 +1,5 @@
 /*
- *  Parser for Mu
+ * Mu parsing and compilation
  */
 
 #ifndef MU_PARSE_H
@@ -18,21 +18,23 @@ struct code *mu_ncompile(const mbyte_t *pos, const mbyte_t *end);
 
 // Conversion to/from ascii
 mu_inline muint_t mu_fromascii(mbyte_t c) {
-    if (c >= '0' && c <= '9')
+    if (c >= '0' && c <= '9') {
         return c - '0';
-    else if (c >= 'a' && c <= 'f')
+    } else if (c >= 'a' && c <= 'f') {
         return c - 'a' + 10;
-    else if (c >= 'A' && c <= 'F')
+    } else if (c >= 'A' && c <= 'F') {
         return c - 'A' + 10;
-    else
+    } else {
         return -1;
+    }
 }
 
 mu_inline mbyte_t mu_toascii(muint_t c) {
-    if (c < 10)
+    if (c < 10) {
         return '0' + c;
-    else
+    } else {
         return 'a' + (c-10);
+    }
 }
 
 

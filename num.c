@@ -32,11 +32,13 @@ mu_inline mu_t mnum(mfloat_t n) {
 // Conversion from floats
 // Number cannot be NaNs or negative zero to garuntee bitwise equality
 mu_t num_fromfloat(mfloat_t n) {
-    if (n != n)
+    if (n != n) {
         mu_errorf("operation resulted in nan");
+    }
 
-    if (n == 0)
+    if (n == 0) {
         n = 0;
+    }
 
     return mnum(n);
 }
@@ -68,10 +70,11 @@ mint_t num_cmp(mu_t a, mu_t b) {
 mu_t num_neg(mu_t a) {
     mu_assert(mu_isnum(a));
 
-    if (a == muint(0))
+    if (a == muint(0)) {
         return a;
-    else
+    } else {
         return mnum(-num_float(a));
+    }
 }
 
 mu_t num_add(mu_t a, mu_t b) {
@@ -105,8 +108,9 @@ mu_t num_mod(mu_t a, mu_t b) {
     mfloat_t mod = fmod(num_float(a), base);
 
     // Handle truncation for negative values
-    if (mod*base < 0)
+    if (mod*base < 0) {
         mod += base;
+    }
 
     return mfloat(mod);
 }
@@ -119,8 +123,9 @@ mu_t num_pow(mu_t a, mu_t b) {
 mu_t num_log(mu_t a, mu_t b) {
     mu_assert(mu_isnum(a) && (!b || mu_isnum(b)));
 
-    if (!b)
+    if (!b) {
         b = MU_E;
+    }
 
     return mfloat(log(num_float(a)) / log(num_float(b)));
 }
@@ -170,10 +175,11 @@ mu_t num_tan(mu_t a) {
 mu_t num_atan(mu_t a, mu_t b) {
     mu_assert(mu_isnum(a) && (!b || mu_isnum(b)));
 
-    if (!b)
+    if (!b) {
         return mfloat(atan(num_float(a)));
-    else
+    } else {
         return mfloat(atan2(num_float(a), num_float(b)));
+    }
 }
 
 
@@ -344,11 +350,13 @@ static void num_base_fpart(mu_t *s, muint_t *i, mu_t n,
     n = num_mod(n, muint(1));
 
     for (muint_t j = 0; j < digits; j++) {
-        if (num_cmp(n, error) <= 0)
+        if (num_cmp(n, error) <= 0) {
             break;
+        }
 
-        if (digit == mint(-1))
+        if (digit == mint(-1)) {
             buf_push(s, i, '.');
+        }
 
         mu_t p = num_pow(base, digit);
         mu_t d = num_idiv(n, p);
@@ -388,8 +396,9 @@ static mu_t num_base(mu_t n, char c, mu_t base, char expc, mu_t expbase) {
         bool scientific = num_cmp(sig, digits) >= 0 ||
                           num_cmp(sig, mint(-1)) < 0;
 
-        if (scientific)
+        if (scientific) {
             n = num_div(n, num_pow(expbase, exp));
+        }
 
         muint_t j = i;
         num_base_ipart(&s, &i, n, base);

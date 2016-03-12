@@ -55,24 +55,27 @@ static mu_noreturn mu_error_convert(mu_t name, mu_t m) {
 // Conversion between different frame types
 void mu_fconvert(mc_t dc, mc_t sc, mu_t *frame) {
     if (dc != 0xf && sc != 0xf) {
-        for (muint_t i = dc; i < sc; i++)
+        for (muint_t i = dc; i < sc; i++) {
             mu_dec(frame[i]);
+        }
 
-        for (muint_t i = sc; i < dc; i++)
+        for (muint_t i = sc; i < dc; i++) {
             frame[i] = 0;
-
+        }
     } else if (dc != 0xf) {
         mu_t t = *frame;
 
-        for (muint_t i = 0; i < dc; i++)
+        for (muint_t i = 0; i < dc; i++) {
             frame[i] = tbl_lookup(t, muint(i));
+        }
 
         tbl_dec(t);
     } else if (sc != 0xf) {
         mu_t t = tbl_create(sc);
 
-        for (muint_t i = 0; i < sc; i++)
+        for (muint_t i = 0; i < sc; i++) {
             tbl_insert(t, muint(i), frame[i]);
+        }
 
         *frame = t;
     }
@@ -135,13 +138,15 @@ void mu_fcall(mu_t m, mc_t fc, mu_t *frame) {
 mu_t mu_vcall(mu_t m, mc_t fc, va_list args) {
     mu_t frame[MU_FRAME];
 
-    for (muint_t i = 0; i < mu_fcount(0xf & fc); i++)
+    for (muint_t i = 0; i < mu_fcount(0xf & fc); i++) {
         frame[i] = va_arg(args, mu_t);
+    }
 
     mu_fcall(m, fc, frame);
 
-    for (muint_t i = 1; i < mu_fcount(fc >> 4); i++)
+    for (muint_t i = 1; i < mu_fcount(fc >> 4); i++) {
         *va_arg(args, mu_t *) = frame[i];
+    }
 
     return (fc >> 4) ? *frame : 0;
 }
@@ -168,8 +173,9 @@ mu_t mu_num(mu_t m) {
     switch (mu_type(m)) {
         case MTNIL:     return muint(0);
         case MTNUM:     return m;
-        case MTSTR:     if (str_len(m) == 1)
+        case MTSTR:     if (str_len(m) == 1) {
                             return num_fromstr(m);
+                        }
                         break;
         default:        break;
     }
@@ -188,8 +194,9 @@ static mc_t mu_str_thunk(mu_t *frame) {
 mu_t mu_str(mu_t m) {
     switch (mu_type(m)) {
         case MTNIL:     return mstr("");
-        case MTNUM:     if (m == muint((mbyte_t)num_uint(m)))
+        case MTNUM:     if (m == muint((mbyte_t)num_uint(m))) {
                             return str_fromnum(m);
+                        }
                         break;
         case MTSTR:     return m;
         case MTTBL:
@@ -209,8 +216,9 @@ static mc_t mu_tbl_thunk(mu_t *frame) {
 }
 
 mu_t mu_tbl(mu_t m, mu_t tail) {
-    if (tail && !mu_istbl(tail))
+    if (tail && !mu_istbl(tail)) {
         mu_error_arg2(MU_TBL_KEY, m, tail);
+    }
 
     mu_t t;
     switch (mu_type(m)) {
@@ -828,8 +836,9 @@ mu_t mu_repr(mu_t m) {
 }
 
 mu_t mu_dump(mu_t m, mu_t depth) {
-    if (depth && !mu_isnum(depth))
+    if (depth && !mu_isnum(depth)) {
         mu_error_arg2(MU_REPR_KEY, m, depth);
+    }
 
     switch (mu_type(m)) {
         case MTNIL:     return MU_KW_NIL;
@@ -976,8 +985,9 @@ static mc_t mu_concat_thunk(mu_t *frame) {
 }
 
 mu_t mu_concat(mu_t a, mu_t b, mu_t offset) {
-    if (offset && !mu_isnum(offset))
+    if (offset && !mu_isnum(offset)) {
         mu_error_arg3(MU_CONCAT_KEY, a, b, offset);
+    }
 
     if (mu_type(a) == mu_type(b)) {
         switch (mu_type(a)) {
@@ -1080,8 +1090,9 @@ static mc_t mu_join_thunk(mu_t *frame) {
 }
 
 mu_t mu_join(mu_t m, mu_t delim) {
-    if (!delim || mu_isstr(delim))
+    if (!delim || mu_isstr(delim)) {
         return str_join(mu_iter(m), delim);
+    }
 
     mu_error_arg2(MU_JOIN_KEY, m, delim);
 }
@@ -1277,8 +1288,9 @@ static mc_t mu_range_thunk(mu_t *frame) {
 mu_t mu_range(mu_t start, mu_t stop, mu_t step) {
     if ((!start || mu_isnum(start)) &&
         (!stop || mu_isnum(stop)) &&
-        (!step || mu_isnum(step)))
+        (!step || mu_isnum(step))) {
         return fn_range(start, stop, step);
+    }
 
     mu_error_arg3(MU_RANGE_KEY, start, stop, step);
 }
@@ -1292,8 +1304,9 @@ static mc_t mu_repeat_thunk(mu_t *frame) {
 }
 
 mu_t mu_repeat(mu_t value, mu_t times) {
-    if (!times || mu_isnum(times))
+    if (!times || mu_isnum(times)) {
         return fn_repeat(value, times);
+    }
 
     mu_error_arg2(MU_REPEAT_KEY, value, times);
 }
@@ -1307,8 +1320,9 @@ static mc_t mu_seed_thunk(mu_t *frame) {
 }
 
 mu_t mu_seed(mu_t m) {
-    if (!m || mu_isnum(m))
+    if (!m || mu_isnum(m)) {
         return num_seed(m);
+    }
 
     mu_error_arg1(MU_SEED_KEY, m);
 }
@@ -1461,8 +1475,9 @@ mu_noreturn mu_error(mu_t message) {
     mu_t v;
 
     for (muint_t i = 0; tbl_next(message, &i, 0, &v);) {
-        if (!mu_isstr(v))
+        if (!mu_isstr(v)) {
             v = mu_repr(v);
+        }
 
         buf_concat(&b, &n, v);
     }
@@ -1501,8 +1516,9 @@ void mu_print(mu_t message) {
     mu_t v;
 
     for (muint_t i = 0; tbl_next(message, &i, 0, &v);) {
-        if (!mu_isstr(v))
+        if (!mu_isstr(v)) {
             v = mu_repr(v);
+        }
 
         buf_concat(&b, &n, v);
     }
@@ -1536,12 +1552,14 @@ static mc_t mu_import_thunk(mu_t *frame) {
 }
 
 mu_t mu_import(mu_t name) {
-    if (!mu_isstr(name))
+    if (!mu_isstr(name)) {
         mu_error_arg1(MU_IMPORT_KEY, name);
+    }
 
     static mu_t import_history = 0;
-    if (!import_history)
+    if (!import_history) {
         import_history = tbl_create(0);
+    }
 
     mu_t module = tbl_lookup(import_history, str_inc(name));
     if (module) {

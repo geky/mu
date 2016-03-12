@@ -1,5 +1,5 @@
 /*
- * Mu's virtual machine
+ * Mu virtual machine
  */
 
 #ifndef MU_VM_H

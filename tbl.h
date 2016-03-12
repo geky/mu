@@ -1,5 +1,5 @@
 /*
- * Table variable type
+ * Table data structure
  */
 
 #ifndef MU_TBL_H
@@ -90,8 +90,9 @@ mu_inline mu_t tbl_inc(mu_t m) {
 mu_inline void tbl_dec(mu_t m) {
     mu_assert(mu_istbl(m));
     extern void tbl_destroy(mu_t);
-    if (ref_dec(m))
+    if (ref_dec(m)) {
         tbl_destroy(m);
+    }
 }
 
 // Table access functions

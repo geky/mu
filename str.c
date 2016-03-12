@@ -60,10 +60,11 @@ static void str_table_insert(mint_t i, mu_t s) {
         muint_t nsize;
         mu_t *ntable;
 
-        if (str_table_size == 0)
+        if (str_table_size == 0) {
             nsize = MU_MINALLOC / sizeof(mu_t);
-        else
+        } else {
             nsize = str_table_size << 1;
+        }
 
         ntable = mu_alloc(nsize * sizeof(mu_t));
         memcpy(ntable, str_table, i * sizeof(mu_t));
@@ -99,8 +100,9 @@ mu_t str_intern(mu_t b, muint_t n) {
         return str_inc(str_table[i]);
     }
 
-    if (buf_len(b) != n)
+    if (buf_len(b) != n) {
         buf_resize(&b, n);
+    }
 
     mu_t s = (mu_t)((muint_t)b - MTBUF + MTSTR);
     str_table_insert(~i, s);
@@ -108,8 +110,9 @@ mu_t str_intern(mu_t b, muint_t n) {
 }
 
 mu_t str_create(const mbyte_t *s, muint_t n) {
-    if (n > (mlen_t)-1)
+    if (n > (mlen_t)-1) {
         mu_errorf("exceeded max length in string");
+    }
 
     mint_t i = str_table_find(s, n);
     if (i >= 0) {
@@ -138,8 +141,9 @@ void str_destroy(mu_t s) {
 mu_t str_init(const struct str *s) {
     mu_t m = str_intern((mu_t)((muint_t)s + MTBUF), s->len);
 
-    if (*(mref_t *)((muint_t)m - MTSTR) != 0)
+    if (*(mref_t *)((muint_t)m - MTSTR) != 0) {
         *(mref_t *)((muint_t)m - MTSTR) = 0;
+    }
 
     return m;
 }
@@ -177,8 +181,9 @@ mu_t str_format(const char *f, ...) {
 mint_t str_cmp(mu_t a, mu_t b) {
     mu_assert(mu_isstr(a) && mu_isstr(b));
 
-    if (a == b)
+    if (a == b) {
         return 0;
+    }
 
     muint_t alen = str_len(a);
     muint_t blen = str_len(b);
@@ -211,28 +216,31 @@ mu_t str_subset(mu_t s, mu_t lower, mu_t upper) {
     muint_t a;
     muint_t b;
 
-    if (num_cmp(lower, muint(len)) >= 0)
+    if (num_cmp(lower, muint(len)) >= 0) {
         a = len;
-    else if (num_cmp(lower, mint(-len)) <= 0)
+    } else if (num_cmp(lower, mint(-len)) <= 0) {
         a = 0;
-    else if (num_cmp(lower, muint(0)) < 0)
+    } else if (num_cmp(lower, muint(0)) < 0) {
         a = str_len(s) + num_int(lower);
-    else
+    } else {
         a = num_uint(lower);
+    }
 
-    if (!upper)
+    if (!upper) {
         b = a + 1;
-    else if (num_cmp(upper, muint(len)) >= 0)
+    } else if (num_cmp(upper, muint(len)) >= 0) {
         b = len;
-    else if (num_cmp(upper, mint(-len)) <= 0)
+    } else if (num_cmp(upper, mint(-len)) <= 0) {
         b = 0;
-    else if (num_cmp(upper, muint(0)) < 0)
+    } else if (num_cmp(upper, muint(0)) < 0) {
         b = str_len(s) + num_int(upper);
-    else
+    } else {
         b = num_uint(upper);
+    }
 
-    if (a > b)
+    if (a > b) {
         return MU_EMPTY_STR;
+    }
 
     mu_t d = str_create(str_bytes(s) + a, b - a);
     str_dec(s);
@@ -309,8 +317,9 @@ static mc_t str_split_step(mu_t scope, mu_t *frame) {
 
     muint_t j = i;
     for (; j < alen; j++) {
-        if (j+slen <= alen && memcmp(&ab[j], sb, slen) == 0)
+        if (j+slen <= alen && memcmp(&ab[j], sb, slen) == 0) {
             break;
+        }
     }
 
     frame[0] = str_create(ab+i, j-i);
@@ -323,10 +332,11 @@ static mc_t str_split_step(mu_t scope, mu_t *frame) {
 mu_t str_split(mu_t s, mu_t delim) {
     mu_assert(mu_isstr(s) && (!delim || mu_isstr(delim)));
 
-    if (!delim)
+    if (!delim) {
         delim = MU_SPACE_STR;
-    else if (str_len(delim) == 0)
+    } else if (str_len(delim) == 0) {
         return str_iter(s);
+    }
 
     return msbfn(0x0, str_split_step, mlist({
         s, delim, muint(0),
@@ -340,17 +350,20 @@ mu_t str_join(mu_t i, mu_t delim) {
     muint_t n = 0;
     bool first = true;
 
-    if (!delim)
+    if (!delim) {
         delim = MU_SPACE_STR;
+    }
 
     while (fn_next(i, 0x1, frame)) {
-        if (!mu_isstr(frame[0]))
+        if (!mu_isstr(frame[0])) {
             mu_errorf("invalid value %r passed to join", frame[0]);
+        }
 
-        if (first)
+        if (first) {
             first = false;
-        else
+        } else {
             buf_concat(&b, &n, str_inc(delim));
+        }
 
         buf_concat(&b, &n, frame[0]);
     }
@@ -364,8 +377,9 @@ mu_t str_pad(mu_t s, mu_t mlen, mu_t pad) {
     mu_assert(mu_isstr(s) && mu_isnum(mlen) &&
               (!pad || (mu_isstr(pad) && str_len(pad) > 0)));
     
-    if (!pad)
+    if (!pad) {
         pad = MU_SPACE_STR;
+    }
 
     bool left;
     muint_t len;
@@ -387,14 +401,17 @@ mu_t str_pad(mu_t s, mu_t mlen, mu_t pad) {
     muint_t n = 0;
     muint_t count = (len - str_len(s)) / str_len(pad);
 
-    if (left)
+    if (left) {
         buf_concat(&d, &n, s);
+    }
 
-    for (muint_t i = 0; i < count; i++)
+    for (muint_t i = 0; i < count; i++) {
         buf_concat(&d, &n, str_inc(pad));
+    }
     
-    if (!left)
+    if (!left) {
         buf_concat(&d, &n, s);
+    }
 
     mu_dec(pad);
     return str_intern(d, n);
@@ -404,8 +421,9 @@ mu_t str_strip(mu_t s, mu_t dir, mu_t pad) {
     mu_assert(mu_isstr(s) && (!dir || mu_isnum(dir)) &&
               (!pad || (mu_isstr(pad) && str_len(pad) > 0)));
 
-    if (!pad)
+    if (!pad) {
         pad = MU_SPACE_STR;
+    }
 
     const mbyte_t *pos = str_bytes(s);
     const mbyte_t *end = pos + str_len(s);
@@ -414,13 +432,15 @@ mu_t str_strip(mu_t s, mu_t dir, mu_t pad) {
     mlen_t plen = str_len(pad);
 
     if (!dir || num_cmp(dir, muint(0)) <= 0) {
-        while (end-pos >= plen && memcmp(pos, pb, plen) == 0)
+        while (end-pos >= plen && memcmp(pos, pb, plen) == 0) {
             pos += plen;
+        }
     }
             
     if (!dir || num_cmp(dir, muint(0)) >= 0) {
-        while (end-pos >= plen && memcmp(end-plen, pb, plen) == 0)
+        while (end-pos >= plen && memcmp(end-plen, pb, plen) == 0) {
             end -= plen;
+        }
     }
 
     mu_t d = str_create(pos, end-pos);
@@ -435,8 +455,9 @@ bool str_next(mu_t s, muint_t *ip, mu_t *cp) {
     mu_assert(mu_isstr(s));
     muint_t i = *ip;
 
-    if (i >= str_len(s))
+    if (i >= str_len(s)) {
         return false;
+    }
 
     if (cp) *cp = str_frombyte(str_bytes(s)[i]);
     *ip = i + 1;
@@ -538,8 +559,9 @@ mu_t str_parse(const mbyte_t **ppos, const mbyte_t *end) {
         }
     }
 
-    if (quote != *pos++)
+    if (quote != *pos++) {
         mu_errorf("unterminated string literal");
+    }
 
     *ppos = pos;
     return str_intern(b, n);

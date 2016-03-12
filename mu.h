@@ -1,9 +1,9 @@
 /*
- * Variable types and definitions
+ * Mu scripting language
  */
 
-#ifndef MU_TYPES_H
-#define MU_TYPES_H
+#ifndef MU_H
+#define MU_H
 #include "config.h"
 #include "mem.h"
 #include <string.h>
@@ -46,8 +46,9 @@ mu_inline bool mu_isref(mu_t m)   { return 4 & (muint_t)m; }
 
 // Reference counting
 mu_inline mu_t mu_inc(mu_t m) {
-    if (mu_isref(m))
+    if (mu_isref(m)) {
         ref_inc(m);
+    }
 
     return m;
 }
@@ -55,8 +56,9 @@ mu_inline mu_t mu_inc(mu_t m) {
 mu_inline void mu_dec(mu_t m) {
     extern void (*const mu_destroy_table[4])(mu_t);
 
-    if (mu_isref(m) && ref_dec(m))
+    if (mu_isref(m) && ref_dec(m)) {
         mu_destroy_table[mu_type(m)-4](m);
+    }
 }
 
 

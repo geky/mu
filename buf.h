@@ -1,5 +1,5 @@
 /*
- *  Buffer Definition
+ * Dynamically allocated buffers
  */
 
 #ifndef MU_BUF_H
@@ -58,8 +58,9 @@ mu_inline mu_t buf_inc(mu_t b) {
 mu_inline void buf_dec(mu_t m) {
     mu_assert(mu_isbuf(m));
     extern void buf_destroy(mu_t);
-    if (ref_dec(m))
+    if (ref_dec(m)) {
         buf_destroy(m);
+    }
 }
 
 // Buffer access functions

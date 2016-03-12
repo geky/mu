@@ -1,9 +1,9 @@
 /*
- * Common definitions
+ * Mu config
  */
 
-#ifndef MU_H
-#define MU_H
+#ifndef MU_CONFIG_H
+#define MU_CONFIG_H
 
 #include <stdint.h>
 #include <stdbool.h>
