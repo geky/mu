@@ -179,6 +179,7 @@ mu_t mu_shl(mu_t a, mu_t b);
 mu_t mu_shr(mu_t a, mu_t b);
 
 // String representation
+mu_t mu_parse(const char *s, muint_t n);
 mu_t mu_addr(mu_t m);
 mu_t mu_repr(mu_t m);
 mu_t mu_dump(mu_t m, mu_t depth);
@@ -186,9 +187,6 @@ mu_t mu_dump(mu_t m, mu_t depth);
 mu_t mu_bin(mu_t m);
 mu_t mu_oct(mu_t m);
 mu_t mu_hex(mu_t m);
-
-// Parsing and evaluation
-mu_t mu_parse(const char *s, muint_t n);
 
 // String operations
 mu_t mu_find(mu_t m, mu_t sub);
@@ -258,6 +256,11 @@ void mu_printf(const char *f, ...);
 void mu_print(const char *s, muint_t n);
 
 mu_t mu_import(mu_t name);
+
+// Evaluation and entry into Mu
+void mu_feval(const char *s, muint_t n, mu_t scope, mc_t fc, mu_t *frame);
+mu_t mu_veval(const char *s, muint_t n, mu_t scope, mc_t fc, va_list args);
+mu_t mu_eval(const char *s, muint_t n, mu_t scope, mc_t fc, ...);
 
 
 // Standard functions are provided as C functions as well as

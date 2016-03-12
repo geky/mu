@@ -27,6 +27,8 @@ mu_t fn_fromsbfn(mc_t args, msbfn_t *sbfn, mu_t closure);
 // Function calls
 mc_t fn_tcall(mu_t f, mc_t fc, mu_t *frame);
 void fn_fcall(mu_t f, mc_t fc, mu_t *frame);
+mu_t fn_vcall(mu_t f, mc_t fc, va_list args);
+mu_t fn_call(mu_t f, mc_t fc, ...);
 
 // Iteration
 bool fn_next(mu_t f, mc_t fc, mu_t *frame);

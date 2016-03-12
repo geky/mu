@@ -6,6 +6,7 @@
 #include "tbl.h"
 #include "fn.h"
 #include "parse.h"
+#include "vm.h"
 
 
 // Constants
@@ -138,17 +139,17 @@ void mu_fcall(mu_t m, mc_t fc, mu_t *frame) {
 mu_t mu_vcall(mu_t m, mc_t fc, va_list args) {
     mu_t frame[MU_FRAME];
 
-    for (muint_t i = 0; i < mu_fcount(0xf & fc); i++) {
+    for (muint_t i = 0; i < mu_fcount(fc >> 4); i++) {
         frame[i] = va_arg(args, mu_t);
     }
 
     mu_fcall(m, fc, frame);
 
-    for (muint_t i = 1; i < mu_fcount(fc >> 4); i++) {
+    for (muint_t i = 1; i < mu_fcount(0xf & fc); i++) {
         *va_arg(args, mu_t *) = frame[i];
     }
 
-    return (fc >> 4) ? *frame : 0;
+    return (0xf & fc) ? *frame : 0;
 }
 
 mu_t mu_call(mu_t m, mc_t fc, ...) {
@@ -1593,6 +1594,33 @@ mu_t mu_import(mu_t name) {
     module = sys_import(str_inc(name));
     tbl_insert(import_history, name, mu_inc(module));
     return module;
+}
+
+// Evaluation and entry into Mu
+void mu_feval(const char *s, muint_t n, mu_t scope, mc_t fc, mu_t *frame) {
+    struct code *c = mu_compile(s, n);
+    mc_t rets = mu_exec(c, mu_inc(scope), frame);
+    mu_fconvert(fc, rets, frame);
+}
+
+mu_t mu_veval(const char *s, muint_t n, mu_t scope, mc_t fc, va_list args) {
+    mu_t frame[MU_FRAME];
+
+    mu_feval(s, n, scope, fc, frame);
+
+    for (muint_t i = 1; i < mu_fcount(fc); i++) {
+        *va_arg(args, mu_t *) = frame[i];
+    }
+
+    return fc ? *frame : 0;
+}
+
+mu_t mu_eval(const char *s, muint_t n, mu_t scope, mc_t fc, ...) {
+    va_list args;
+    va_start(args, fc);
+    mu_t ret = mu_veval(s, n, scope, fc, args);
+    va_end(args);
+    return ret;
 }
 
 

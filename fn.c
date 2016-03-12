@@ -104,6 +104,30 @@ void fn_fcall(mu_t f, mc_t fc, mu_t *frame) {
     mu_fconvert(fc & 0xf, rets, frame);
 }
 
+mu_t fn_vcall(mu_t f, mc_t fc, va_list args) {
+    mu_t frame[MU_FRAME];
+
+    for (muint_t i = 0; i < mu_fcount(fc >> 4); i++) {
+        frame[i] = va_arg(args, mu_t);
+    }
+
+    fn_fcall(f, fc, frame);
+
+    for (muint_t i = 1; i < mu_fcount(0xf & fc); i++) {
+        *va_arg(args, mu_t *) = frame[i];
+    }
+
+    return (0xf & fc) ? *frame : 0;
+}
+
+mu_t fn_call(mu_t f, mc_t fc, ...) {
+    va_list args;
+    va_start(args, fc);
+    mu_t ret = mu_vcall(f, fc, args);
+    va_end(args);
+    return ret;
+}
+
 
 // Iteration
 bool fn_next(mu_t f, mc_t fc, mu_t *frame) {
