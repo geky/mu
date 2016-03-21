@@ -242,12 +242,12 @@ mu_t str_subset(mu_t s, mu_t lower, mu_t upper) {
     return d;
 }
 
-mu_t str_find(mu_t m, mu_t s) {
-    mu_assert(mu_isstr(m) && mu_isstr(s));
-    const mbyte_t *mb = str_data(m);
-    mlen_t mlen = str_len(m);
+mu_t str_find(mu_t s, mu_t m) {
+    mu_assert(mu_isstr(s) && mu_isstr(m));
     const mbyte_t *sb = str_data(s);
     mlen_t slen = str_len(s);
+    const mbyte_t *mb = str_data(m);
+    mlen_t mlen = str_len(m);
 
     for (muint_t i = 0; i+mlen <= slen; i++) {
         if (memcmp(&sb[i], mb, mlen) == 0) {
@@ -257,17 +257,17 @@ mu_t str_find(mu_t m, mu_t s) {
         }
     }
 
-    str_dec(m);
     str_dec(s);
+    str_dec(m);
     return 0;
 }
 
-mu_t str_replace(mu_t m, mu_t r, mu_t s) {
-    mu_assert(mu_isstr(m) && mu_isstr(r) && mu_isstr(s));
-    const mbyte_t *mb = str_data(m);
-    mlen_t mlen = str_len(m);
+mu_t str_replace(mu_t s, mu_t m, mu_t r) {
+    mu_assert(mu_isstr(s) && mu_isstr(m) && mu_isstr(r));
     const mbyte_t *sb = str_data(s);
     mlen_t slen = str_len(s);
+    const mbyte_t *mb = str_data(m);
+    mlen_t mlen = str_len(m);
 
     mu_t d = buf_create(slen);
     muint_t n = 0;
@@ -289,9 +289,9 @@ mu_t str_replace(mu_t m, mu_t r, mu_t s) {
 
     buf_append(&d, &n, &sb[i], slen-i);
 
+    str_dec(s);
     str_dec(m);
     str_dec(r);
-    str_dec(s);
     return str_intern(d, n);
 }
 
