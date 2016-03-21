@@ -1036,9 +1036,9 @@ static mc_t mu_find_thunk(mu_t *frame);
 MSTR(mu_find_key, "find")
 MBFN(mu_find_bfn, 0x2, mu_find_thunk)
 static mc_t mu_find_thunk(mu_t *frame) {
-    mu_t len = muint(mu_len(frame[0]));
+    mlen_t len = mu_len(frame[0]);
     frame[0] = mu_find(frame[0], frame[1]);
-    frame[1] = len;
+    frame[1] = frame[0] ? muint(num_uint(frame[0]) + len) : 0;
     return 2;
 }
 
@@ -1413,7 +1413,11 @@ static mc_t mu_take_thunk(mu_t *frame) {
 }
 
 mu_t mu_take(mu_t m, mu_t iter) {
-    return fn_take(m, mu_iter(iter));
+    if (mu_isnum(m) || mu_isfn(m)) {
+        return fn_take(m, mu_iter(iter));
+    }
+
+    mu_error_arg2(MU_TAKE_KEY, m, iter);
 }
 
 static mc_t mu_drop_thunk(mu_t *frame);
@@ -1425,7 +1429,11 @@ static mc_t mu_drop_thunk(mu_t *frame) {
 }
 
 mu_t mu_drop(mu_t m, mu_t iter) {
-    return fn_drop(m, mu_iter(iter));
+    if (mu_isnum(m) || mu_isfn(m)) {
+        return fn_drop(m, mu_iter(iter));
+    }
+
+    mu_error_arg2(MU_DROP_KEY, m, iter);
 }
 
 

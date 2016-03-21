@@ -1169,6 +1169,7 @@ static void p_entry(struct parse *p, struct frame *f) {
         nf.tabled = true;
         p_frame(p, &nf);
         p->sp -= f->tabled || f->count < f->target-1;
+        f->count -= 1;
         expect(p, T_RTABLE);
     } else if (f->unpack) {
         if (f->key) {
