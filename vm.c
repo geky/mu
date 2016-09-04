@@ -8,16 +8,6 @@
 #include "fn.h"
 
 
-// Emitted jump size in bytes (7 bits per byte)
-#ifndef MU_JUMP_SIZE
-#ifdef MU64
-#define MU_JUMP_SIZE 3
-#else
-#define MU_JUMP_SIZE 2
-#endif
-#endif
-
-
 // Bytecode errors
 static mu_noreturn mu_error_bytecode(void) {
     mu_errorf("exceeded bytecode limits");
@@ -29,68 +19,76 @@ static mu_noreturn mu_error_bytecode(void) {
 // Note: size of the jump opcodes currently can not change based on argument
 void mu_encode(void (*emit)(void *, mbyte_t), void *p,
                enum op op, mint_t d, mint_t a, mint_t b) {
+    union {
+        uint16_t u16;
+        uint8_t u8[2];
+    } ins;
+
     if (op > 0xf || d > 0xf) {
         mu_error_bytecode();
     }
 
-    emit(p, (op << 4) | d);
+    ins.u16 =  0xf000 & (op << 12);
+    ins.u16 |= 0x0f00 & (d << 8);
 
-    if (op >= OP_RET && op <= OP_DUP) {
+    if (op >= OP_RET && op <= OP_DROP) {
         if (a > 0xff) {
             mu_error_bytecode();
         }
 
-        emit(p, a);
+        ins.u16 |= 0x00ff & a;
+        emit(p, ins.u8[0]);
+        emit(p, ins.u8[1]);
     } else if (op >= OP_LOOKDN && op <= OP_ASSIGN) {
         if (a > 0xf || b > 0xf) {
             mu_error_bytecode();
         }
 
-        emit(p, (a << 4) | b);
+        ins.u16 |= 0x00f0 & (a << 4);
+        ins.u16 |= 0x000f & b;
+        emit(p, ins.u8[0]);
+        emit(p, ins.u8[1]);
     } else if (op >= OP_IMM && op <= OP_TBL) {
-        muint_t count = (a == 0) ? 1 : mu_npw2(a)/7 + 1;
+        if (a > 0xffff) {
+            mu_error_bytecode();
+        } else if (a > 0xfe) {
+            ins.u16 |= 0x00ff;
+            emit(p, ins.u8[0]);
+            emit(p, ins.u8[1]);
 
-        for (muint_t i = 0; i < count-1; i++) {
-            emit(p, 0x80 | (0x7f & (a >> 7*(count-1-i))));
+            ins.u16 = a;
+            emit(p, ins.u8[0]);
+            emit(p, ins.u8[1]);
+        } else {
+            ins.u16 |= 0x00ff & a;
+            emit(p, ins.u8[0]);
+            emit(p, ins.u8[1]);
         }
-
-        emit(p, 0x7f & a);
     } else if (op >= OP_JFALSE && op <= OP_JUMP) {
-        a -= MU_JUMP_SIZE + 1;
-        if (a > +(1 << (7*MU_JUMP_SIZE-1))-1 ||
-            a < -(1 << (7*MU_JUMP_SIZE-1))) {
+        a = (a / 2) - 2;
+
+        if (a > 0x7fff || a < -0x8000) {
             mu_error_bytecode();
         }
 
-        for (muint_t i = 0; i < MU_JUMP_SIZE-1; i++) {
-            emit(p, 0x80 | (0x7f & (a >> 7*(MU_JUMP_SIZE-1-i))));
-        }
+        ins.u16 |= 0x00ff;
+        emit(p, ins.u8[0]);
+        emit(p, ins.u8[1]);
 
-        emit(p, 0x7f & a);
+        ins.u16 = a;
+        emit(p, ins.u8[0]);
+        emit(p, ins.u8[1]);
     }
 }
 
-mint_t mu_patch(void *c, mint_t nj) {
-    mbyte_t *p = c;
-    mu_assert((p[0] >> 4) >= OP_JFALSE && (p[0] >> 4) <= OP_JUMP);
+mint_t mu_patch(void *p, mint_t nj) {
+    uint16_t *c = p;
+    mu_assert((c[0] >> 12) >= OP_JFALSE && (c[0] >> 12) <= OP_JUMP);
 
-    mint_t pj = (0x40 & *p) ? -1 : 0;
-    for (muint_t i = 0; i < MU_JUMP_SIZE; i++) {
-        pj = (pj << 7) | (0x7f & p[i+1]);
-    }
+    mint_t pj = c[1];
+    c[1] = (nj / 2) - 2;
 
-    nj -= MU_JUMP_SIZE + 1;
-    if (nj > +(1 << (7*MU_JUMP_SIZE-1))-1 ||
-        nj < -(1 << (7*MU_JUMP_SIZE-1))) {
-        mu_error_bytecode();
-    }
-
-    for (muint_t i = 0; i < MU_JUMP_SIZE-1; i++) {
-        p[i+1] = 0x80 | (0x7f & (nj >> 7*(MU_JUMP_SIZE-1-i)));
-    }
-    p[MU_JUMP_SIZE] = 0x7f & nj;
-
-    return pj + MU_JUMP_SIZE + 1;
+    return pj;
 }
 
 
@@ -115,28 +113,11 @@ static const char *const op_names[16] = {
     [OP_RET]    = "ret",
 };
 
-static mu_t mu_dis_bytes(muint_t count, const mbyte_t *pc) {
-    mu_t b = buf_create(0);
-    muint_t n = 0;
-    muint_t i = 0;
-
-    for (; i < count; i++) {
-        buf_format(&b, &n, "%bx", pc[i]);
-    }
-
-    for (; i < MU_JUMP_SIZE+1; i++) {
-        buf_format(&b, &n, "  ");
-    }
-
-    buf_resize(&b, n);
-    return b;
-}
-
 void mu_dis(struct code *code) {
     mu_t *imms = code_imms(code);
     struct code **fns = code_fns(code);
-    const mbyte_t *pc = code_bcode(code);
-    const mbyte_t *end = pc + code->bcount;
+    const uint16_t *pc = code_bcode(code);
+    const uint16_t *end = pc + code->bcount/2;
 
     mu_printf("-- dis 0x%wx --", code);
     mu_printf("regs: %qu, scope: %qu, args: %bx",
@@ -158,66 +139,58 @@ void mu_dis(struct code *code) {
 
     mu_printf("bcode:");
     while (pc < end) {
-        enum op op = *pc >> 4;
+        enum op op = pc[0] >> 12;
 
         if (op == OP_DROP) {
-            mu_printf("%m %s r%d", 
-                    mu_dis_bytes(1, pc),
-                    op_names[op],
-                    (0xf & pc[0]));
+            mu_printf("%bx%bx      %s r%d",
+                    pc[0] >> 8, 0xff & pc[0], op_names[op],
+                    0xf & (pc[0] >> 8));
             pc += 1;
-        } else if (op >= OP_RET && op <= OP_DUP) {
-            mu_printf("%m %s r%d,0x%bx",
-                    mu_dis_bytes(2, pc),
-                    op_names[op],
-                    (0xf & pc[0]),
-                    pc[1]);
-            pc += 2;
+        } else if (op >= OP_RET && op <= OP_DROP) {
+            mu_printf("%bx%bx      %s r%d, 0x%bx",
+                    pc[0] >> 8, 0xff & pc[0], op_names[op],
+                    0xf & (pc[0] >> 8), 0xff & pc[0]);
+            pc += 1;
         } else if (op >= OP_LOOKDN && op <= OP_ASSIGN) {
-            mu_printf("%m %s r%d,r%d[r%d]",
-                    mu_dis_bytes(2, pc),
-                    op_names[op],
-                    (0xf & pc[0]),
-                    (0xf & pc[1] >> 4),
-                    (0xf & pc[1]));
+            mu_printf("%bx%bx      %s r%d, r%d[r%d]",
+                    pc[0] >> 8, 0xff & pc[0], op_names[op],
+                    0xf & (pc[0] >> 8), 0xf & (pc[0] >> 4), 0xf & pc[0]);
+            pc += 1;
+        } else if (op == OP_IMM && (0xff & pc[0]) == 0xff) {
+            mu_printf("%bx%bx%bx%bx  %s r%d, %wu (%r)",
+                    pc[0] >> 8, 0xff & pc[0],
+                    pc[1] >> 8, 0xff & pc[1], op_names[op],
+                    0xf & (pc[0] >> 8), pc[1],
+                    mu_inc(imms[pc[1]]));
+            pc += 2;
+        } else if (op == OP_IMM) {
+            mu_printf("%bx%bx      %s r%d, %wu (%r)",
+                    pc[0] >> 8, 0xff & pc[0], op_names[op],
+                    0xf & (pc[0] >> 8), 0x7f & pc[0],
+                    mu_inc(imms[0x7f & pc[0]]));
+            pc += 1;
+        } else if (op >= OP_IMM && op <= OP_TBL && (0xff & pc[0]) == 0xff) {
+            mu_printf("%bx%bx%bx%bx  %s r%d, %wu",
+                    pc[0] >> 8, 0xff & pc[0],
+                    pc[1] >> 8, 0xff & pc[1], op_names[op],
+                    0xf & (pc[0] >> 8), pc[1]);
             pc += 2;
         } else if (op >= OP_IMM && op <= OP_TBL) {
-            unsigned d = 0xf & pc[0];
-            muint_t i = 0;
-            muint_t c = 0;
-            do {
-                i = (i << 7) | (0x7f & pc[c+1]);
-            } while (0x80 & pc[c++ + 1]);
-
-            if (op == OP_IMM) {
-                mu_printf("%m %s r%d,%wu (%r)",
-                        mu_dis_bytes(c+1, pc),
-                        op_names[op], d, i,
-                        mu_inc(imms[i]));
-            } else {
-                mu_printf("%m %s r%d,%wu",
-                        mu_dis_bytes(c+1, pc),
-                        op_names[op], d, i);
-            }
-            pc += c+1;
+            mu_printf("%bx%bx      %s r%d, %wu",
+                    pc[0] >> 8, 0xff & pc[0], op_names[op],
+                    0xf & (pc[0] >> 8), 0x7f & pc[0]);
+            pc += 1;
+        } else if (op >= OP_JFALSE && op <= OP_JUMP && (0xff & pc[0]) == 0xff) {
+            mu_printf("%bx%bx%bx%bx  %s r%d, %wu",
+                    pc[0] >> 8, 0xff & pc[0],
+                    pc[1] >> 8, 0xff & pc[1], op_names[op],
+                    0xf & (pc[0] >> 8), (int16_t)pc[1]);
+            pc += 2;
         } else if (op >= OP_JFALSE && op <= OP_JUMP) {
-            unsigned d = 0xf & pc[0];
-            mint_t j = (0x40 & pc[1]) ? -1 : 0;
-            muint_t c = 0;
-            do {
-                j = (j << 7) | (0x7f & pc[c+1]);
-            } while (0x80 & pc[c++ + 1]);
-
-            if (op != OP_JUMP) {
-                mu_printf("%m %s r%d,%wd",
-                        mu_dis_bytes(c+1, pc),
-                        op_names[op], d, j);
-            } else {
-                mu_printf("%m %s %wd",
-                        mu_dis_bytes(c+1, pc),
-                        op_names[op], j);
-            }
-            pc += c+1;
+            mu_printf("%bx%bx      %s r%d, %wu",
+                    pc[0] >> 8, 0xff & pc[0], op_names[op],
+                    0xf & (pc[0] >> 8), (int16_t)(pc[0] << 8) >> 8);
+            pc += 1;
         }
     }
 }
@@ -225,96 +198,97 @@ void mu_dis(struct code *code) {
 
 // Virtual machine dispatch macros
 #ifdef MU_COMPUTED_GOTO
-#define VM_DISPATCH(pc)                         \
-    {   static void *const vm_entry[16] = {     \
-            [OP_IMM]    = &&VM_ENTRY_OP_IMM,    \
-            [OP_FN]     = &&VM_ENTRY_OP_FN,     \
-            [OP_TBL]    = &&VM_ENTRY_OP_TBL,    \
-            [OP_MOVE]   = &&VM_ENTRY_OP_MOVE,   \
-            [OP_DUP]    = &&VM_ENTRY_OP_DUP,    \
-            [OP_DROP]   = &&VM_ENTRY_OP_DROP,   \
-            [OP_LOOKUP] = &&VM_ENTRY_OP_LOOKUP, \
-            [OP_LOOKDN] = &&VM_ENTRY_OP_LOOKDN, \
-            [OP_INSERT] = &&VM_ENTRY_OP_INSERT, \
-            [OP_ASSIGN] = &&VM_ENTRY_OP_ASSIGN, \
-            [OP_JUMP]   = &&VM_ENTRY_OP_JUMP,   \
-            [OP_JTRUE]  = &&VM_ENTRY_OP_JTRUE,  \
-            [OP_JFALSE] = &&VM_ENTRY_OP_JFALSE, \
-            [OP_CALL]   = &&VM_ENTRY_OP_CALL,   \
-            [OP_TCALL]  = &&VM_ENTRY_OP_TCALL,  \
-            [OP_RET]    = &&VM_ENTRY_OP_RET,    \
-        };                                      \
-                                                \
-        while (1) {                             \
-            goto *vm_entry[*pc >> 4];
-#define VM_DISPATCH_END                         \
-        }                                       \
-        mu_unreachable;                         \
+#define VM_DISPATCH(pc)                                                     \
+    {   static void *const vm_entry[16] = {                                 \
+            [OP_IMM]    = &&VM_ENTRY_OP_IMM,                                \
+            [OP_FN]     = &&VM_ENTRY_OP_FN,                                 \
+            [OP_TBL]    = &&VM_ENTRY_OP_TBL,                                \
+            [OP_MOVE]   = &&VM_ENTRY_OP_MOVE,                               \
+            [OP_DUP]    = &&VM_ENTRY_OP_DUP,                                \
+            [OP_DROP]   = &&VM_ENTRY_OP_DROP,                               \
+            [OP_LOOKUP] = &&VM_ENTRY_OP_LOOKUP,                             \
+            [OP_LOOKDN] = &&VM_ENTRY_OP_LOOKDN,                             \
+            [OP_INSERT] = &&VM_ENTRY_OP_INSERT,                             \
+            [OP_ASSIGN] = &&VM_ENTRY_OP_ASSIGN,                             \
+            [OP_JUMP]   = &&VM_ENTRY_OP_JUMP,                               \
+            [OP_JTRUE]  = &&VM_ENTRY_OP_JTRUE,                              \
+            [OP_JFALSE] = &&VM_ENTRY_OP_JFALSE,                             \
+            [OP_CALL]   = &&VM_ENTRY_OP_CALL,                               \
+            [OP_TCALL]  = &&VM_ENTRY_OP_TCALL,                              \
+            [OP_RET]    = &&VM_ENTRY_OP_RET,                                \
+        };                                                                  \
+                                                                            \
+        while (1) {                                                         \
+            register uint16_t ins = *pc++;                                  \
+            goto *vm_entry[ins >> 12];
+#define VM_DISPATCH_END                                                     \
+        }                                                                   \
+        mu_unreachable;                                                     \
     }
 
-#define VM_ENTRY(op)                            \
+#define VM_ENTRY(op)                                                        \
     VM_ENTRY_##op: {
-#define VM_ENTRY_END                            \
-        goto *vm_entry[*pc >> 4];               \
+#define VM_ENTRY_END                                                        \
+        goto *vm_entry[*pc >> 4];                                           \
     }
 #else
-#define VM_DISPATCH(pc)             \
-    {                               \
-        while (1) {                 \
-            switch (*pc >> 4) {
-#define VM_DISPATCH_END             \
-            }                       \
-        }                           \
-        mu_unreachable;             \
+#define VM_DISPATCH(pc)                                                     \
+    {                                                                       \
+        while (1) {                                                         \
+            register uint16_t ins = *pc++;                                  \
+            switch (ins >> 12) {
+#define VM_DISPATCH_END                                                     \
+            }                                                               \
+        }                                                                   \
+        mu_unreachable;                                                     \
     }
 
-#define VM_ENTRY(op)                \
+#define VM_ENTRY(op)                                                        \
     case op: {
-#define VM_ENTRY_END                \
-        break;                      \
+#define VM_ENTRY_END                                                        \
+        break;                                                              \
     }
 #endif
 
 
-#define VM_ENTRY_D(op, d)                                       \
-    VM_ENTRY(op)                                                \
-        mu_unused register unsigned d = 0xf & *pc++;
+#define VM_ENTRY_DA(op, d, a)                                               \
+    VM_ENTRY(op)                                                            \
+        mu_unused unsigned d = 0xf & (ins >> 8);                            \
+        mu_unused unsigned a = 0xff & ins;
 
-#define VM_ENTRY_DA(op, d, a)                                   \
-    VM_ENTRY(op)                                                \
-        mu_unused register unsigned d = 0xf & *pc++;            \
-        mu_unused register unsigned a = *pc++;
+#define VM_ENTRY_DAB(op, d, a, b)                                           \
+    VM_ENTRY(op)                                                            \
+        mu_unused unsigned d = 0xf & (ins >> 8);                            \
+        mu_unused unsigned a = 0xf & (ins >> 4);                            \
+        mu_unused unsigned b = 0xf & (ins >> 0);
 
-#define VM_ENTRY_DAB(op, d, a, b)                               \
-    VM_ENTRY(op)                                                \
-        mu_unused register unsigned d = 0xf & *pc++;            \
-        mu_unused register unsigned a = 0xf & *pc >> 4;         \
-        mu_unused register unsigned b = 0xf & *pc++;
+#define VM_ENTRY_DI(op, d, i)                                               \
+    VM_ENTRY(op)                                                            \
+        mu_unused unsigned d = 0xf & (ins >> 8);                            \
+        mu_unused muint_t i = 0xff & ins;                                   \
+        if (i == 0xff) {                                                    \
+            i = *pc++;                                                      \
+        }
 
-#define VM_ENTRY_DI(op, d, i)                                   \
-    VM_ENTRY(op)                                                \
-        mu_unused register unsigned d = 0xf & *pc++;            \
-        mu_unused register muint_t i = 0;                       \
-        do {                                                    \
-            i = (i << 7) | (0x7f & *pc);                        \
-        } while (0x80 & *pc++);
-
-#define VM_ENTRY_DJ(op, d, j)                                   \
-    VM_ENTRY(op)                                                \
-        mu_unused register unsigned d = 0xf & *pc++;            \
-        mu_unused register mint_t j = (0x40 & *pc) ? -1 : 0;    \
-        do {                                                    \
-            j = (j << 7) | (0x7f & *pc);                        \
-        } while (0x80 & *pc++);
-
+#define VM_ENTRY_DJ(op, d, j)                                               \
+    VM_ENTRY(op)                                                            \
+        mu_unused unsigned d = 0xf & (ins >> 8);                            \
+        mu_unused mint_t j = (int16_t)(ins << 8) >> 8;                      \
+        if (j == -1) {                                                      \
+            j = (int16_t)*pc++;                                             \
+        }
 
 
 // Execute bytecode
 mc_t mu_exec(struct code *code, mu_t scope, mu_t *frame) {
     // Allocate temporary variables
-    register const mbyte_t *pc;
+    const uint16_t *pc;
     mu_t *imms;
     struct code **fns;
+
+#ifdef MU_DISASSEMBLE
+    mu_dis(code);
+#endif
 
 reenter:
     {   // Setup the registers and scope
@@ -349,7 +323,7 @@ reenter:
                 regs[d] = mu_inc(regs[a]);
             VM_ENTRY_END
 
-            VM_ENTRY_D(OP_DROP, d)
+            VM_ENTRY_DA(OP_DROP, d, a)
                 mu_dec(regs[d]);
             VM_ENTRY_END
 
@@ -358,7 +332,7 @@ reenter:
             VM_ENTRY_END
 
             VM_ENTRY_DAB(OP_LOOKDN, d, a, b)
-                register mu_t scratch = mu_lookup(regs[a], regs[b]);
+                mu_t scratch = mu_lookup(regs[a], regs[b]);
                 mu_dec(regs[a]);
                 regs[d] = scratch;
             VM_ENTRY_END
@@ -402,7 +376,7 @@ reenter:
             VM_ENTRY_END
 
             VM_ENTRY_DA(OP_TCALL, d, a)
-                register mu_t scratch = regs[d];
+                mu_t scratch = regs[d];
                 mu_fcopy(a, frame, &regs[d+1]);
                 tbl_dec(scope);
                 code_dec(code);

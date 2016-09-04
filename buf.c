@@ -100,7 +100,7 @@ static void buf_append_signed(mu_t *b, muint_t *i, mint_t d) {
 
 static void buf_append_hex(mu_t *b, muint_t *i, mlen_t n, muint_t x) {
     for (muint_t j = 0; j < 2*n; j++) {
-        buf_push(b, i, mu_toascii((x >> 4*(n-j)) & 0xf));
+        buf_push(b, i, mu_toascii((x >> 4*(2*n-j-1)) & 0xf));
     }
 }
 
