@@ -15,9 +15,14 @@ mu_inline struct fn *fn(mu_t f) {
 
 // Creation functions
 mu_t fn_create(struct code *c, mu_t closure) {
+    if (c->flags & FN_WEAK) {
+        mu_assert(mu_ref(closure) > 1);
+        mu_dec(closure);
+    }
+
     struct fn *f = ref_alloc(sizeof(struct fn));
     f->args = c->args;
-    f->type = FTMFN;
+    f->flags = c->flags;
     f->closure = closure;
     f->fn.code = c;
     return (mu_t)((muint_t)f + MTFN);
@@ -26,7 +31,7 @@ mu_t fn_create(struct code *c, mu_t closure) {
 mu_t fn_frombfn(mc_t args, mbfn_t *bfn) {
     struct fn *f = ref_alloc(sizeof(struct fn));
     f->args = args;
-    f->type = FTBFN;
+    f->flags = FN_BUILTIN;
     f->closure = 0;
     f->fn.bfn = bfn;
     return (mu_t)((muint_t)f + MTFN);
@@ -35,7 +40,7 @@ mu_t fn_frombfn(mc_t args, mbfn_t *bfn) {
 mu_t fn_fromsbfn(mc_t args, msbfn_t *sbfn, mu_t closure) {
     struct fn *f = ref_alloc(sizeof(struct fn));
     f->args = args;
-    f->type = FTSBFN;
+    f->flags = FN_BUILTIN | FN_SCOPED;
     f->closure = closure;
     f->fn.sbfn = sbfn;
     return (mu_t)((muint_t)f + MTFN);
@@ -44,11 +49,11 @@ mu_t fn_fromsbfn(mc_t args, msbfn_t *sbfn, mu_t closure) {
 
 // Called by garbage collector to clean up
 void fn_destroy(mu_t f) {
-    if (fn(f)->type == MTFN) {
+    if (!(fn(f)->flags & FN_BUILTIN)) {
         code_dec(fn(f)->fn.code);
     }
 
-    if (fn(f)->closure) {
+    if (!(fn(f)->flags & FN_WEAK)) {
         mu_dec(fn(f)->closure);
     }
 
@@ -75,20 +80,20 @@ void code_destroy(struct code *c) {
 mc_t fn_tcall(mu_t f, mc_t fc, mu_t *frame) {
     mu_fconvert(fn(f)->args, fc, frame);
 
-    switch (fn(f)->type) {
-        case FTBFN: {
+    switch (fn(f)->flags & (FN_BUILTIN | FN_SCOPED)) {
+        case FN_BUILTIN: {
             mbfn_t *bfn = fn(f)->fn.bfn;
             fn_dec(f);
             return bfn(frame);
         }
 
-        case FTSBFN: {
+        case FN_BUILTIN | FN_SCOPED: {
             mc_t rc = fn(f)->fn.sbfn(fn(f)->closure, frame);
             fn_dec(f);
             return rc;
         }
 
-        case FTMFN: {
+        case FN_SCOPED: {
             struct code *c = fn_code(f);
             mu_t scope = tbl_extend(c->scope, fn_closure(f));
             fn_dec(f);

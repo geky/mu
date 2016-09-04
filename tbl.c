@@ -52,7 +52,7 @@ mu_t tbl_create(muint_t len) {
     struct tbl *t = ref_alloc(sizeof(struct tbl));
 
     t->npw2 = tbl_npw2(true, len);
-    t->linear = true;
+    t->flags = TBL_LINEAR;
     t->len = 0;
     t->tail = 0;
 
@@ -76,7 +76,7 @@ void tbl_settail(mu_t t, mu_t tail) {
 }
 
 void tbl_destroy(mu_t t) {
-    muint_t size = (tbl(t)->linear ? 1 : 2) * (1 << tbl(t)->npw2);
+    muint_t size = 1 << (tbl(t)->npw2 + !(tbl(t)->flags & TBL_LINEAR));
 
     for (muint_t i = 0; i < size; i++) {
         mu_dec(tbl(t)->array[i]);
@@ -99,7 +99,7 @@ mu_t tbl_lookup(mu_t t, mu_t k) {
     for (; t; t = tbl(t)->tail) {
         muint_t mask = (1 << tbl(t)->npw2) - 1;
 
-        if (tbl(t)->linear) {
+        if (tbl(t)->flags & TBL_LINEAR) {
             muint_t i = num_uint(k) & mask;
 
             if (k == muint(i) && tbl(t)->array[i]) {
@@ -186,14 +186,14 @@ static void tbl_realize(mu_t t) {
     tbl(t)->array = array;
     tbl(t)->npw2 = npw2;
     tbl(t)->nils = 0;
-    tbl(t)->linear = false;
+    tbl(t)->flags &= ~TBL_LINEAR;
 }
 
 // Make room for an additional element
 static void tbl_expand(mu_t t) {
     muint_t size = 1 << tbl(t)->npw2;
 
-    if (tbl(t)->linear) {
+    if (tbl(t)->flags & TBL_LINEAR) {
         if (tbl(t)->len + 1 > size) {
             muintq_t npw2 = tbl_npw2(true, tbl(t)->len + 1);
             muint_t nsize = 1 << npw2;
@@ -256,7 +256,7 @@ void tbl_insert(mu_t t, mu_t k, mu_t v) {
 
     muint_t mask = (1 << tbl(t)->npw2) - 1;
 
-    if (tbl(t)->linear) {
+    if (tbl(t)->flags & TBL_LINEAR) {
         muint_t i = num_uint(k) & mask;
 
         if (k == muint(i)) {
@@ -298,7 +298,7 @@ void tbl_assign(mu_t head, mu_t k, mu_t v) {
     for (mu_t t = head; t; t = tbl(t)->tail) {
         muint_t mask = (1 << tbl(t)->npw2) - 1;
 
-        if (tbl(t)->linear) {
+        if (tbl(t)->flags & TBL_LINEAR) {
             muint_t i = num_uint(k) & mask;
 
             if (k == muint(i) && tbl(t)->array[i]) {
@@ -339,8 +339,14 @@ bool tbl_next(mu_t t, muint_t *ip, mu_t *kp, mu_t *vp) {
             return false;
         }
 
-        k = tbl(t)->linear ? muint(i)         : tbl(t)->array[2*i+0];
-        v = tbl(t)->linear ? tbl(t)->array[i] : tbl(t)->array[2*i+1];
+        if (tbl(t)->flags & TBL_LINEAR) {
+            k = muint(i);
+            v = tbl(t)->array[i];
+        } else {
+            k = tbl(t)->array[2*i+0];
+            v = tbl(t)->array[2*i+1];
+        }
+
         i++;
     } while (!k || !v);
 
@@ -385,7 +391,7 @@ mu_t tbl_pairs(mu_t t) {
 mu_t tbl_initlist(struct tbl *t, mgen_t *const *gen, muint_t n) {
     memset(t, 0, sizeof(struct tbl));
     t->npw2 = tbl_npw2(true, n);
-    t->linear = true;
+    t->flags = TBL_LINEAR;
 
     muint_t size = 1 << t->npw2;
     t->array = mu_alloc(size * sizeof(mu_t));
@@ -403,7 +409,7 @@ mu_t tbl_initlist(struct tbl *t, mgen_t *const *gen, muint_t n) {
 mu_t tbl_initpairs(struct tbl *t, mgen_t *const (*gen)[2], muint_t n) {
     memset(t, 0, sizeof(struct tbl));
     t->npw2 = tbl_npw2(true, n);
-    t->linear = true;
+    t->flags = TBL_LINEAR;
 
     muint_t size = 1 << t->npw2;
     t->array = mu_alloc(size * sizeof(mu_t));
@@ -466,7 +472,7 @@ void tbl_push(mu_t t, mu_t v, mu_t i) {
         i = num_add(i, muint(tbl_len(t)));
     }
 
-    if (tbl(t)->linear) {
+    if (tbl(t)->flags & TBL_LINEAR) {
         tbl_expand(t);
         muint_t size = 1 << tbl(t)->npw2;
 
@@ -513,7 +519,7 @@ mu_t tbl_pop(mu_t t, mu_t i) {
     mu_t ret = tbl_lookup(t, mu_inc(i));
     tbl_insert(t, i, 0);
 
-    if (tbl(t)->linear) {
+    if (tbl(t)->flags & TBL_LINEAR) {
         muint_t size = 1 << tbl(t)->npw2;
 
         if (num_cmp(i, muint(size)) < 0) {
@@ -745,7 +751,7 @@ static void tbl_dump_nested(mu_t t, mu_t *s, muint_t *n, mu_t depth) {
         return;
     }
 
-    bool linear = tbl(t)->linear;
+    bool linear = tbl(t)->flags & TBL_LINEAR;
     for (muint_t i = 0; linear && i < tbl_len(t); i++) {
         if (!tbl(t)->array[i]) {
             linear = false;

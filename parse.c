@@ -654,7 +654,7 @@ static struct code *compile(struct parse *p) {
         p->bcount);
 
     code->args = p->args;
-    code->type = 0;
+    code->flags = FN_SCOPED;
     code->regs = p->regs;
     code->scope = p->scope;
     code->icount = tbl_len(p->imms);
@@ -780,7 +780,7 @@ static void s_frame(struct parse *p, struct frame *f, bool update) {
 
 
 //// Grammar rules ////
-static void p_fn(struct parse *p);
+static void p_fn(struct parse *p, bool weak);
 static void p_if(struct parse *p, bool expr);
 static void p_while(struct parse *p);
 static void p_for(struct parse *p);
@@ -794,7 +794,7 @@ static void p_return(struct parse *p);
 static void p_stmt(struct parse *p);
 static void p_block(struct parse *p, bool root);
 
-static void p_fn(struct parse *p) {
+static void p_fn(struct parse *p, bool weak) {
     struct parse q = {
         .bcode = buf_create(0),
         .bcount = 0,
@@ -822,7 +822,10 @@ static void p_fn(struct parse *p) {
     encode(&q, OP_RET, 0, 0, 0, 0);
 
     p->l = q.l;
-    encode(p, OP_FN, p->sp+1, fn(p, compile(&q)), 0, +1);
+
+    struct code *c = compile(&q);
+    c->flags |= weak ? FN_WEAK : 0;
+    encode(p, OP_FN, p->sp+1, fn(p, c), 0, +1);
 }
 
 static void p_if(struct parse *p, bool expr) {
@@ -982,7 +985,7 @@ static void p_subexpr(struct parse *p, struct expr *e) {
         p_postexpr(p, e);
 
     } else if (match(p, T_FN)) {
-        p_fn(p);
+        p_fn(p, false);
         e->state = P_DIRECT;
         p_postexpr(p, e);
 
@@ -1349,7 +1352,7 @@ static void p_stmt(struct parse *p) {
     } else if (lookahead(p, T_FN, T_ANY_SYM | T_ANY_OP)) {
         expect(p, T_ANY_SYM | T_ANY_OP);
         mu_t sym = mu_inc(p->m.val);
-        p_fn(p);
+        p_fn(p, true);
         encode(p, OP_IMM, p->sp+1, imm(p, sym), 0, +1);
         encode(p, OP_INSERT, p->sp-1, 0, p->sp, -2);
 

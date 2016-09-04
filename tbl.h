@@ -52,6 +52,10 @@ mu_t tbl_or(mu_t a, mu_t b);
 mu_t tbl_xor(mu_t a, mu_t b);
 mu_t tbl_diff(mu_t a, mu_t b);
 
+// Table flags
+enum tbl_flags {
+    TBL_LINEAR = 1 << 0, // stored as linear array
+};
 
 // Definition of Mu's table type
 //
@@ -61,14 +65,14 @@ mu_t tbl_diff(mu_t a, mu_t b);
 // stored as a range/offset based on the specified
 // offset and length.
 struct tbl {
-    mref_t ref;      // reference count
-    muintq_t npw2;   // log2 of capacity
-    muintq_t linear; // type of table
-    mlen_t len;      // count of non-nil entries
-    mlen_t nils;     // count of nil entries
+    mref_t ref;     // reference count
+    muintq_t npw2;  // log2 of capacity
+    mbyte_t flags;  // table flags
+    mlen_t len;     // count of non-nil entries
+    mlen_t nils;    // count of nil entries
 
-    mu_t tail;       // tail chain of tables
-    mu_t *array;     // pointer to stored data
+    mu_t tail;      // tail chain of tables
+    mu_t *array;    // pointer to stored data
 };
 
 

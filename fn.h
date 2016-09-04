@@ -66,18 +66,18 @@ mu_t fn_sort(mu_t iter);
 
 
 // Function tags
-enum fn_type {
-    FTMFN,  // Mu function
-    FTBFN,  // C builtin function
-    FTSBFN, // C scoped builtin function
+enum fn_flags {
+    FN_BUILTIN = 1 << 0, // C builtin function
+    FN_SCOPED  = 1 << 1, // Closure attached to function
+    FN_WEAK    = 1 << 2, // Closure is weakly referenced
 };
 
 // Definition of code structure used to represent the
 // executable component of Mu functions.
 struct code {
     mref_t ref;     // reference count
-    mc_t args;      // argument count
-    muintq_t type;  // function type
+    mbyte_t args;   // argument count
+    mbyte_t flags;  // function flags
     muintq_t regs;  // number of registers
     muintq_t scope; // size of scope
 
@@ -124,9 +124,9 @@ mu_inline void *code_bcode(struct code *c) {
 // Additionally several flags are defined to specify how the
 // function should be called.
 struct fn {
-    mref_t ref;    // reference count
-    mc_t args;     // argument count
-    muintq_t type; // function type
+    mref_t ref;     // reference count
+    mbyte_t args;   // argument count
+    mbyte_t flags;  // function flags
 
     mu_t closure;  // function closure
 
@@ -159,8 +159,8 @@ mu_inline void fn_dec(mu_t f) {
 }
 
 // Function access
-mu_inline enum fn_type fn_type(mu_t m) {
-    return ((struct fn *)((muint_t)m - MTFN))->type;
+mu_inline bool fn_isbuiltin(mu_t m) {
+    return ((struct fn *)((muint_t)m - MTFN))->flags & FN_BUILTIN;
 }
 
 mu_inline struct code *fn_code(mu_t m) {
@@ -174,7 +174,7 @@ mu_inline mu_t fn_closure(mu_t m) {
 // Function constant macro
 #define MBFN(name, args, bfn)                                               \
 mu_pure mu_t name(void) {                                                   \
-    static const struct fn inst = {0, args, FTBFN, 0, {bfn}};               \
+    static const struct fn inst = {0, args, FN_BUILTIN, 0, {bfn}};          \
     return (mu_t)((muint_t)&inst + MTFN);                                   \
 }
 

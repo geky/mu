@@ -838,7 +838,7 @@ mu_t mu_addr(mu_t m) {
     };
 
     mu_dec(m);
-    return mstr("<%m 0x%wx>", names[mu_type(m)](), m);
+    return mstr("<%m 0x%wx>", names[mu_type(m)](), (muint_t)m & ~7);
 }
 
 mu_t mu_repr(mu_t m) {
