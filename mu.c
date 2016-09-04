@@ -111,7 +111,7 @@ void mu_insert(mu_t m, mu_t k, mu_t v) {
         mu_errorf("unable to insert %r to %r in %r", v, k, m);
     }
 
-    return tbl_insert(m, k, v);
+    tbl_insert(m, k, v);
 }
 
 void mu_assign(mu_t m, mu_t k, mu_t v) {
@@ -119,7 +119,7 @@ void mu_assign(mu_t m, mu_t k, mu_t v) {
         mu_errorf("unable to assign %r to %r in %r", v, k, m);
     }
 
-    return tbl_assign(m, k, v);
+    tbl_assign(m, k, v);
 }
 
 // Function calls performed on variables
@@ -164,7 +164,7 @@ mu_t mu_call(mu_t m, mc_t fc, ...) {
 // Type casts and declarations
 static mc_t mu_num_thunk(mu_t *frame);
 MSTR(mu_num_key, "num")
-MBFN(mu_num_bfn, 0x1, mu_num_thunk);
+MBFN(mu_num_bfn, 0x1, mu_num_thunk)
 static mc_t mu_num_thunk(mu_t *frame) {
     frame[0] = mu_num(frame[0]);
     return 1;
@@ -186,7 +186,7 @@ mu_t mu_num(mu_t m) {
 
 static mc_t mu_str_thunk(mu_t *frame);
 MSTR(mu_str_key, "str")
-MBFN(mu_str_bfn, 0x1, mu_str_thunk);
+MBFN(mu_str_bfn, 0x1, mu_str_thunk)
 static mc_t mu_str_thunk(mu_t *frame) {
     frame[0] = mu_str(frame[0]);
     return 1;
@@ -957,7 +957,7 @@ static mc_t mu_push_thunk(mu_t *frame) {
 void mu_push(mu_t m, mu_t v, mu_t i) {
     if (!i || mu_isnum(i)) {
         switch (mu_type(m)) {
-            case MTTBL:     return tbl_push(m, v, i);
+            case MTTBL:     tbl_push(m, v, i); return;
             default:        break;
         }
     }
@@ -1557,7 +1557,7 @@ static mc_t mu_print_thunk(mu_t *frame) {
 }
 
 void mu_print(const char *s, muint_t n) {
-    return sys_print(s, n);
+    sys_print(s, n);
 }
 
 void mu_vprintf(const char *f, va_list args) {

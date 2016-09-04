@@ -134,7 +134,7 @@ struct fn {
         mbfn_t *bfn;       // c function
         msbfn_t *sbfn;     // scoped c function
         struct code *code; // compiled mu code
-    };
+    } fn;
 };
 
 // Function creating functions
@@ -155,7 +155,7 @@ mu_inline mu_t fn_inc(mu_t f) {
 
 mu_inline void fn_dec(mu_t f) {
     mu_assert(mu_isfn(f));
-    return mu_dec(f);
+    mu_dec(f);
 }
 
 // Function access
@@ -164,7 +164,7 @@ mu_inline enum fn_type fn_type(mu_t m) {
 }
 
 mu_inline struct code *fn_code(mu_t m) {
-    return code_inc(((struct fn *)((muint_t)m - MTFN))->code);
+    return code_inc(((struct fn *)((muint_t)m - MTFN))->fn.code);
 }
 
 mu_inline mu_t fn_closure(mu_t m) {
@@ -172,12 +172,10 @@ mu_inline mu_t fn_closure(mu_t m) {
 }
 
 // Function constant macro
-#define MBFN(name, args, bfn)                           \
-static const struct fn _mu_val_##name =                 \
-    {0, args, FTBFN, 0, {bfn}};                         \
-                                                        \
-mu_pure mu_t name(void) {                               \
-    return (mu_t)((muint_t)&_mu_val_##name + MTFN);     \
+#define MBFN(name, args, bfn)                                               \
+mu_pure mu_t name(void) {                                                   \
+    static const struct fn inst = {0, args, FTBFN, 0, {bfn}};               \
+    return (mu_t)((muint_t)&inst + MTFN);                                   \
 }
 
 

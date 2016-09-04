@@ -264,7 +264,7 @@ void tbl_insert(mu_t t, mu_t k, mu_t v) {
         } else if (v) {
             // Index is out of range, convert to full table
             tbl_realize(t);
-            return tbl_insert(t, k, v);
+            tbl_insert(t, k, v);
         }
     } else {
         for (muint_t i = tbl_hash(k);; i++) {
@@ -741,7 +741,8 @@ mu_t tbl_parse(const mbyte_t **ppos, const mbyte_t *end) {
 
 static void tbl_dump_nested(mu_t t, mu_t *s, muint_t *n, mu_t depth) {
     if (num_cmp(depth, muint(0)) <= 0) {
-        return buf_concat(s, n, mu_addr(t));
+        buf_concat(s, n, mu_addr(t));
+        return;
     }
 
     bool linear = tbl(t)->linear;

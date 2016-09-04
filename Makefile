@@ -16,11 +16,8 @@ CFLAGS += -fkeep-inline-functions
 else
 CFLAGS += -O2
 endif
-ifdef WORD
-CFLAGS += -m$(WORD)
-endif
 CFLAGS += -std=c99
-CFLAGS += -Wall -Winline
+CFLAGS += -Wall -Winline -pedantic
 
 
 all: $(TARGET)

@@ -224,7 +224,6 @@ void mu_dis(struct code *code) {
 
 
 // Virtual machine dispatch macros
-#define MU_COMPUTED_GOTO
 #ifdef MU_COMPUTED_GOTO
 #define VM_DISPATCH(pc)                         \
     {   static void *const vm_entry[16] = {     \
@@ -317,8 +316,6 @@ mc_t mu_exec(struct code *code, mu_t scope, mu_t *frame) {
     mu_t *imms;
     struct code **fns;
 
-    register mu_t scratch;
-
 reenter:
     {   // Setup the registers and scope
         mu_t regs[code->regs];
@@ -361,7 +358,7 @@ reenter:
             VM_ENTRY_END
 
             VM_ENTRY_DAB(OP_LOOKDN, d, a, b)
-                scratch = mu_lookup(regs[a], regs[b]);
+                register mu_t scratch = mu_lookup(regs[a], regs[b]);
                 mu_dec(regs[a]);
                 regs[d] = scratch;
             VM_ENTRY_END
@@ -405,7 +402,7 @@ reenter:
             VM_ENTRY_END
 
             VM_ENTRY_DA(OP_TCALL, d, a)
-                scratch = regs[d];
+                register mu_t scratch = regs[d];
                 mu_fcopy(a, frame, &regs[d+1]);
                 tbl_dec(scope);
                 code_dec(code);

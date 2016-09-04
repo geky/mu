@@ -959,7 +959,7 @@ static void p_subexpr(struct parse *p, struct expr *e) {
         p_subexpr(p, e);
         e->prec = prec;
         expect(p, T_RPAREN);
-        return p_postexpr(p, e);
+        p_postexpr(p, e);
 
     } else if (match(p, T_LTABLE)) {
         struct frame f = {.unpack = false};
@@ -968,7 +968,7 @@ static void p_subexpr(struct parse *p, struct expr *e) {
         p_frame(p, &f);
         expect(p, T_RTABLE);
         e->state = P_DIRECT;
-        return p_postexpr(p, e);
+        p_postexpr(p, e);
 
     } else if (lookahead(p, T_ANY_OP, T_EXPR)) {
         encode(p, OP_IMM, p->sp+1, imm(p, mu_inc(p->m.val)), 0, +1);
@@ -979,34 +979,35 @@ static void p_subexpr(struct parse *p, struct expr *e) {
         encode_load(p, e, 0);
         e->state = P_CALLED;
         e->params = 1;
-        return p_postexpr(p, e);
+        p_postexpr(p, e);
 
     } else if (match(p, T_FN)) {
         p_fn(p);
         e->state = P_DIRECT;
-        return p_postexpr(p, e);
+        p_postexpr(p, e);
 
     } else if (match(p, T_IF)) {
         p_if(p, true);
         e->state = P_DIRECT;
-        return p_postexpr(p, e);
+        p_postexpr(p, e);
 
     } else if (match(p, T_IMM)) {
         encode(p, OP_IMM, p->sp+1, imm(p, mu_inc(p->m.val)), 0, +1);
         e->state = P_DIRECT;
-        return p_postexpr(p, e);
+        p_postexpr(p, e);
 
     } else if (match(p, T_NIL)) {
         e->state = P_NIL;
-        return p_postexpr(p, e);
+        p_postexpr(p, e);
 
     } else if (match(p, T_SYM | T_ANY_OP)) {
         encode(p, OP_IMM, p->sp+1, imm(p, mu_inc(p->m.val)), 0, +1);
         e->state = P_SCOPED;
-        return p_postexpr(p, e);
-    }
+        p_postexpr(p, e);
 
-    unexpected(p);
+    } else {
+        unexpected(p);
+    }
 }
 
 static void p_postexpr(struct parse *p, struct expr *e) {
@@ -1019,21 +1020,21 @@ static void p_postexpr(struct parse *p, struct expr *e) {
         expect(p, T_RPAREN);
         e->state = P_CALLED;
         e->params = f.tabled ? 0xf : f.count;
-        return p_postexpr(p, e);
+        p_postexpr(p, e);
 
     } else if (match(p, T_LTABLE)) {
         encode_load(p, e, 0);
         p_expr(p);
         expect(p, T_RTABLE);
         e->state = P_INDIRECT;
-        return p_postexpr(p, e);
+        p_postexpr(p, e);
 
     } else if (match(p, T_DOT)) {
         expect(p, T_ANY_SYM);
         encode_load(p, e, 0);
         encode(p, OP_IMM, p->sp+1, imm(p, mu_inc(p->m.val)), 0, +1);
         e->state = P_INDIRECT;
-        return p_postexpr(p, e);
+        p_postexpr(p, e);
 
     } else if (match(p, T_ARROW)) {
         expect(p, T_ANY_SYM);
@@ -1051,7 +1052,8 @@ static void p_postexpr(struct parse *p, struct expr *e) {
                 expect(p, T_RPAREN);
                 e->state = P_CALLED;
                 e->params = f.count + 1;
-                return p_postexpr(p, e);
+                p_postexpr(p, e);
+                return;
             }
             lex_dec(p->l); p->l = l;
         }
@@ -1062,7 +1064,7 @@ static void p_postexpr(struct parse *p, struct expr *e) {
         encode(p, OP_LOOKUP, p->sp-2, 0, p->sp-2, 0);
         encode(p, OP_CALL, p->sp-2, 0x21, 0, -2);
         e->state = P_DIRECT;
-        return p_postexpr(p, e);
+        p_postexpr(p, e);
 
     } else if (e->prec > p->l.prec && match(p, T_ANY_OP)) {
         encode_load(p, e, 1);
@@ -1074,7 +1076,7 @@ static void p_postexpr(struct parse *p, struct expr *e) {
         e->prec = prec;
         e->state = P_CALLED;
         e->params = 2;
-        return p_postexpr(p, e);
+        p_postexpr(p, e);
 
     } else if (e->prec > p->l.prec && match(p, T_AND)) {
         encode_load(p, e, 0);
@@ -1087,7 +1089,7 @@ static void p_postexpr(struct parse *p, struct expr *e) {
         e->prec = prec;
         patch(p, offset, p->bcount - offset);
         e->state = P_DIRECT;
-        return p_postexpr(p, e);
+        p_postexpr(p, e);
 
     } else if (e->prec > p->l.prec && match(p, T_OR)) {
         encode_load(p, e, 0);
@@ -1099,7 +1101,7 @@ static void p_postexpr(struct parse *p, struct expr *e) {
         e->prec = prec;
         patch(p, offset, p->bcount - offset);
         e->state = P_DIRECT;
-        return p_postexpr(p, e);
+        p_postexpr(p, e);
     }
 }
 
@@ -1276,7 +1278,7 @@ static void p_frame(struct parse *p, struct frame *f) {
 
 static void p_assign(struct parse *p, bool insert) {
     struct lex ll = lex_inc(p->l);
-    struct frame fl = {};
+    struct frame fl = {.unpack = false};
     s_frame(p, &fl, true);
 
     if (match(p, T_ASSIGN)) {

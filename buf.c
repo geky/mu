@@ -67,7 +67,8 @@ void buf_concat(mu_t *b, muint_t *i, mu_t c) {
 
 static void buf_append_unsigned(mu_t *b, muint_t *i, muint_t u) {
     if (u == 0) {
-        return buf_push(b, i, '0');
+        buf_push(b, i, '0');
+        return;
     }
 
     muint_t size = 0;
@@ -80,7 +81,7 @@ static void buf_append_unsigned(mu_t *b, muint_t *i, muint_t u) {
     buf_expand(b, *i + size);
     *i += size;
 
-    char *c = buf_data(*b) + *i - 1;
+    char *c = (char *)buf_data(*b) + *i - 1;
     while (u > 0) {
         *c = mu_toascii(u % 10);
         u /= 10;

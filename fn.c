@@ -19,7 +19,7 @@ mu_t fn_create(struct code *c, mu_t closure) {
     f->args = c->args;
     f->type = FTMFN;
     f->closure = closure;
-    f->code = c;
+    f->fn.code = c;
     return (mu_t)((muint_t)f + MTFN);
 }
 
@@ -28,7 +28,7 @@ mu_t fn_frombfn(mc_t args, mbfn_t *bfn) {
     f->args = args;
     f->type = FTBFN;
     f->closure = 0;
-    f->bfn = bfn;
+    f->fn.bfn = bfn;
     return (mu_t)((muint_t)f + MTFN);
 }
 
@@ -37,7 +37,7 @@ mu_t fn_fromsbfn(mc_t args, msbfn_t *sbfn, mu_t closure) {
     f->args = args;
     f->type = FTSBFN;
     f->closure = closure;
-    f->sbfn = sbfn;
+    f->fn.sbfn = sbfn;
     return (mu_t)((muint_t)f + MTFN);
 }
 
@@ -45,7 +45,7 @@ mu_t fn_fromsbfn(mc_t args, msbfn_t *sbfn, mu_t closure) {
 // Called by garbage collector to clean up
 void fn_destroy(mu_t f) {
     if (fn(f)->type == MTFN) {
-        code_dec(fn(f)->code);
+        code_dec(fn(f)->fn.code);
     }
 
     if (fn(f)->closure) {
@@ -77,13 +77,13 @@ mc_t fn_tcall(mu_t f, mc_t fc, mu_t *frame) {
 
     switch (fn(f)->type) {
         case FTBFN: {
-            mbfn_t *bfn = fn(f)->bfn;
+            mbfn_t *bfn = fn(f)->fn.bfn;
             fn_dec(f);
             return bfn(frame);
         }
 
         case FTSBFN: {
-            mc_t rc = fn(f)->sbfn(fn(f)->closure, frame);
+            mc_t rc = fn(f)->fn.sbfn(fn(f)->closure, frame);
             fn_dec(f);
             return rc;
         }

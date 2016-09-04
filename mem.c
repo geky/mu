@@ -14,12 +14,6 @@ extern void free(void *);
 #endif
 
 
-// Defined as constant since at this point Mu is
-// in fact out of memory
-#define MU_OOM mu_oom()
-MSTR(mu_oom, "out of memory")
-
-
 // Manual memory management
 // Currently just a wrapper over malloc and free
 // Garuntees 8 byte alignment

@@ -49,10 +49,9 @@ typedef muinth_t mlen_t;
 
 
 // Flags for Mu options
-#define MU_MALLOC
 //#define MU_DEBUG
-#define MU_COMPUTED_GOTO
-#define MU_CONSTRUCTOR
+#define MU_MALLOC
+//#define MU_COMPUTED_GOTO
 
 
 // Definition of macro-like inlined functions

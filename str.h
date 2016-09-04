@@ -88,41 +88,21 @@ mu_inline const mbyte_t *str_data(mu_t m) {
 }
 
 // String constant macro
-#ifdef MU_CONSTRUCTOR
-#define MSTR(name, s)                                       \
-static mu_t _mu_ref_##name = 0;                             \
-static const struct {                                       \
-    struct str str;                                         \
-    mbyte_t data[(sizeof s)-1];                             \
-} _mu_struct_##name = {{0, (sizeof s)-1}, s};               \
-                                                            \
-mu_constructor void _mu_init_##name(void) {                 \
-    extern mu_t str_init(const struct str *);               \
-    _mu_ref_##name = str_init(                              \
-            (const struct str *)&_mu_struct_##name);        \
-}                                                           \
-                                                            \
-mu_pure mu_t name(void) {                                   \
-    return _mu_ref_##name;                                  \
+#define MSTR(name, s)                                                       \
+mu_pure mu_t name(void) {                                                   \
+    static mu_t ref = 0;                                                    \
+    static const struct {                                                   \
+        struct str str;                                                     \
+        mbyte_t data[sizeof s > 1 ? (sizeof s)-1 : 1];                      \
+    } inst = {{0, (sizeof s)-1}, s};                                        \
+                                                                            \
+    extern mu_t str_init(const struct str *);                               \
+    if (!ref) {                                                             \
+        ref = str_init(&inst.str);                                          \
+    }                                                                       \
+                                                                            \
+    return ref;                                                             \
 }
-#else
-#define MSTR(name, s)                                       \
-static mu_t _mu_ref_##name = 0;                             \
-static const struct {                                       \
-    struct str str;                                         \
-    mbyte_t data[(sizeof s)-1];                             \
-} _mu_val_##name = {{0, (sizeof s)-1}, s};                  \
-                                                            \
-mu_pure mu_t name(void) {                                   \
-    extern mu_t str_init(const struct str *);               \
-    if (!_mu_ref_##name) {                                  \
-        _mu_ref_##name = str_init(                          \
-                (const struct str *)&_mu_struct_##name);    \
-    }                                                       \
-                                                            \
-    return _mu_ref_##name;                                  \
-}
-#endif
 
 
 #endif

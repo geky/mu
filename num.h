@@ -92,10 +92,10 @@ mu_inline muint_t num_uint(mu_t m) { return (muint_t)num_float(m); }
 mu_inline mint_t  num_int(mu_t m)  { return (mint_t)num_float(m); }
 
 // Number constant macro
-#define MFLOAT(name, num)                                           \
-mu_pure mu_t name(void) {                                           \
-    return (mu_t)(MTNUM + (~7 &                                     \
-        ((union { mfloat_t n; muint_t u; }){(mfloat_t)num}).u));    \
+#define MFLOAT(name, num)                                                   \
+mu_pure mu_t name(void) {                                                   \
+    return (mu_t)(MTNUM + (~7 &                                             \
+        ((union { mfloat_t n; muint_t u; }){(mfloat_t)num}).u));            \
 }
 
 #define MUINT(name, num) MFLOAT(name, (muint_t)num)
