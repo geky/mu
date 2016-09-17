@@ -7,27 +7,30 @@
 #include "mu.h"
 
 
+// Function frame type
+//typedef uint8_t mcnt_t;
+
 // Definition of C Function types
 struct code;
-typedef mc_t mbfn_t(mu_t frame[MU_FRAME]);
-typedef mc_t msbfn_t(mu_t closure, mu_t frame[MU_FRAME]);
+typedef mcnt_t mbfn_t(mu_t *frame);
+typedef mcnt_t msbfn_t(mu_t closure, mu_t *frame);
 
 
 // Creation functions
 mu_t fn_create(struct code *c, mu_t closure);
 
 // Conversion operations
-mu_t fn_frombfn(mc_t args, mbfn_t *bfn);
-mu_t fn_fromsbfn(mc_t args, msbfn_t *sbfn, mu_t closure);
+mu_t fn_frombfn(mcnt_t args, mbfn_t *bfn);
+mu_t fn_fromsbfn(mcnt_t args, msbfn_t *sbfn, mu_t closure);
 
 // Function calls
-mc_t fn_tcall(mu_t f, mc_t fc, mu_t *frame);
-void fn_fcall(mu_t f, mc_t fc, mu_t *frame);
-mu_t fn_vcall(mu_t f, mc_t fc, va_list args);
-mu_t fn_call(mu_t f, mc_t fc, ...);
+mcnt_t fn_tcall(mu_t f, mcnt_t fc, mu_t *frame);
+void fn_fcall(mu_t f, mcnt_t fc, mu_t *frame);
+mu_t fn_vcall(mu_t f, mcnt_t fc, va_list args);
+mu_t fn_call(mu_t f, mcnt_t fc, ...);
 
 // Iteration
-bool fn_next(mu_t f, mc_t fc, mu_t *frame);
+bool fn_next(mu_t f, mcnt_t fc, mu_t *frame);
 
 
 // Function tags
@@ -41,8 +44,8 @@ enum fn_flags {
 // executable component of Mu functions.
 struct code {
     mref_t ref;     // reference count
-    mbyte_t args;   // argument count
-    mbyte_t flags;  // function flags
+    mcnt_t args;    // argument count
+    uint8_t flags;  // function flags
     muintq_t regs;  // number of registers
     muintq_t scope; // size of scope
 
@@ -90,10 +93,10 @@ mu_inline void *code_bcode(struct code *c) {
 // function should be called.
 struct fn {
     mref_t ref;     // reference count
-    mbyte_t args;   // argument count
-    mbyte_t flags;  // function flags
+    mcnt_t args;    // argument count
+    uint8_t flags;  // function flags
 
-    mu_t closure;  // function closure
+    mu_t closure;   // function closure
 
     union {
         mbfn_t *bfn;       // c function
@@ -103,11 +106,11 @@ struct fn {
 };
 
 // Function creating functions
-mu_inline mu_t mbfn(mc_t args, mbfn_t *bfn) {
+mu_inline mu_t mbfn(mcnt_t args, mbfn_t *bfn) {
     return fn_frombfn(args, bfn);
 }
 
-mu_inline mu_t msbfn(mc_t args, msbfn_t *sbfn, mu_t closure) {
+mu_inline mu_t msbfn(mcnt_t args, msbfn_t *sbfn, mu_t closure) {
     return fn_fromsbfn(args, sbfn, closure);
 }
 

@@ -43,6 +43,36 @@ mu_inline bool mu_isfn(mu_t m)  { return mu_type(m) == MTFN;  }
 mu_inline bool mu_isref(mu_t m) { return 4 & (muint_t)m; }
 
 
+// Smallest addressable unit
+typedef unsigned char mbyte_t;
+
+// Length type for strings/tables
+typedef muinth_t mlen_t;
+
+
+// Multiple variables can be passed in a frame,
+// which is a small array of MU_FRAME elements.
+//
+// If more than MU_FRAME elements need to be passed, the
+// frame count of 0xf indicates a table containing the true
+// elements is passed as the first value in the frame.
+// 
+// For function calls, the frame count is split into two
+// nibbles for arguments and return values, in that order.
+#define MU_FRAME 4
+
+// Type for specific one or two frame counts
+typedef uint8_t mcnt_t;
+
+// Frame operations
+mu_inline mlen_t mu_frame_len(mcnt_t fc) {
+    return (fc > MU_FRAME) ? 1 : fc;
+}
+
+void mu_frame_move(mcnt_t fc, mu_t *dframe, mu_t *sframe);
+void mu_frame_convert(mcnt_t sc, mcnt_t dc, mu_t *frame);
+
+
 // Reference counting
 mu_inline mu_t mu_inc(mu_t m) {
     if (mu_isref(m)) {
@@ -59,7 +89,6 @@ mu_inline void mu_dec(mu_t m) {
     }
 }
 
-
 // Wrapping C data into Mu variables
 mu_inline mu_t mu_wrap(void *data) {
     mu_assert((7 & (muint_t)data) == 0); // Must be aligned
@@ -69,32 +98,6 @@ mu_inline mu_t mu_wrap(void *data) {
 mu_inline void *mu_unwrap(mu_t data) {
     mu_assert(mu_iscd(data));
     return (void *)((muint_t)data - MTCD);
-}
-
-
-// Multiple variables can be passed in a frame,
-// which is a small array of MU_FRAME elements.
-//
-// If more than MU_FRAME elements need to be passed
-// a table containing the true elements is used instead.
-#define MU_FRAME 4
-
-// Type for specifying frame counts.
-//
-// The value of 0xf indicates a table is used.
-// For function calls, the frame count is split into two
-// nibbles for arguments and return values, in that order.
-typedef uint8_t mc_t;
-
-// Conversion between different frame types
-void mu_fconvert(mc_t dc, mc_t sc, mu_t *frame);
-
-mu_inline muint_t mu_fcount(mc_t fc) {
-    return (fc == 0xf) ? 1 : fc;
-}
-
-mu_inline void mu_fcopy(mc_t fc, mu_t *dframe, mu_t *sframe) {
-    memcpy(dframe, sframe, sizeof(mu_t)*mu_fcount(fc));
 }
 
 
@@ -110,13 +113,13 @@ void mu_print(const char *s, muint_t n);
 mu_t mu_import(mu_t name);
 
 // Evaluation and entry into Mu
-void mu_feval(const char *s, muint_t n, mu_t scope, mc_t fc, mu_t *frame);
-mu_t mu_veval(const char *s, muint_t n, mu_t scope, mc_t fc, va_list args);
-mu_t mu_eval(const char *s, muint_t n, mu_t scope, mc_t fc, ...);
+void mu_feval(const char *s, muint_t n, mu_t scope, mcnt_t fc, mu_t *frame);
+mu_t mu_veval(const char *s, muint_t n, mu_t scope, mcnt_t fc, va_list args);
+mu_t mu_eval(const char *s, muint_t n, mu_t scope, mcnt_t fc, ...);
 
 // Common errors
-mu_noreturn mu_error_arg(mu_t name, mc_t count, mu_t *frame);
-mu_noreturn mu_error_op(mu_t name, mc_t count, mu_t *args);
+mu_noreturn mu_error_arg(mu_t name, mcnt_t count, mu_t *frame);
+mu_noreturn mu_error_op(mu_t name, mcnt_t count, mu_t *args);
 mu_noreturn mu_error_cast(mu_t name, mu_t m);
 
 

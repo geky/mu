@@ -402,7 +402,7 @@ mu_t num_hex(mu_t n) {
 
 
 // Number related Mu functions
-static mc_t mu_bfn_num(mu_t *frame) {
+static mcnt_t mu_bfn_num(mu_t *frame) {
     mu_t m = frame[0];
 
     switch (mu_type(m)) {
@@ -431,7 +431,7 @@ static mc_t mu_bfn_num(mu_t *frame) {
 MSTR(mu_gen_key_num, "num")
 MBFN(mu_gen_num, 0x1, mu_bfn_num)
 
-static mc_t mu_bfn_add(mu_t *frame) {
+static mcnt_t mu_bfn_add(mu_t *frame) {
     mu_t a = frame[0];
     mu_t b = frame[1];
     if (!mu_isnum(a) || (b && !mu_isnum(b))) {
@@ -450,7 +450,7 @@ static mc_t mu_bfn_add(mu_t *frame) {
 MSTR(mu_gen_key_add, "+")
 MBFN(mu_gen_add, 0x2, mu_bfn_add)
 
-static mc_t mu_bfn_sub(mu_t *frame) {
+static mcnt_t mu_bfn_sub(mu_t *frame) {
     mu_t a = frame[0];
     mu_t b = frame[1];
     if (!mu_isnum(a) || (b && !mu_isnum(b))) {
@@ -469,7 +469,7 @@ static mc_t mu_bfn_sub(mu_t *frame) {
 MSTR(mu_gen_key_sub, "-")
 MBFN(mu_gen_sub, 0x2, mu_bfn_sub)
 
-static mc_t mu_bfn_mul(mu_t *frame) {
+static mcnt_t mu_bfn_mul(mu_t *frame) {
     mu_t a = frame[0];
     mu_t b = frame[1];
     if (!mu_isnum(a) || !mu_isnum(b)) {
@@ -483,7 +483,7 @@ static mc_t mu_bfn_mul(mu_t *frame) {
 MSTR(mu_gen_key_mul, "*")
 MBFN(mu_gen_mul, 0x2, mu_bfn_mul)
 
-static mc_t mu_bfn_div(mu_t *frame) {
+static mcnt_t mu_bfn_div(mu_t *frame) {
     mu_t a = frame[0];
     mu_t b = frame[1];
     if (!mu_isnum(a) || !mu_isnum(b)) {
@@ -497,7 +497,7 @@ static mc_t mu_bfn_div(mu_t *frame) {
 MSTR(mu_gen_key_div, "/")
 MBFN(mu_gen_div, 0x2, mu_bfn_div)
 
-static mc_t mu_bfn_abs(mu_t *frame) {
+static mcnt_t mu_bfn_abs(mu_t *frame) {
     mu_t a = frame[0];
     if (!mu_isnum(a)) {
         mu_error_arg(MU_KEY_ABS, 0x1, frame);
@@ -510,7 +510,7 @@ static mc_t mu_bfn_abs(mu_t *frame) {
 MSTR(mu_gen_key_abs, "abs")
 MBFN(mu_gen_abs, 0x1, mu_bfn_abs)
 
-static mc_t mu_bfn_floor(mu_t *frame) {
+static mcnt_t mu_bfn_floor(mu_t *frame) {
     mu_t a = frame[0];
     if (!mu_isnum(a)) {
         mu_error_arg(MU_KEY_FLOOR, 0x1, frame);
@@ -523,7 +523,7 @@ static mc_t mu_bfn_floor(mu_t *frame) {
 MSTR(mu_gen_key_floor, "floor")
 MBFN(mu_gen_floor, 0x1, mu_bfn_floor)
 
-static mc_t mu_bfn_ceil(mu_t *frame) {
+static mcnt_t mu_bfn_ceil(mu_t *frame) {
     mu_t a = frame[0];
     if (!mu_isnum(a)) {
         mu_error_arg(MU_KEY_CEIL, 0x1, frame);
@@ -536,7 +536,7 @@ static mc_t mu_bfn_ceil(mu_t *frame) {
 MSTR(mu_gen_key_ceil, "ceil")
 MBFN(mu_gen_ceil, 0x1, mu_bfn_ceil)
 
-static mc_t mu_bfn_idiv(mu_t *frame) {
+static mcnt_t mu_bfn_idiv(mu_t *frame) {
     mu_t a = frame[0];
     mu_t b = frame[1];
     if (!mu_isnum(a) || !mu_isnum(b)) {
@@ -550,7 +550,7 @@ static mc_t mu_bfn_idiv(mu_t *frame) {
 MSTR(mu_gen_key_idiv, "//")
 MBFN(mu_gen_idiv, 0x2, mu_bfn_idiv)
 
-static mc_t mu_bfn_mod(mu_t *frame) {
+static mcnt_t mu_bfn_mod(mu_t *frame) {
     mu_t a = frame[0];
     mu_t b = frame[1];
     if (!mu_isnum(a) || !mu_isnum(b)) {
@@ -564,7 +564,7 @@ static mc_t mu_bfn_mod(mu_t *frame) {
 MSTR(mu_gen_key_mod, "%")
 MBFN(mu_gen_mod, 0x2, mu_bfn_mod)
 
-static mc_t mu_bfn_pow(mu_t *frame) {
+static mcnt_t mu_bfn_pow(mu_t *frame) {
     mu_t a = frame[0];
     mu_t b = frame[1];
     if (!mu_isnum(a) || !mu_isnum(b)) {
@@ -578,7 +578,7 @@ static mc_t mu_bfn_pow(mu_t *frame) {
 MSTR(mu_gen_key_pow, "^")
 MBFN(mu_gen_pow, 0x2, mu_bfn_pow)
 
-static mc_t mu_bfn_log(mu_t *frame) {
+static mcnt_t mu_bfn_log(mu_t *frame) {
     mu_t a = frame[0];
     mu_t b = frame[1];
     if (!mu_isnum(a) || (b && !mu_isnum(b))) {
@@ -592,7 +592,7 @@ static mc_t mu_bfn_log(mu_t *frame) {
 MSTR(mu_gen_key_log, "log")
 MBFN(mu_gen_log, 0x2, mu_bfn_log)
 
-static mc_t mu_bfn_cos(mu_t *frame) {
+static mcnt_t mu_bfn_cos(mu_t *frame) {
     mu_t a = frame[0];
     if (!mu_isnum(a)) {
         mu_error_arg(MU_KEY_COS, 0x1, frame);
@@ -605,7 +605,7 @@ static mc_t mu_bfn_cos(mu_t *frame) {
 MSTR(mu_gen_key_cos, "cos")
 MBFN(mu_gen_cos, 0x1, mu_bfn_cos)
 
-static mc_t mu_bfn_acos(mu_t *frame) {
+static mcnt_t mu_bfn_acos(mu_t *frame) {
     mu_t a = frame[0];
     if (!mu_isnum(a)) {
         mu_error_arg(MU_KEY_ACOS, 0x1, frame);
@@ -618,7 +618,7 @@ static mc_t mu_bfn_acos(mu_t *frame) {
 MSTR(mu_gen_key_acos, "acos")
 MBFN(mu_gen_acos, 0x1, mu_bfn_acos)
 
-static mc_t mu_bfn_sin(mu_t *frame) {
+static mcnt_t mu_bfn_sin(mu_t *frame) {
     mu_t a = frame[0];
     if (!mu_isnum(a)) {
         mu_error_arg(MU_KEY_SIN, 0x1, frame);
@@ -631,7 +631,7 @@ static mc_t mu_bfn_sin(mu_t *frame) {
 MSTR(mu_gen_key_sin, "sin")
 MBFN(mu_gen_sin, 0x1, mu_bfn_sin)
 
-static mc_t mu_bfn_asin(mu_t *frame) {
+static mcnt_t mu_bfn_asin(mu_t *frame) {
     mu_t a = frame[0];
     if (!mu_isnum(a)) {
         mu_error_arg(MU_KEY_ASIN, 0x1, frame);
@@ -644,7 +644,7 @@ static mc_t mu_bfn_asin(mu_t *frame) {
 MSTR(mu_gen_key_asin, "asin")
 MBFN(mu_gen_asin, 0x1, mu_bfn_asin)
 
-static mc_t mu_bfn_tan(mu_t *frame) {
+static mcnt_t mu_bfn_tan(mu_t *frame) {
     mu_t a = frame[0];
     if (!mu_isnum(a)) {
         mu_error_arg(MU_KEY_TAN, 0x1, frame);
@@ -657,7 +657,7 @@ static mc_t mu_bfn_tan(mu_t *frame) {
 MSTR(mu_gen_key_tan, "tan")
 MBFN(mu_gen_tan, 0x1, mu_bfn_tan)
 
-static mc_t mu_bfn_atan(mu_t *frame) {
+static mcnt_t mu_bfn_atan(mu_t *frame) {
     mu_t a = frame[0];
     mu_t b = frame[1];
     if (!mu_isnum(a) || (b && !mu_isnum(b))) {
@@ -671,7 +671,7 @@ static mc_t mu_bfn_atan(mu_t *frame) {
 MSTR(mu_gen_key_atan, "atan")
 MBFN(mu_gen_atan, 0x2, mu_bfn_atan)
 
-static mc_t mu_bfn_shl(mu_t *frame) {
+static mcnt_t mu_bfn_shl(mu_t *frame) {
     mu_t a = frame[0];
     mu_t b = frame[1];
     if (!mu_isnum(a) || !mu_isnum(b)) {
@@ -685,7 +685,7 @@ static mc_t mu_bfn_shl(mu_t *frame) {
 MSTR(mu_gen_key_shl, "<<")
 MBFN(mu_gen_shl, 0x2, mu_bfn_shl)
 
-static mc_t mu_bfn_shr(mu_t *frame) {
+static mcnt_t mu_bfn_shr(mu_t *frame) {
     mu_t a = frame[0];
     mu_t b = frame[1];
     if (!mu_isnum(a) || !mu_isnum(b)) {
@@ -712,7 +712,7 @@ MBFN(mu_gen_shr, 0x2, mu_bfn_shr)
 #define XORSHIFT3 11
 #endif
 
-static mc_t num_random(mu_t scope, mu_t *frame) {
+static mcnt_t num_random(mu_t scope, mu_t *frame) {
     muint_t *a = buf_data(scope);
     muint_t x = a[0];
     muint_t y = a[1];
@@ -727,7 +727,7 @@ static mc_t num_random(mu_t scope, mu_t *frame) {
     return 1;
 }
 
-static mc_t num_seed(mu_t *frame) {
+static mcnt_t num_seed(mu_t *frame) {
     mu_t seed = frame[0] ? frame[0] : muint(0);
     if (!mu_isnum(seed)) {
         mu_error_arg(MU_KEY_SEED, 0x1, frame);

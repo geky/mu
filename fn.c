@@ -28,7 +28,7 @@ mu_t fn_create(struct code *c, mu_t closure) {
     return (mu_t)((muint_t)f + MTFN);
 }
 
-mu_t fn_frombfn(mc_t args, mbfn_t *bfn) {
+mu_t fn_frombfn(mcnt_t args, mbfn_t *bfn) {
     struct fn *f = ref_alloc(sizeof(struct fn));
     f->args = args;
     f->flags = FN_BUILTIN;
@@ -37,7 +37,7 @@ mu_t fn_frombfn(mc_t args, mbfn_t *bfn) {
     return (mu_t)((muint_t)f + MTFN);
 }
 
-mu_t fn_fromsbfn(mc_t args, msbfn_t *sbfn, mu_t closure) {
+mu_t fn_fromsbfn(mcnt_t args, msbfn_t *sbfn, mu_t closure) {
     struct fn *f = ref_alloc(sizeof(struct fn));
     f->args = args;
     f->flags = FN_BUILTIN | FN_SCOPED;
@@ -77,8 +77,8 @@ void code_destroy(struct code *c) {
 
 
 // C interface for calling functions
-mc_t fn_tcall(mu_t f, mc_t fc, mu_t *frame) {
-    mu_fconvert(fn(f)->args, fc, frame);
+mcnt_t fn_tcall(mu_t f, mcnt_t fc, mu_t *frame) {
+    mu_frame_convert(fc, fn(f)->args, frame);
 
     switch (fn(f)->flags & (FN_BUILTIN | FN_SCOPED)) {
         case FN_BUILTIN: {
@@ -88,7 +88,7 @@ mc_t fn_tcall(mu_t f, mc_t fc, mu_t *frame) {
         }
 
         case FN_BUILTIN | FN_SCOPED: {
-            mc_t rc = fn(f)->fn.sbfn(fn(f)->closure, frame);
+            mcnt_t rc = fn(f)->fn.sbfn(fn(f)->closure, frame);
             fn_dec(f);
             return rc;
         }
@@ -104,28 +104,28 @@ mc_t fn_tcall(mu_t f, mc_t fc, mu_t *frame) {
     mu_unreachable;
 }
 
-void fn_fcall(mu_t f, mc_t fc, mu_t *frame) {
-    mc_t rets = fn_tcall(mu_inc(f), fc >> 4, frame);
-    mu_fconvert(fc & 0xf, rets, frame);
+void fn_fcall(mu_t f, mcnt_t fc, mu_t *frame) {
+    mcnt_t rets = fn_tcall(mu_inc(f), fc >> 4, frame);
+    mu_frame_convert(rets, fc & 0xf, frame);
 }
 
-mu_t fn_vcall(mu_t f, mc_t fc, va_list args) {
+mu_t fn_vcall(mu_t f, mcnt_t fc, va_list args) {
     mu_t frame[MU_FRAME];
 
-    for (muint_t i = 0; i < mu_fcount(fc >> 4); i++) {
+    for (muint_t i = 0; i < mu_frame_len(fc >> 4); i++) {
         frame[i] = va_arg(args, mu_t);
     }
 
     fn_fcall(f, fc, frame);
 
-    for (muint_t i = 1; i < mu_fcount(0xf & fc); i++) {
+    for (muint_t i = 1; i < mu_frame_len(0xf & fc); i++) {
         *va_arg(args, mu_t *) = frame[i];
     }
 
     return (0xf & fc) ? *frame : 0;
 }
 
-mu_t fn_call(mu_t f, mc_t fc, ...) {
+mu_t fn_call(mu_t f, mcnt_t fc, ...) {
     va_list args;
     va_start(args, fc);
     mu_t ret = fn_vcall(f, fc, args);
@@ -135,7 +135,7 @@ mu_t fn_call(mu_t f, mc_t fc, ...) {
 
 
 // Iteration
-bool fn_next(mu_t f, mc_t fc, mu_t *frame) {
+bool fn_next(mu_t f, mcnt_t fc, mu_t *frame) {
     mu_assert(mu_isfn(f));
     fn_fcall(f, (fc == 0) ? 1 : fc, frame);
 
@@ -146,7 +146,7 @@ bool fn_next(mu_t f, mc_t fc, mu_t *frame) {
             }
             return true;
         } else {
-            mu_fconvert(0, fc, frame);
+            mu_frame_convert(fc, 0, frame);
             return false;
         }
     } else {
@@ -163,7 +163,7 @@ bool fn_next(mu_t f, mc_t fc, mu_t *frame) {
 
 
 // Function related Mu functions
-static mc_t mu_bfn_fn(mu_t *frame) {
+static mcnt_t mu_bfn_fn(mu_t *frame) {
     mu_t m = frame[0];
 
     switch (mu_type(m)) {
@@ -187,7 +187,7 @@ MSTR(mu_gen_key_fn2, "fn_")
 MBFN(mu_gen_fn, 0x1, mu_bfn_fn)
 
 // Default function
-static mc_t mu_bfn_id(mu_t *frame) {
+static mcnt_t mu_bfn_id(mu_t *frame) {
     return 0xf;
 }
 
@@ -195,7 +195,7 @@ MSTR(mu_gen_key_id, "id")
 MBFN(mu_gen_id, 0xf, mu_bfn_id)
 
 // Binds arguments to function
-static mc_t fn_bound(mu_t scope, mu_t *frame) {
+static mcnt_t fn_bound(mu_t scope, mu_t *frame) {
     mu_t f = tbl_lookup(scope, muint(0));
     mu_t args = tbl_lookup(scope, muint(1));
 
@@ -203,7 +203,7 @@ static mc_t fn_bound(mu_t scope, mu_t *frame) {
     return fn_tcall(f, 0xf, frame);
 }
 
-static mc_t mu_bfn_bind(mu_t *frame) {
+static mcnt_t mu_bfn_bind(mu_t *frame) {
     mu_t f = tbl_pop(frame[0], 0);
     if (!mu_isfn(f)) {
         mu_error_arg(MU_KEY_BIND, 0x2, (mu_t[]){f, frame[0]});
@@ -216,8 +216,8 @@ static mc_t mu_bfn_bind(mu_t *frame) {
 MSTR(mu_gen_key_bind, "bind")
 MBFN(mu_gen_bind, 0xf, mu_bfn_bind)
 
-static mc_t fn_composed(mu_t fs, mu_t *frame) {
-    mc_t c = 0xf;
+static mcnt_t fn_composed(mu_t fs, mu_t *frame) {
+    mcnt_t c = 0xf;
     for (muint_t i = tbl_len(fs)-1; i+1 > 0; i--) {
         mu_t f = tbl_lookup(fs, muint(i));
         c = fn_tcall(f, c, frame);
@@ -226,7 +226,7 @@ static mc_t fn_composed(mu_t fs, mu_t *frame) {
     return c;
 }
 
-static mc_t mu_bfn_comp(mu_t *frame) {
+static mcnt_t mu_bfn_comp(mu_t *frame) {
     mu_t f;
     for (muint_t i = 0; tbl_next(frame[0], &i, 0, &f);) {
         if (!mu_isfn(f)) {

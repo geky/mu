@@ -18,7 +18,7 @@ void mu_encode(void (*emit)(void *, mbyte_t), void *p,
 mint_t mu_patch(void *c, mint_t j);
 
 // Execute bytecode
-mc_t mu_exec(struct code *c, mu_t scope, mu_t *frame);
+mcnt_t mu_exec(struct code *c, mu_t scope, mu_t *frame);
 
 
 // Disassemble bytecode for debugging and introspection

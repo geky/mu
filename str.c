@@ -204,7 +204,7 @@ bool str_next(mu_t s, muint_t *ip, mu_t *cp) {
     return true;
 }
 
-static mc_t str_step(mu_t scope, mu_t *frame) {
+static mcnt_t str_step(mu_t scope, mu_t *frame) {
     mu_t s = tbl_lookup(scope, muint(0));
     muint_t i = num_uint(tbl_lookup(scope, muint(1)));
 
@@ -418,7 +418,7 @@ mu_t str_hex(mu_t s) {
 
 
 // String related functions in Mu
-static mc_t mu_bfn_str(mu_t *frame) {
+static mcnt_t mu_bfn_str(mu_t *frame) {
     mu_t m = frame[0];
 
     switch (mu_type(m)) {
@@ -454,7 +454,7 @@ static mc_t mu_bfn_str(mu_t *frame) {
 MSTR(mu_gen_key_str, "str")
 MBFN(mu_gen_str, 0x1, mu_bfn_str)
 
-static mc_t mu_bfn_find(mu_t *frame) {
+static mcnt_t mu_bfn_find(mu_t *frame) {
     mu_t s = frame[0];
     mu_t m = frame[1];
     if (!mu_isstr(s) || !mu_isstr(m)) {
@@ -484,7 +484,7 @@ static mc_t mu_bfn_find(mu_t *frame) {
 MSTR(mu_gen_key_find, "find")
 MBFN(mu_gen_find, 0x2, mu_bfn_find)
 
-static mc_t mu_bfn_replace(mu_t *frame) {
+static mcnt_t mu_bfn_replace(mu_t *frame) {
     mu_t s = frame[0];
     mu_t m = frame[1];
     mu_t r = frame[2];
@@ -528,7 +528,7 @@ MSTR(mu_gen_key_replace, "replace")
 MBFN(mu_gen_replace, 0x3, mu_bfn_replace)
 
 
-static mc_t str_split_step(mu_t scope, mu_t *frame) {
+static mcnt_t str_split_step(mu_t scope, mu_t *frame) {
     mu_t a = tbl_lookup(scope, muint(0));
     const mbyte_t *ab = str_data(a);
     mlen_t alen = str_len(a);
@@ -557,7 +557,7 @@ static mc_t str_split_step(mu_t scope, mu_t *frame) {
     return 1;
 }
 
-static mc_t mu_bfn_split(mu_t *frame) {
+static mcnt_t mu_bfn_split(mu_t *frame) {
     mu_t s     = frame[0];
     mu_t delim = frame[1] ? frame[1] : MU_SPACE_STR;
     if (!mu_isstr(s) || !mu_isstr(delim)) {
@@ -576,7 +576,7 @@ static mc_t mu_bfn_split(mu_t *frame) {
 MSTR(mu_gen_key_split, "split")
 MBFN(mu_gen_split, 0x2, mu_bfn_split)
 
-static mc_t mu_bfn_join(mu_t *frame) {
+static mcnt_t mu_bfn_join(mu_t *frame) {
     mu_t iter  = frame[0];
     mu_t delim = frame[1] ? frame[1] : MU_SPACE_STR;
     if (!mu_isstr(delim)) {
@@ -612,7 +612,7 @@ static mc_t mu_bfn_join(mu_t *frame) {
 MSTR(mu_gen_key_join, "join")
 MBFN(mu_gen_join, 0x2, mu_bfn_join)
 
-static mc_t mu_bfn_pad(mu_t *frame) {
+static mcnt_t mu_bfn_pad(mu_t *frame) {
     mu_t s    = frame[0];
     mu_t mlen = frame[1];
     mu_t pad  = frame[2] ? frame[2] : MU_SPACE_STR;
@@ -662,7 +662,7 @@ static mc_t mu_bfn_pad(mu_t *frame) {
 MSTR(mu_gen_key_pad, "pad")
 MBFN(mu_gen_pad, 0x3, mu_bfn_pad)
 
-static mc_t mu_bfn_strip(mu_t *frame) {
+static mcnt_t mu_bfn_strip(mu_t *frame) {
     if (mu_isstr(frame[1])) {
         mu_dec(frame[2]);
         frame[2] = frame[1];

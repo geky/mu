@@ -68,7 +68,7 @@ enum tbl_flags {
 struct tbl {
     mref_t ref;     // reference count
     muintq_t npw2;  // log2 of capacity
-    mbyte_t flags;  // table flags
+    uint8_t flags;  // table flags
     mlen_t len;     // count of non-nil entries
     mlen_t nils;    // count of nil entries
 

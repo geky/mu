@@ -356,7 +356,7 @@ bool tbl_next(mu_t t, muint_t *ip, mu_t *kp, mu_t *vp) {
     return true;
 }
 
-static mc_t tbl_iter_step(mu_t scope, mu_t *frame) {
+static mcnt_t tbl_iter_step(mu_t scope, mu_t *frame) {
     mu_t t = tbl_lookup(scope, muint(0));
     muint_t i = num_uint(tbl_lookup(scope, muint(1)));
 
@@ -371,7 +371,7 @@ mu_t tbl_iter(mu_t t) {
     return msbfn(0x0, tbl_iter_step, mlist({t, muint(0)}));
 }
 
-static mc_t tbl_pairs_step(mu_t scope, mu_t *frame) {
+static mcnt_t tbl_pairs_step(mu_t scope, mu_t *frame) {
     mu_t t = tbl_lookup(scope, muint(0));
     muint_t i = num_uint(tbl_lookup(scope, muint(1)));
 
@@ -784,7 +784,7 @@ mu_t tbl_dump(mu_t t, mu_t depth) {
 
 
 // Table related Mu functions
-static mc_t mu_bfn_tbl(mu_t *frame) {
+static mcnt_t mu_bfn_tbl(mu_t *frame) {
     mu_t m    = frame[0];
     mu_t tail = frame[1];
     if (tail && !mu_istbl(tail)) {
@@ -827,7 +827,7 @@ static mc_t mu_bfn_tbl(mu_t *frame) {
 MSTR(mu_gen_key_tbl, "tbl")
 MBFN(mu_gen_tbl, 0x2, mu_bfn_tbl)
 
-static mc_t mu_bfn_tail(mu_t *frame) {
+static mcnt_t mu_bfn_tail(mu_t *frame) {
     if (!mu_istbl(frame[0])) {
         mu_error_arg(MU_KEY_TAIL, 0x1, frame);
     }

@@ -280,7 +280,7 @@ void mu_dis(struct code *code) {
 
 
 // Execute bytecode
-mc_t mu_exec(struct code *code, mu_t scope, mu_t *frame) {
+mcnt_t mu_exec(struct code *code, mu_t scope, mu_t *frame) {
     // Allocate temporary variables
     const uint16_t *pc;
     mu_t *imms;
@@ -294,7 +294,7 @@ reenter:
     {   // Setup the registers and scope
         mu_t regs[code->regs];
         regs[0] = scope;
-        mu_fcopy(code->args, &regs[1], frame);
+        mu_frame_move(code->args, &regs[1], frame);
 
         // Setup other state
         imms = code_imms(code);
@@ -384,14 +384,14 @@ reenter:
                     mu_errorf("unable to call %r", regs[d]);
                 }
 
-                mu_fcopy(a >> 4, frame, &regs[d+1]);
+                mu_frame_move(a >> 4, frame, &regs[d+1]);
                 fn_fcall(regs[d], a, frame);
                 mu_dec(regs[d]);
-                mu_fcopy(0xf & a, &regs[d], frame);
+                mu_frame_move(0xf & a, &regs[d], frame);
             VM_ENTRY_END
 
             VM_ENTRY_DA(OP_RET, d, a)
-                mu_fcopy(a, frame, &regs[d]);
+                mu_frame_move(a, frame, &regs[d]);
                 tbl_dec(scope);
                 code_dec(code);
                 return a;
@@ -399,7 +399,7 @@ reenter:
 
             VM_ENTRY_DA(OP_TCALL, d, a)
                 mu_t scratch = regs[d];
-                mu_fcopy(a, frame, &regs[d+1]);
+                mu_frame_move(a, frame, &regs[d+1]);
                 tbl_dec(scope);
                 code_dec(code);
 
@@ -410,7 +410,7 @@ reenter:
                     mu_errorf("unable to call %r", scratch);
                 } else if (!fn_isbuiltin(scratch)) {
                     code = fn_code(scratch);
-                    mu_fconvert(code->args, a, frame);
+                    mu_frame_convert(a, code->args, frame);
                     scope = tbl_extend(code->scope, fn_closure(scratch));
                     fn_dec(scratch);
                     goto reenter;

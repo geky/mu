@@ -70,8 +70,12 @@ static mu_t (*const mu_attr_repr[8])(mu_t) = {
 };
 
 
-// Conversion between different frame types
-void mu_fconvert(mc_t dc, mc_t sc, mu_t *frame) {
+// Frame operations
+void mu_frame_move(mcnt_t fc, mu_t *dframe, mu_t *sframe) {
+    memcpy(dframe, sframe, sizeof(mu_t)*mu_frame_len(fc));
+}
+
+void mu_frame_convert(mcnt_t sc, mcnt_t dc, mu_t *frame) {
     if (dc != 0xf && sc != 0xf) {
         for (muint_t i = dc; i < sc; i++) {
             mu_dec(frame[i]);
@@ -119,7 +123,7 @@ mu_noreturn mu_errorf(const char *f, ...) {
     mu_verrorf(f, args);
 }
 
-static mc_t mu_bfn_error(mu_t *frame) {
+static mcnt_t mu_bfn_error(mu_t *frame) {
     mu_t b = buf_create(0);
     muint_t n = 0;
     mu_t v;
@@ -153,7 +157,7 @@ void mu_printf(const char *f, ...) {
     va_end(args);
 }
 
-static mc_t mu_bfn_print(mu_t *frame) {
+static mcnt_t mu_bfn_print(mu_t *frame) {
     mu_t b = buf_create(0);
     muint_t n = 0;
     mu_t v;
@@ -171,7 +175,7 @@ static mc_t mu_bfn_print(mu_t *frame) {
 MSTR(mu_gen_key_print, "print")
 MBFN(mu_gen_print, 0xf, mu_bfn_print)
 
-static mc_t mu_bfn_import(mu_t *frame) {
+static mcnt_t mu_bfn_import(mu_t *frame) {
     mu_t name = frame[0];
     if (!mu_isstr(name)) {
         mu_error_arg(MU_KEY_IMPORT, 0x1, frame);
@@ -200,25 +204,25 @@ MBFN(mu_gen_import, 0x1, mu_bfn_import)
 
 
 // Evaluation and entry into Mu
-void mu_feval(const char *s, muint_t n, mu_t scope, mc_t fc, mu_t *frame) {
+void mu_feval(const char *s, muint_t n, mu_t scope, mcnt_t fc, mu_t *frame) {
     struct code *c = mu_compile(s, n);
-    mc_t rets = mu_exec(c, mu_inc(scope), frame);
-    mu_fconvert(fc, rets, frame);
+    mcnt_t rets = mu_exec(c, mu_inc(scope), frame);
+    mu_frame_convert(rets, fc, frame);
 }
 
-mu_t mu_veval(const char *s, muint_t n, mu_t scope, mc_t fc, va_list args) {
+mu_t mu_veval(const char *s, muint_t n, mu_t scope, mcnt_t fc, va_list args) {
     mu_t frame[MU_FRAME];
 
     mu_feval(s, n, scope, fc, frame);
 
-    for (muint_t i = 1; i < mu_fcount(fc); i++) {
+    for (muint_t i = 1; i < mu_frame_len(fc); i++) {
         *va_arg(args, mu_t *) = frame[i];
     }
 
     return fc ? *frame : 0;
 }
 
-mu_t mu_eval(const char *s, muint_t n, mu_t scope, mc_t fc, ...) {
+mu_t mu_eval(const char *s, muint_t n, mu_t scope, mcnt_t fc, ...) {
     va_list args;
     va_start(args, fc);
     mu_t ret = mu_veval(s, n, scope, fc, args);
@@ -228,7 +232,7 @@ mu_t mu_eval(const char *s, muint_t n, mu_t scope, mc_t fc, ...) {
 
 
 // Common errors
-mu_noreturn mu_error_arg(mu_t name, mc_t fc, mu_t *frame) {
+mu_noreturn mu_error_arg(mu_t name, mcnt_t fc, mu_t *frame) {
     mu_t message = buf_create(0);
     muint_t n = 0;
 
@@ -247,7 +251,7 @@ mu_noreturn mu_error_arg(mu_t name, mc_t fc, mu_t *frame) {
     mu_errorf("%ns", buf_data(message), n);
 }
 
-mu_noreturn mu_error_op(mu_t name, mc_t fc, mu_t *frame) {
+mu_noreturn mu_error_op(mu_t name, mcnt_t fc, mu_t *frame) {
     if (fc < 2 || !frame[1]) {
         mu_errorf("invalid operation %m%r", name, frame[0]);
     } else {
@@ -261,7 +265,7 @@ mu_noreturn mu_error_cast(mu_t name, mu_t m) {
 
 
 // wrappers for comparison operations
-static mc_t mu_bfn_not(mu_t *frame) {
+static mcnt_t mu_bfn_not(mu_t *frame) {
     mu_dec(frame[0]);
     frame[0] = !frame[0] ? MU_TRUE : MU_FALSE;
     return 1;
@@ -270,7 +274,7 @@ static mc_t mu_bfn_not(mu_t *frame) {
 MSTR(mu_gen_key_not, "!")
 MBFN(mu_gen_not, 0x1, mu_bfn_not)
 
-static mc_t mu_bfn_eq(mu_t *frame) {
+static mcnt_t mu_bfn_eq(mu_t *frame) {
     mu_dec(frame[0]);
     mu_dec(frame[1]);
     frame[0] = (frame[0] == frame[1]) ? MU_TRUE : MU_FALSE;
@@ -280,7 +284,7 @@ static mc_t mu_bfn_eq(mu_t *frame) {
 MSTR(mu_gen_key_eq, "==")
 MBFN(mu_gen_eq,  0x2, mu_bfn_eq)
 
-static mc_t mu_bfn_neq(mu_t *frame) {
+static mcnt_t mu_bfn_neq(mu_t *frame) {
     mu_dec(frame[0]);
     mu_dec(frame[1]);
     frame[0] = (frame[0] != frame[1]) ? MU_TRUE : MU_FALSE;
@@ -290,7 +294,7 @@ static mc_t mu_bfn_neq(mu_t *frame) {
 MSTR(mu_gen_key_neq, "!=")
 MBFN(mu_gen_neq, 0x2, mu_bfn_neq)
 
-static mc_t mu_bfn_lt(mu_t *frame) {
+static mcnt_t mu_bfn_lt(mu_t *frame) {
     mu_t a = frame[0];
     mu_t b = frame[1];
     if (mu_type(a) != mu_type(b) || !mu_attr_cmp[mu_type(a)]) {
@@ -306,7 +310,7 @@ static mc_t mu_bfn_lt(mu_t *frame) {
 MSTR(mu_gen_key_lt, "<")
 MBFN(mu_gen_lt,  0x2, mu_bfn_lt)
 
-static mc_t mu_bfn_lte(mu_t *frame) {
+static mcnt_t mu_bfn_lte(mu_t *frame) {
     mu_t a = frame[0];
     mu_t b = frame[1];
     if (mu_type(a) != mu_type(b) || !mu_attr_cmp[mu_type(a)]) {
@@ -322,7 +326,7 @@ static mc_t mu_bfn_lte(mu_t *frame) {
 MSTR(mu_gen_key_lte, "<=")
 MBFN(mu_gen_lte, 0x2, mu_bfn_lte)
 
-static mc_t mu_bfn_gt(mu_t *frame) {
+static mcnt_t mu_bfn_gt(mu_t *frame) {
     mu_t a = frame[0];
     mu_t b = frame[1];
     if (mu_type(a) != mu_type(b) || !mu_attr_cmp[mu_type(a)]) {
@@ -338,7 +342,7 @@ static mc_t mu_bfn_gt(mu_t *frame) {
 MSTR(mu_gen_key_gt, ">")
 MBFN(mu_gen_gt,  0x2, mu_bfn_gt)
 
-static mc_t mu_bfn_gte(mu_t *frame) {
+static mcnt_t mu_bfn_gte(mu_t *frame) {
     mu_t a = frame[0];
     mu_t b = frame[1];
     if (mu_type(a) != mu_type(b) || !mu_attr_cmp[mu_type(a)]) {
@@ -354,7 +358,7 @@ static mc_t mu_bfn_gte(mu_t *frame) {
 MSTR(mu_gen_key_gte, ">=")
 MBFN(mu_gen_gte, 0x2, mu_bfn_gte)
 
-static mc_t mu_bfn_is(mu_t *frame) {
+static mcnt_t mu_bfn_is(mu_t *frame) {
     mu_t m    = frame[0];
     mu_t type = frame[1];
     mu_dec(m);
@@ -376,7 +380,7 @@ MBFN(mu_gen_is, 0x2, mu_bfn_is)
 
 
 // String representation
-static mc_t mu_bfn_parse(mu_t *frame) {
+static mcnt_t mu_bfn_parse(mu_t *frame) {
     mu_t s = frame[0];
     if (!mu_isstr(s)) {
         mu_error_arg(MU_KEY_PARSE, 0x1, frame);
@@ -390,7 +394,7 @@ static mc_t mu_bfn_parse(mu_t *frame) {
 MSTR(mu_gen_key_parse, "parse")
 MBFN(mu_gen_parse, 0x1, mu_bfn_parse)
 
-static mc_t mu_bfn_repr(mu_t *frame) {
+static mcnt_t mu_bfn_repr(mu_t *frame) {
     mu_t m     = frame[0];
     mu_t depth = frame[1] ? frame[1] : muint(1);
     if (!mu_isnum(depth)) {
@@ -415,7 +419,7 @@ static mc_t mu_bfn_repr(mu_t *frame) {
 MSTR(mu_gen_key_repr, "repr")
 MBFN(mu_gen_repr, 0x2, mu_bfn_repr)
 
-static mc_t mu_bfn_bin(mu_t *frame) {
+static mcnt_t mu_bfn_bin(mu_t *frame) {
     mu_t m = frame[0];
 
     if (mu_isnum(m)) {
@@ -432,7 +436,7 @@ static mc_t mu_bfn_bin(mu_t *frame) {
 MSTR(mu_gen_key_bin, "bin")
 MBFN(mu_gen_bin, 0x1, mu_bfn_bin)
 
-static mc_t mu_bfn_oct(mu_t *frame) {
+static mcnt_t mu_bfn_oct(mu_t *frame) {
     mu_t m = frame[0];
 
     if (mu_isnum(m)) {
@@ -449,7 +453,7 @@ static mc_t mu_bfn_oct(mu_t *frame) {
 MSTR(mu_gen_key_oct, "oct")
 MBFN(mu_gen_oct, 0x1, mu_bfn_oct)
 
-static mc_t mu_bfn_hex(mu_t *frame) {
+static mcnt_t mu_bfn_hex(mu_t *frame) {
     mu_t m = frame[0];
 
     if (mu_isnum(m)) {
@@ -480,7 +484,7 @@ static mint_t mu_clamp(mu_t n, mint_t lower, mint_t upper) {
     }
 }
 
-static mc_t mu_bfn_len(mu_t *frame) {
+static mcnt_t mu_bfn_len(mu_t *frame) {
     mu_t a = frame[0];
 
     if (mu_isstr(a)) {
@@ -499,7 +503,7 @@ static mc_t mu_bfn_len(mu_t *frame) {
 MSTR(mu_gen_key_len, "len")
 MBFN(mu_gen_len, 0x1, mu_bfn_len)
 
-static mc_t mu_bfn_concat(mu_t *frame) {
+static mcnt_t mu_bfn_concat(mu_t *frame) {
     mu_t a      = frame[0];
     mu_t b      = frame[1];
     mu_t offset = frame[2];
@@ -521,7 +525,7 @@ static mc_t mu_bfn_concat(mu_t *frame) {
 MSTR(mu_gen_key_concat, "++")
 MBFN(mu_gen_concat, 0x3, mu_bfn_concat)
 
-static mc_t mu_bfn_subset(mu_t *frame) {
+static mcnt_t mu_bfn_subset(mu_t *frame) {
     mu_t a     = frame[0];
     mu_t lower = frame[1];
     mu_t upper = frame[2];
@@ -551,7 +555,7 @@ static mc_t mu_bfn_subset(mu_t *frame) {
 MSTR(mu_gen_key_subset, "sub")
 MBFN(mu_gen_subset, 0x3, mu_bfn_subset)
 
-static mc_t mu_bfn_push(mu_t *frame) {
+static mcnt_t mu_bfn_push(mu_t *frame) {
     mu_t t = frame[0];
     mu_t v = frame[1];
     mu_t i = frame[2];
@@ -573,7 +577,7 @@ static mc_t mu_bfn_push(mu_t *frame) {
 MSTR(mu_gen_key_push, "push")
 MBFN(mu_gen_push, 0x3, mu_bfn_push)
 
-static mc_t mu_bfn_pop(mu_t *frame) {
+static mcnt_t mu_bfn_pop(mu_t *frame) {
     mu_t t = frame[0];
     mu_t i = frame[1];
     if (!mu_istbl(t) || (i && !mu_isnum(i))) {
@@ -594,7 +598,7 @@ static mc_t mu_bfn_pop(mu_t *frame) {
 MSTR(mu_gen_key_pop, "pop")
 MBFN(mu_gen_pop, 0x2, mu_bfn_pop)
 
-static mc_t mu_bfn_and(mu_t *frame) {
+static mcnt_t mu_bfn_and(mu_t *frame) {
     mu_t a = frame[0];
     mu_t b = frame[1];
 
@@ -612,7 +616,7 @@ static mc_t mu_bfn_and(mu_t *frame) {
 MSTR(mu_gen_key_and2, "&")
 MBFN(mu_gen_and, 0x2, mu_bfn_and)
 
-static mc_t mu_bfn_or(mu_t *frame) {
+static mcnt_t mu_bfn_or(mu_t *frame) {
     mu_t a = frame[0];
     mu_t b = frame[1];
 
@@ -630,7 +634,7 @@ static mc_t mu_bfn_or(mu_t *frame) {
 MSTR(mu_gen_key_or2, "|")
 MBFN(mu_gen_or, 0x2, mu_bfn_or)
 
-static mc_t mu_bfn_xor(mu_t *frame) {
+static mcnt_t mu_bfn_xor(mu_t *frame) {
     mu_t a = frame[0];
     mu_t b = frame[1];
 
@@ -651,7 +655,7 @@ static mc_t mu_bfn_xor(mu_t *frame) {
 MSTR(mu_gen_key_xor, "~")
 MBFN(mu_gen_xor, 0x2, mu_bfn_xor)
 
-static mc_t mu_bfn_diff(mu_t *frame) {
+static mcnt_t mu_bfn_diff(mu_t *frame) {
     mu_t a = frame[0];
     mu_t b = frame[1];
 
@@ -671,7 +675,7 @@ MBFN(mu_gen_diff, 0x2, mu_bfn_diff)
 
 
 // Iterators and generators
-static mc_t mu_bfn_iter(mu_t *frame) {
+static mcnt_t mu_bfn_iter(mu_t *frame) {
     mu_t m = frame[0];
     if (!mu_attr_iter[mu_type(m)]) {
         mu_error_cast(MU_KEY_ITER, m);
@@ -684,7 +688,7 @@ static mc_t mu_bfn_iter(mu_t *frame) {
 MSTR(mu_gen_key_iter, "iter")
 MBFN(mu_gen_iter, 0x1, mu_bfn_iter)
 
-static mc_t fn_pairs(mu_t *frame) {
+static mcnt_t fn_pairs(mu_t *frame) {
     mu_t m = frame[0];
 
     if (mu_istbl(m)) {
@@ -704,7 +708,7 @@ MBFN(mu_gen_pairs, 0x1, fn_pairs)
 
 
 // Functions over iterators
-static mc_t fn_map_step(mu_t scope, mu_t *frame) {
+static mcnt_t fn_map_step(mu_t scope, mu_t *frame) {
     mu_t f = tbl_lookup(scope, muint(0));
     mu_t i = tbl_lookup(scope, muint(1));
 
@@ -725,7 +729,7 @@ static mc_t fn_map_step(mu_t scope, mu_t *frame) {
     return 0;
 }
 
-static mc_t fn_map(mu_t *frame) {
+static mcnt_t fn_map(mu_t *frame) {
     mu_t f    = frame[0];
     mu_t iter = frame[1];
     if (!mu_isfn(f)) {
@@ -743,7 +747,7 @@ static mc_t fn_map(mu_t *frame) {
 MSTR(mu_gen_key_map, "map")
 MBFN(mu_gen_map, 0x2, fn_map)
 
-static mc_t fn_filter_step(mu_t scope, mu_t *frame) {
+static mcnt_t fn_filter_step(mu_t scope, mu_t *frame) {
     mu_t f = tbl_lookup(scope, muint(0));
     mu_t i = tbl_lookup(scope, muint(1));
 
@@ -765,7 +769,7 @@ static mc_t fn_filter_step(mu_t scope, mu_t *frame) {
     return 0;
 }
 
-static mc_t fn_filter(mu_t *frame) {
+static mcnt_t fn_filter(mu_t *frame) {
     mu_t f    = frame[0];
     mu_t iter = frame[1];
     if (!mu_isfn(f)) {
@@ -783,7 +787,7 @@ static mc_t fn_filter(mu_t *frame) {
 MSTR(mu_gen_key_filter, "filter")
 MBFN(mu_gen_filter, 0x2, fn_filter)
 
-static mc_t fn_reduce(mu_t *frame) {
+static mcnt_t fn_reduce(mu_t *frame) {
     mu_t f    = tbl_pop(frame[0], 0);
     mu_t iter = tbl_pop(frame[0], 0);
     mu_t acc  = frame[0];
@@ -816,7 +820,7 @@ static mc_t fn_reduce(mu_t *frame) {
 MSTR(mu_gen_key_reduce, "reduce")
 MBFN(mu_gen_reduce, 0xf, fn_reduce)
 
-static mc_t fn_any(mu_t *frame) {
+static mcnt_t fn_any(mu_t *frame) {
     mu_t pred = frame[0];
     mu_t iter = frame[1];
     if (!mu_isfn(pred)) {
@@ -846,7 +850,7 @@ static mc_t fn_any(mu_t *frame) {
 MSTR(mu_gen_key_any, "any")
 MBFN(mu_gen_any, 0x2, fn_any)
 
-static mc_t fn_all(mu_t *frame) {
+static mcnt_t fn_all(mu_t *frame) {
     mu_t pred = frame[0];
     mu_t iter = frame[1];
     if (!mu_isfn(pred)) {
@@ -879,7 +883,7 @@ MBFN(mu_gen_all, 0x2, fn_all)
 
 
 // Other iterators/generators
-static mc_t fn_range_step(mu_t scope, mu_t *frame) {
+static mcnt_t fn_range_step(mu_t scope, mu_t *frame) {
     mu_t *a = buf_data(scope);
 
     if ((num_cmp(a[2], muint(0)) > 0 && num_cmp(a[0], a[1]) >= 0) ||
@@ -892,7 +896,7 @@ static mc_t fn_range_step(mu_t scope, mu_t *frame) {
     return 1;
 }
 
-static mc_t fn_range(mu_t *frame) {
+static mcnt_t fn_range(mu_t *frame) {
     if (!frame[1]) {
         frame[1] = frame[0];
         frame[0] = 0;
@@ -917,7 +921,7 @@ static mc_t fn_range(mu_t *frame) {
 MSTR(mu_gen_key_range, "range")
 MBFN(mu_gen_range, 0x3, fn_range)
 
-static mc_t fn_repeat_step(mu_t scope, mu_t *frame) {
+static mcnt_t fn_repeat_step(mu_t scope, mu_t *frame) {
     mu_t i = tbl_lookup(scope, muint(1));
     if (num_cmp(i, muint(0)) <= 0) {
         return 0;
@@ -928,7 +932,7 @@ static mc_t fn_repeat_step(mu_t scope, mu_t *frame) {
     return 1;
 }
 
-static mc_t fn_repeat(mu_t *frame) {
+static mcnt_t fn_repeat(mu_t *frame) {
     mu_t m     = frame[0];
     mu_t count = frame[1] ? frame[1] : MU_INF;
     if (!mu_isnum(count)) {
@@ -944,7 +948,7 @@ MBFN(mu_gen_repeat, 0x2, fn_repeat)
 
 
 // Iterator manipulation
-static mc_t fn_zip_step(mu_t scope, mu_t *frame) {
+static mcnt_t fn_zip_step(mu_t scope, mu_t *frame) {
     mu_t iters = tbl_lookup(scope, muint(1));
 
     if (!iters) {
@@ -984,7 +988,7 @@ static mc_t fn_zip_step(mu_t scope, mu_t *frame) {
     return 0xf;
 }
 
-static mc_t fn_zip(mu_t *frame) {
+static mcnt_t fn_zip(mu_t *frame) {
     mu_t iter;
     if (tbl_len(frame[0]) == 0) {
         mu_errorf("no arguments passed to zip");
@@ -1003,7 +1007,7 @@ static mc_t fn_zip(mu_t *frame) {
 MSTR(mu_gen_key_zip, "zip")
 MBFN(mu_gen_zip, 0xf, fn_zip)
 
-static mc_t fn_chain_step(mu_t scope, mu_t *frame) {
+static mcnt_t fn_chain_step(mu_t scope, mu_t *frame) {
     mu_t iter = tbl_lookup(scope, muint(1));
 
     if (iter) {
@@ -1029,7 +1033,7 @@ static mc_t fn_chain_step(mu_t scope, mu_t *frame) {
     return 0;
 }
 
-static mc_t fn_chain(mu_t *frame) {
+static mcnt_t fn_chain(mu_t *frame) {
     mu_t iter;
     if (tbl_len(frame[0]) == 0) {
         mu_errorf("no arguments passed to chain");
@@ -1048,7 +1052,7 @@ static mc_t fn_chain(mu_t *frame) {
 MSTR(mu_gen_key_chain, "chain")
 MBFN(mu_gen_chain, 0xf, fn_chain)
 
-static mc_t fn_take_count_step(mu_t scope, mu_t *frame) {
+static mcnt_t fn_take_count_step(mu_t scope, mu_t *frame) {
     mu_t i = tbl_lookup(scope, muint(0));
     if (num_cmp(i, muint(0)) <= 0) {
         return 0;
@@ -1059,7 +1063,7 @@ static mc_t fn_take_count_step(mu_t scope, mu_t *frame) {
     return fn_tcall(iter, 0x0, frame);
 }
 
-static mc_t fn_take_while_step(mu_t scope, mu_t *frame) {
+static mcnt_t fn_take_while_step(mu_t scope, mu_t *frame) {
     mu_t iter = tbl_lookup(scope, muint(1));
     fn_fcall(iter, 0x0f, frame);
     fn_dec(iter);
@@ -1084,7 +1088,7 @@ static mc_t fn_take_while_step(mu_t scope, mu_t *frame) {
     return 0xf;
 }
 
-static mc_t fn_take(mu_t *frame) {
+static mcnt_t fn_take(mu_t *frame) {
     mu_t m    = frame[0];
     mu_t iter = frame[1];
     if (!mu_isnum(m) && !mu_isfn(m)) {
@@ -1095,7 +1099,7 @@ static mc_t fn_take(mu_t *frame) {
     fn_fcall(MU_ITER, 0x11, frame);
     iter = frame[0];
 
-    mc_t (*fn_take_step)(mu_t scope, mu_t *frame);
+    mcnt_t (*fn_take_step)(mu_t scope, mu_t *frame);
     if (mu_isnum(m)) {
         fn_take_step = fn_take_count_step;
     } else {
@@ -1109,7 +1113,7 @@ static mc_t fn_take(mu_t *frame) {
 MSTR(mu_gen_key_take, "take")
 MBFN(mu_gen_take, 0x2, fn_take)
 
-static mc_t fn_drop_count_step(mu_t scope, mu_t *frame) {
+static mcnt_t fn_drop_count_step(mu_t scope, mu_t *frame) {
     mu_t iter = tbl_lookup(scope, muint(1));
     mu_t i = tbl_lookup(scope, muint(0));
 
@@ -1130,7 +1134,7 @@ static mc_t fn_drop_count_step(mu_t scope, mu_t *frame) {
     return fn_tcall(iter, 0x0, frame);
 }
 
-static mc_t fn_drop_while_step(mu_t scope, mu_t *frame) {
+static mcnt_t fn_drop_while_step(mu_t scope, mu_t *frame) {
     mu_t iter = tbl_lookup(scope, muint(1));
     mu_t cond = tbl_lookup(scope, muint(0));
 
@@ -1156,7 +1160,7 @@ static mc_t fn_drop_while_step(mu_t scope, mu_t *frame) {
     return fn_tcall(iter, 0x0, frame);
 }
 
-static mc_t fn_drop(mu_t *frame) {
+static mcnt_t fn_drop(mu_t *frame) {
     mu_t m    = frame[0];
     mu_t iter = frame[1];
     if (!mu_isnum(m) && !mu_isfn(m)) {
@@ -1167,7 +1171,7 @@ static mc_t fn_drop(mu_t *frame) {
     fn_fcall(MU_ITER, 0x11, frame);
     iter = frame[0];
 
-    mc_t (*fn_drop_step)(mu_t scope, mu_t *frame);
+    mcnt_t (*fn_drop_step)(mu_t scope, mu_t *frame);
     if (mu_isnum(m)) {
         fn_drop_step = fn_drop_count_step;
     } else {
@@ -1183,7 +1187,7 @@ MBFN(mu_gen_drop, 0x2, fn_drop)
 
 
 // Iterator ordering
-static mc_t fn_min(mu_t *frame) {
+static mcnt_t fn_min(mu_t *frame) {
     if (tbl_len(frame[0]) == 1) {
         mu_t m = tbl_lookup(frame[0], muint(0));
         mu_dec(frame[0]);
@@ -1232,7 +1236,7 @@ static mc_t fn_min(mu_t *frame) {
 MSTR(mu_gen_key_min, "min")
 MBFN(mu_gen_min, 0xf, fn_min)
 
-static mc_t fn_max(mu_t *frame) {
+static mcnt_t fn_max(mu_t *frame) {
     if (tbl_len(frame[0]) == 1) {
         mu_t m = tbl_lookup(frame[0], muint(0));
         mu_dec(frame[0]);
@@ -1281,7 +1285,7 @@ static mc_t fn_max(mu_t *frame) {
 MSTR(mu_gen_key_max, "max")
 MBFN(mu_gen_max, 0xf, fn_max)
 
-static mc_t fn_reverse_step(mu_t scope, mu_t *frame) {
+static mcnt_t fn_reverse_step(mu_t scope, mu_t *frame) {
     mu_t i = tbl_lookup(scope, muint(1));
     if (num_cmp(i, muint(0)) < 0) {
         return 0;
@@ -1295,7 +1299,7 @@ static mc_t fn_reverse_step(mu_t scope, mu_t *frame) {
     return 0xf;
 }
 
-static mc_t fn_reverse(mu_t *frame) {
+static mcnt_t fn_reverse(mu_t *frame) {
     fn_fcall(MU_ITER, 0x11, frame);
     mu_t iter = frame[0];
     mu_t store = tbl_create(0);
@@ -1376,7 +1380,7 @@ static void fn_merge_sort(mu_t elems) {
     mu_dealloc(b, len*sizeof(mu_t[2]));
 }
 
-static mc_t fn_sort_step(mu_t scope, mu_t *frame) {
+static mcnt_t fn_sort_step(mu_t scope, mu_t *frame) {
     mu_t store = tbl_lookup(scope, muint(0));
     muint_t i = num_uint(tbl_lookup(scope, muint(1)));
 
@@ -1386,7 +1390,7 @@ static mc_t fn_sort_step(mu_t scope, mu_t *frame) {
     return next ? 0xf : 0;
 }
 
-static mc_t fn_sort(mu_t *frame) {
+static mcnt_t fn_sort(mu_t *frame) {
     fn_fcall(MU_ITER, 0x11, frame);
     mu_t iter = frame[0];
     mu_t store = tbl_create(0);

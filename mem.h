@@ -8,7 +8,7 @@
 
 
 // Reference type as word type aligned to 8 bytes
-typedef mu_aligned muinth_t mref_t;
+typedef mu_aligned(8) muinth_t mref_t;
 
 // Smallest allocatable size
 #define MU_MINALLOC (4*sizeof(muint_t))

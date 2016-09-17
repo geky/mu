@@ -41,13 +41,6 @@ typedef uint64_t muint_t;
 typedef double   mfloat_t;
 #endif
 
-// Smallest addressable unit
-typedef unsigned char mbyte_t;
-
-// Length type for strings/tables
-typedef muinth_t mlen_t;
-
-
 // Flags for Mu options
 //#define MU_DEBUG
 #define MU_MALLOC
@@ -67,15 +60,8 @@ typedef muinth_t mlen_t;
 // Definition of unused variables
 #define mu_unused __attribute__((unused))
 
-// Definition of constructor functions
-#define mu_constructor static __attribute__((constructor))
-
 // Definition of alignment for Mu types
-#define mu_aligned __attribute__((aligned(8)))
-
-// Builtins for the likelyness of branches
-#define mu_likely(x) __builtin_expect((x) != 0, 1)
-#define mu_unlikely(x) __builtin_expect((x) != 0, 0)
+#define mu_aligned(x) __attribute__((__aligned__(x)))
 
 // Builtin for an unreachable point in code
 #define mu_unreachable __builtin_unreachable()
