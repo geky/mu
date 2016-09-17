@@ -7,14 +7,10 @@
 #include "mu.h"
 
 
-// Function constants
-#define MU_ID mu_id()
-mgen_t mu_id;
-
 // Definition of C Function types
 struct code;
-typedef mc_t mbfn_t(mu_t *frame);
-typedef mc_t msbfn_t(mu_t closure, mu_t *frame);
+typedef mc_t mbfn_t(mu_t frame[MU_FRAME]);
+typedef mc_t msbfn_t(mu_t closure, mu_t frame[MU_FRAME]);
 
 
 // Creation functions
@@ -32,37 +28,6 @@ mu_t fn_call(mu_t f, mc_t fc, ...);
 
 // Iteration
 bool fn_next(mu_t f, mc_t fc, mu_t *frame);
-
-// Function operations
-mu_t fn_bind(mu_t f, mu_t args);
-mu_t fn_comp(mu_t fs);
-
-mu_t fn_map(mu_t f, mu_t iter);
-mu_t fn_filter(mu_t f, mu_t iter);
-mu_t fn_reduce(mu_t f, mu_t iter, mu_t inits);
-
-bool fn_any(mu_t f, mu_t iter);
-bool fn_all(mu_t f, mu_t iter);
-
-// Iterators and generators
-mu_t fn_range(mu_t start, mu_t stop, mu_t step);
-mu_t fn_repeat(mu_t value, mu_t times);
-mu_t fn_cycle(mu_t iter, mu_t times);
-
-// Iterator manipulation
-mu_t fn_zip(mu_t iters);
-mu_t fn_chain(mu_t iters);
-mu_t fn_tee(mu_t iter, mu_t n);
-
-mu_t fn_take(mu_t cond, mu_t iter);
-mu_t fn_drop(mu_t cond, mu_t iter);
-
-// Iterator ordering
-mu_t fn_min(mu_t iter);
-mu_t fn_max(mu_t iter);
-
-mu_t fn_reverse(mu_t iter);
-mu_t fn_sort(mu_t iter);
 
 
 // Function tags
@@ -155,7 +120,10 @@ mu_inline mu_t fn_inc(mu_t f) {
 
 mu_inline void fn_dec(mu_t f) {
     mu_assert(mu_isfn(f));
-    mu_dec(f);
+    extern void fn_destroy(mu_t);
+    if (ref_dec(f)) {
+        fn_destroy(f);
+    }
 }
 
 // Function access
@@ -170,6 +138,7 @@ mu_inline struct code *fn_code(mu_t m) {
 mu_inline mu_t fn_closure(mu_t m) {
     return mu_inc(((struct fn *)((muint_t)m - MTFN))->closure);
 }
+
 
 // Function constant macro
 #define MBFN(name, args, bfn)                                               \

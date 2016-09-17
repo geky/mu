@@ -7,17 +7,6 @@
 #include "mu.h"
 
 
-// Number constants
-#define MU_INF  mu_inf()
-#define MU_NINF mu_ninf()
-#define MU_E    mu_e()
-#define MU_PI   mu_pi()
-mgen_t mu_inf;
-mgen_t mu_ninf;
-mgen_t mu_e;
-mgen_t mu_pi;
-
-
 // Conversion operations
 mu_t num_fromfloat(mfloat_t);
 mu_t num_fromuint(muint_t);
@@ -58,9 +47,6 @@ mu_t num_xor(mu_t, mu_t);
 mu_t num_shl(mu_t, mu_t);
 mu_t num_shr(mu_t, mu_t);
 
-// Random number generation
-mu_t num_seed(mu_t);
-
 // Number representation
 mu_t num_parse(const mbyte_t **pos, const mbyte_t *end);
 mu_t num_repr(mu_t);
@@ -90,6 +76,7 @@ mu_inline mfloat_t num_float(mu_t m) {
 
 mu_inline muint_t num_uint(mu_t m) { return (muint_t)num_float(m); }
 mu_inline mint_t  num_int(mu_t m)  { return (mint_t)num_float(m); }
+
 
 // Number constant macro
 #define MFLOAT(name, num)                                                   \

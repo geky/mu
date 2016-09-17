@@ -76,46 +76,46 @@ enum tok {
 #define T_ANY (-1)
 
 // Table of keywords
-MSTR(mu_kw_let,         "let")      MUINT(mu_tok_let,     T_LET)
-MSTR(mu_kw_else,        "else")     MUINT(mu_tok_else,    T_ELSE)
-MSTR(mu_kw_and,         "and")      MUINT(mu_tok_and,     T_AND)
-MSTR(mu_kw_or,          "or")       MUINT(mu_tok_or,      T_OR)
-MSTR(mu_kw_continue,    "continue") MUINT(mu_tok_cont,    T_CONTINUE)
-MSTR(mu_kw_break,       "break")    MUINT(mu_tok_break,   T_BREAK)
-MSTR(mu_kw_return,      "return")   MUINT(mu_tok_return,  T_RETURN)
-MSTR(mu_kw_fn,          "fn")       MUINT(mu_tok_fn,      T_FN)
-MSTR(mu_kw_type,        "type")     MUINT(mu_tok_type,    T_TYPE)
-MSTR(mu_kw_if,          "if")       MUINT(mu_tok_if,      T_IF)
-MSTR(mu_kw_while,       "while")    MUINT(mu_tok_while,   T_WHILE)
-MSTR(mu_kw_for,         "for")      MUINT(mu_tok_for,     T_FOR)
-MSTR(mu_kw_nil,         "nil")      MUINT(mu_tok_nil,     T_NIL)
-MSTR(mu_kw_nil2,        "_")
-MSTR(mu_kw_assign,      "=")        MUINT(mu_tok_assign,  T_ASSIGN)
-MSTR(mu_kw_pair,        ":")        MUINT(mu_tok_pair,    T_PAIR)
-MSTR(mu_kw_dot,         ".")        MUINT(mu_tok_dot,     T_DOT)
-MSTR(mu_kw_arrow,       "->")       MUINT(mu_tok_arrow,   T_ARROW)
-MSTR(mu_kw_expand,      "..")       MUINT(mu_tok_expand,  T_EXPAND)
+MSTR(mu_gen_key_let,        "let")      MUINT(mu_gen_tok_let,       T_LET)
+MSTR(mu_gen_key_else,       "else")     MUINT(mu_gen_tok_else,      T_ELSE)
+MSTR(mu_gen_key_and,        "and")      MUINT(mu_gen_tok_and,       T_AND)
+MSTR(mu_gen_key_or,         "or")       MUINT(mu_gen_tok_or,        T_OR)
+MSTR(mu_gen_key_continue,   "continue") MUINT(mu_gen_tok_cont,      T_CONTINUE)
+MSTR(mu_gen_key_break,      "break")    MUINT(mu_gen_tok_break,     T_BREAK)
+MSTR(mu_gen_key_return,     "return")   MUINT(mu_gen_tok_return,    T_RETURN)
+MSTR(mu_gen_key_fn,         "fn")       MUINT(mu_gen_tok_fn,        T_FN)
+MSTR(mu_gen_key_type,       "type")     MUINT(mu_gen_tok_type,      T_TYPE)
+MSTR(mu_gen_key_if,         "if")       MUINT(mu_gen_tok_if,        T_IF)
+MSTR(mu_gen_key_while,      "while")    MUINT(mu_gen_tok_while,     T_WHILE)
+MSTR(mu_gen_key_for,        "for")      MUINT(mu_gen_tok_for,       T_FOR)
+MSTR(mu_gen_key_nil,        "nil")      MUINT(mu_gen_tok_nil,       T_NIL)
+MSTR(mu_gen_key_nil2,       "_")
+MSTR(mu_gen_key_assign,     "=")        MUINT(mu_gen_tok_assign,    T_ASSIGN)
+MSTR(mu_gen_key_pair,       ":")        MUINT(mu_gen_tok_pair,      T_PAIR)
+MSTR(mu_gen_key_dot,        ".")        MUINT(mu_gen_tok_dot,       T_DOT)
+MSTR(mu_gen_key_arrow,      "->")       MUINT(mu_gen_tok_arrow,     T_ARROW)
+MSTR(mu_gen_key_expand,     "..")       MUINT(mu_gen_tok_expand,    T_EXPAND)
 
-MTBL(mu_keywords, {
-    { mu_kw_let,        mu_tok_let    },
-    { mu_kw_else,       mu_tok_else   },
-    { mu_kw_and,        mu_tok_and    },
-    { mu_kw_or,         mu_tok_or     },
-    { mu_kw_continue,   mu_tok_cont   },
-    { mu_kw_break,      mu_tok_break  },
-    { mu_kw_return,     mu_tok_return },
-    { mu_kw_fn,         mu_tok_fn     },
-    { mu_kw_type,       mu_tok_type   },
-    { mu_kw_if,         mu_tok_if     },
-    { mu_kw_while,      mu_tok_while  },
-    { mu_kw_for,        mu_tok_for    },
-    { mu_kw_nil,        mu_tok_nil    },
-    { mu_kw_nil2,       mu_tok_nil    },
-    { mu_kw_assign,     mu_tok_assign },
-    { mu_kw_pair,       mu_tok_pair   },
-    { mu_kw_dot,        mu_tok_dot    },
-    { mu_kw_arrow,      mu_tok_arrow  },
-    { mu_kw_expand,     mu_tok_expand },
+MTBL(mu_gen_keywords, {
+    { mu_gen_key_let,        mu_gen_tok_let    },
+    { mu_gen_key_else,       mu_gen_tok_else   },
+    { mu_gen_key_and,        mu_gen_tok_and    },
+    { mu_gen_key_or,         mu_gen_tok_or     },
+    { mu_gen_key_continue,   mu_gen_tok_cont   },
+    { mu_gen_key_break,      mu_gen_tok_break  },
+    { mu_gen_key_return,     mu_gen_tok_return },
+    { mu_gen_key_fn,         mu_gen_tok_fn     },
+    { mu_gen_key_type,       mu_gen_tok_type   },
+    { mu_gen_key_if,         mu_gen_tok_if     },
+    { mu_gen_key_while,      mu_gen_tok_while  },
+    { mu_gen_key_for,        mu_gen_tok_for    },
+    { mu_gen_key_nil,        mu_gen_tok_nil    },
+    { mu_gen_key_nil2,       mu_gen_tok_nil    },
+    { mu_gen_key_assign,     mu_gen_tok_assign },
+    { mu_gen_key_pair,       mu_gen_tok_pair   },
+    { mu_gen_key_dot,        mu_gen_tok_dot    },
+    { mu_gen_key_arrow,      mu_gen_tok_arrow  },
+    { mu_gen_key_expand,     mu_gen_tok_expand },
 })
 
 
@@ -321,7 +321,7 @@ static mu_noreturn mu_error_token(struct lex *l) {
     buf_format(&b, &n, "unexpected ");
 
     if (l->tok & T_ANY_VAL) {
-        buf_concat(&b, &n, mu_repr(mu_inc(l->val)));
+        buf_format(&b, &n, "%r", mu_inc(l->val));
     } else if (l->tok & T_TERM) {
         buf_format(&b, &n, "terminator");
     } else if (l->tok & T_SEP) {
@@ -899,7 +899,7 @@ static void p_for(struct parse *p) {
         mu_error_assignment(&p->l);
     }
 
-    encode(p, OP_IMM, p->sp+1, imm(p, MU_ITER_KEY), 0, +1);
+    encode(p, OP_IMM, p->sp+1, imm(p, MU_KEY_ITER), 0, +1);
     encode(p, OP_LOOKUP, p->sp, 0, p->sp, 0);
     p_expr(p);
     encode(p, OP_CALL, p->sp-1, 0x11, 0, -1);
@@ -1063,7 +1063,7 @@ static void p_postexpr(struct parse *p, struct expr *e) {
         encode_load(p, e, 2);
         encode(p, OP_IMM, p->sp-1, imm(p, sym), 0, 0);
         encode(p, OP_LOOKUP, p->sp-1, p->sp, p->sp-1, 0);
-        encode(p, OP_IMM, p->sp-2, imm(p, MU_BIND_KEY), 0, 0);
+        encode(p, OP_IMM, p->sp-2, imm(p, MU_KEY_BIND), 0, 0);
         encode(p, OP_LOOKUP, p->sp-2, 0, p->sp-2, 0);
         encode(p, OP_CALL, p->sp-2, 0x21, 0, -2);
         e->state = P_DIRECT;
@@ -1151,7 +1151,7 @@ static void p_entry(struct parse *p, struct frame *f) {
         f->key = true;
     } else if (f->tabled) {
         if (f->unpack && f->expand) {
-            encode(p, OP_IMM, p->sp+1, imm(p, MU_POP_KEY), 0, +1);
+            encode(p, OP_IMM, p->sp+1, imm(p, MU_KEY_POP), 0, +1);
             encode(p, OP_LOOKUP, p->sp, 0, p->sp, 0);
             encode(p, OP_DUP, p->sp+1, p->sp-1-offset(&e), 0, +1);
             encode(p, OP_IMM, p->sp+1, imm(p, muint(f->index)), 0, +1);
@@ -1238,7 +1238,7 @@ static void p_frame(struct parse *p, struct frame *f) {
             p->sp -= 1;
         } else if (f->count > 0) {
             encode(p, OP_MOVE, p->sp+1, p->sp, 0, +1);
-            encode(p, OP_IMM, p->sp-1, imm(p, MU_CONCAT_KEY), 0, 0);
+            encode(p, OP_IMM, p->sp-1, imm(p, MU_KEY_CONCAT), 0, 0);
             encode(p, OP_LOOKUP, p->sp-1, 0, p->sp-1, 0);
             p_expr(p);
             encode(p, OP_IMM, p->sp+1, imm(p, muint(f->index)), 0, +1);

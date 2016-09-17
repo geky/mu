@@ -41,10 +41,11 @@ mu_t tbl_parse(const mbyte_t **pos, const mbyte_t *end);
 mu_t tbl_dump(mu_t t, mu_t depth);
 
 // Array-like manipulations
-void tbl_push(mu_t t, mu_t v, mu_t i);
-mu_t tbl_pop(mu_t t, mu_t i);
 mu_t tbl_concat(mu_t a, mu_t b, mu_t offset);
-mu_t tbl_subset(mu_t t, mu_t lower, mu_t upper);
+mu_t tbl_subset(mu_t t, mint_t lower, mint_t upper);
+
+void tbl_push(mu_t t, mu_t v, mint_t i);
+mu_t tbl_pop(mu_t t, mint_t i);
 
 // Set operations
 mu_t tbl_and(mu_t a, mu_t b);
@@ -102,21 +103,24 @@ mu_inline void tbl_dec(mu_t m) {
 
 // Table access functions
 mu_inline mlen_t tbl_len(mu_t m) {
+    mu_assert(mu_istbl(m));
     return ((struct tbl *)((muint_t)m - MTTBL))->len;
 }
 
 mu_inline mu_t tbl_tail(mu_t m) {
+    mu_assert(mu_istbl(m));
     return ((struct tbl *)((muint_t)m - MTTBL))->tail;
 }
+
 
 // Table constant macros
 #define MLIST(name, ...)                                                    \
 mu_pure mu_t name(void) {                                                   \
     static mu_t ref = 0;                                                    \
-    static mgent_t *const gen[] = __VA_ARGS__;                              \
+    static mu_t (*const gen[])(void) = __VA_ARGS__;                         \
     static struct tbl inst;                                                 \
                                                                             \
-    extern mu_t tbl_initlist(struct tbl *, mgen_t *const *, muint_t);       \
+    extern mu_t tbl_initlist(struct tbl *, mu_t (*const *)(void), muint_t); \
     if (!ref) {                                                             \
         ref = tbl_initlist(&inst, gen, sizeof gen / sizeof(gen[0]));        \
     }                                                                       \
@@ -127,10 +131,11 @@ mu_pure mu_t name(void) {                                                   \
 #define MTBL(name, ...)                                                     \
 mu_pure mu_t name(void) {                                                   \
     static mu_t ref = 0;                                                    \
-    static mgen_t *const gen[][2] = __VA_ARGS__;                            \
+    static mu_t (*const gen[][2])(void) = __VA_ARGS__;                      \
     static struct tbl inst;                                                 \
-    extern mu_t tbl_initpairs(struct tbl *, mgen_t *const (*)[2], muint_t); \
                                                                             \
+    extern mu_t tbl_initpairs(                                              \
+            struct tbl *, mu_t (*const (*)[2])(void), muint_t);             \
     ref = tbl_initpairs(&inst, gen, sizeof gen / sizeof(gen[0]));           \
     if (!ref) {                                                             \
     }                                                                       \

@@ -388,7 +388,7 @@ mu_t tbl_pairs(mu_t t) {
 
 
 // Table creating functions
-mu_t tbl_initlist(struct tbl *t, mgen_t *const *gen, muint_t n) {
+mu_t tbl_initlist(struct tbl *t, mu_t (*const *gen)(void), muint_t n) {
     memset(t, 0, sizeof(struct tbl));
     t->npw2 = tbl_npw2(true, n);
     t->flags = TBL_LINEAR;
@@ -406,7 +406,7 @@ mu_t tbl_initlist(struct tbl *t, mgen_t *const *gen, muint_t n) {
     return m;
 }
 
-mu_t tbl_initpairs(struct tbl *t, mgen_t *const (*gen)[2], muint_t n) {
+mu_t tbl_initpairs(struct tbl *t, mu_t (*const (*gen)[2])(void), muint_t n) {
     memset(t, 0, sizeof(struct tbl));
     t->npw2 = tbl_npw2(true, n);
     t->flags = TBL_LINEAR;
@@ -461,34 +461,24 @@ mu_t tbl_fromiter(mu_t i) {
     return t;
 }
 
+// Table operations
+void tbl_push(mu_t t, mu_t p, mint_t i) {
+    mu_assert(mu_istbl(t));
+    i = (i >= 0) ? i : i + tbl(t)->len;
 
-// Data structure operations
-void tbl_push(mu_t t, mu_t v, mu_t i) {
-    mu_assert(mu_istbl(t) && (!i || mu_isnum(i)));
+    tbl_expand(t);
+    mint_t size = 1 << tbl(t)->npw2;
 
-    if (!i) {
-        i = muint(tbl_len(t));
-    } else if (num_cmp(i, muint(0)) < 0) {
-        i = num_add(i, muint(tbl_len(t)));
-    }
-
-    if (tbl(t)->flags & TBL_LINEAR) {
-        tbl_expand(t);
-        muint_t size = 1 << tbl(t)->npw2;
-
-        if (num_cmp(i, muint(size)) <= 0) {
-            muint_t j = num_uint(i);
-
-            memmove(&tbl(t)->array[j+1], &tbl(t)->array[j], 
-                    (size-j-1)*sizeof(mu_t));
-            tbl(t)->array[j] = 0;
-        }
+    if ((tbl(t)->flags & TBL_LINEAR) && i >= 0 && i < size) {
+        memmove(&tbl(t)->array[i+1], &tbl(t)->array[i],
+                    (size-i-1)*sizeof(mu_t));
+        tbl_place(t, &tbl(t)->array[i], p);
     } else {
         mu_t d = tbl_create(tbl(t)->len);
         mu_t k, v;
 
         for (muint_t j = 0; tbl_next(t, &j, &k, &v);) {
-            if (mu_isnum(k) && num_cmp(k, i) >= 0) {
+            if (mu_isnum(k) && num_cmp(k, mint(i)) >= 0) {
                 tbl_insert(d, num_add(k, muint(1)), v);
                 tbl_insert(t, k, 0);
             } else {
@@ -502,39 +492,32 @@ void tbl_push(mu_t t, mu_t v, mu_t i) {
         }
 
         tbl_dec(d);
+        tbl_insert(t, mint(i), p);
     }
-
-    tbl_insert(t, i, v);
 }
 
-mu_t tbl_pop(mu_t t, mu_t i) {
-    mu_assert(mu_istbl(t) && (!i || mu_isnum(i)));
+mu_t tbl_pop(mu_t t, mint_t i) {
+    mu_assert(mu_istbl(t));
+    i = (i >= 0) ? i : i + tbl(t)->len;
 
-    if (!i) {
-        i = muint(tbl_len(t)-1);
-    } else if (num_cmp(i, muint(0)) < 0) {
-        i = num_add(i, muint(tbl_len(t)));
-    }
+    mint_t size = 1 << tbl(t)->npw2;
 
-    mu_t ret = tbl_lookup(t, mu_inc(i));
-    tbl_insert(t, i, 0);
-
-    if (tbl(t)->flags & TBL_LINEAR) {
-        muint_t size = 1 << tbl(t)->npw2;
-
-        if (num_cmp(i, muint(size)) < 0) {
-            muint_t j = num_uint(i);
-
-            memmove(&tbl(t)->array[j], &tbl(t)->array[j+1], 
-                    (size-(j+1))*sizeof(mu_t));
-            tbl(t)->array[size-1] = 0;
-        }
+    if ((tbl(t)->flags & TBL_LINEAR) && i >= 0 && i < size) {
+        mu_t p = tbl(t)->array[i];
+        tbl_replace(t, &tbl(t)->array[i], 0);
+        memmove(&tbl(t)->array[i], &tbl(t)->array[i+1],
+                (size-(i+1))*sizeof(mu_t));
+        tbl(t)->array[size-1] = 0;
+        return p;
     } else {
+        mu_t p = tbl_lookup(t, mint(i));
+        tbl_insert(t, mint(i), 0);
+
         mu_t d = tbl_create(tbl(t)->len);
         mu_t k, v;
 
         for (muint_t j = 0; tbl_next(t, &j, &k, &v);) {
-            if (mu_isnum(k) && num_cmp(k, i) > 0) {
+            if (mu_isnum(k) && num_cmp(k, mint(i)) > 0) {
                 tbl_insert(d, num_sub(k, muint(1)), v);
                 tbl_insert(t, k, 0);
             } else {
@@ -548,13 +531,12 @@ mu_t tbl_pop(mu_t t, mu_t i) {
         }
 
         tbl_dec(d);
+        return p;
     }
-
-    return ret;
 }
 
 mu_t tbl_concat(mu_t a, mu_t b, mu_t offset) {
-    mu_assert(mu_istbl(a) && mu_istbl(b) 
+    mu_assert(mu_istbl(a) && mu_istbl(b)
               && (!offset || mu_isnum(offset)));
 
     if (!offset) {
@@ -583,27 +565,28 @@ mu_t tbl_concat(mu_t a, mu_t b, mu_t offset) {
     return d;
 }
 
-mu_t tbl_subset(mu_t t, mu_t lower, mu_t upper) {
-    mu_assert(mu_istbl(t) && mu_isnum(lower)
-              && (!upper || mu_isnum(upper)));
+mu_t tbl_subset(mu_t t, mint_t lower, mint_t upper) {
+    mu_assert(mu_istbl(t));
+    lower = (lower >= 0) ? lower : lower + tbl_len(t);
+    upper = (upper >= 0) ? upper : upper + tbl_len(t);
 
-    if (num_cmp(lower, muint(0)) < 0) {
-        lower = num_add(lower, muint(tbl_len(t)));
+    if (lower < 0) {
+        lower = 0;
     }
 
-    if (!upper) {
-        upper = num_add(lower, muint(1));
-    } else if (num_cmp(upper, muint(0)) < 0) {
-        upper = num_add(upper, muint(tbl_len(t)));
+    if (lower > upper) {
+        mu_dec(t);
+        return tbl_create(0);
     }
 
-    mu_t d = tbl_create(tbl_len(t));
+    muint_t len = (upper-lower < tbl_len(t)) ? upper-lower : tbl_len(t);
+    mu_t d = tbl_create(len);
     mu_t k, v;
 
     for (muint_t i = 0; tbl_next(t, &i, &k, &v);) {
-        if (mu_isnum(k) && num_cmp(k, lower) >= 0
-                        && num_cmp(k, upper) < 0) {
-            tbl_insert(d, num_sub(k, lower), v);
+        if (mu_isnum(k) && num_cmp(k, mint(lower)) >= 0
+                        && num_cmp(k, mint(upper)) < 0) {
+            tbl_insert(d, num_sub(k, mint(lower)), v);
         } else {
             mu_dec(k);
             mu_dec(v);
@@ -742,12 +725,12 @@ mu_t tbl_parse(const mbyte_t **ppos, const mbyte_t *end) {
     }
 
     *ppos = pos;
-    return t;    
+    return t;
 }
 
 static void tbl_dump_nested(mu_t t, mu_t *s, muint_t *n, mu_t depth) {
     if (num_cmp(depth, muint(0)) <= 0) {
-        buf_concat(s, n, mu_addr(t));
+        buf_format(s, n, "%nr", t, 0);
         return;
     }
 
@@ -763,19 +746,17 @@ static void tbl_dump_nested(mu_t t, mu_t *s, muint_t *n, mu_t depth) {
     mu_t k, v;
     for (muint_t i = 0; tbl_next(t, &i, &k, &v);) {
         if (!linear) {
-            buf_concat(s, n, mu_dump(k, muint(0)));
-            buf_format(s, n, ": ");
+            buf_format(s, n, "%nr: ", k, 0);
         } else {
             mu_dec(k);
         }
 
         if (mu_istbl(v)) {
             tbl_dump_nested(v, s, n, num_sub(depth, muint(1)));
+            buf_format(s, n, ", ");
         } else {
-            buf_concat(s, n, mu_repr(v));
+            buf_format(s, n, "%r, ", v);
         }
-
-        buf_format(s, n, ", ");
     }
 
     if (tbl_len(t) > 0) {
@@ -800,3 +781,60 @@ mu_t tbl_dump(mu_t t, mu_t depth) {
 
     return str_intern(s, n);
 }
+
+
+// Table related Mu functions
+static mc_t mu_bfn_tbl(mu_t *frame) {
+    mu_t m    = frame[0];
+    mu_t tail = frame[1];
+    if (tail && !mu_istbl(tail)) {
+        mu_error_arg(MU_KEY_TBL, 0x2, frame);
+    }
+
+    switch (mu_type(m)) {
+        case MTNIL:
+            frame[0] = tbl_create(0);
+            break;
+
+        case MTNUM:
+            frame[0] = tbl_create(num_uint(m));
+            break;
+
+        case MTSTR:
+            frame[0] = m;
+            fn_fcall(MU_ITER, 0x11, frame);
+            frame[0] = tbl_fromiter(frame[0]);
+            return 1;
+
+        case MTTBL:
+            frame[0] = m;
+            fn_fcall(MU_PAIRS, 0x11, frame);
+            frame[0] = tbl_fromiter(frame[0]);
+            return 1;
+
+        case MTFN:
+            frame[0] = tbl_fromiter(m);
+            break;
+
+        default:
+            mu_error_cast(MU_KEY_TBL, m);
+    }
+
+    tbl_settail(frame[0], tail);
+    return 1;
+}
+
+MSTR(mu_gen_key_tbl, "tbl")
+MBFN(mu_gen_tbl, 0x2, mu_bfn_tbl)
+
+static mc_t mu_bfn_tail(mu_t *frame) {
+    if (!mu_istbl(frame[0])) {
+        mu_error_arg(MU_KEY_TAIL, 0x1, frame);
+    }
+
+    frame[0] = tbl_tail(frame[0]);
+    return 1;
+}
+
+MSTR(mu_gen_key_tail, "tail")
+MBFN(mu_gen_tail, 0x1, mu_bfn_tail)

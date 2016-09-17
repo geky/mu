@@ -25,14 +25,7 @@ mint_t str_cmp(mu_t a, mu_t b);
 
 // String operations
 mu_t str_concat(mu_t a, mu_t b);
-mu_t str_subset(mu_t s, mu_t lower, mu_t upper);
-
-mu_t str_find(mu_t s, mu_t sub);
-mu_t str_replace(mu_t s, mu_t sub, mu_t rep);
-mu_t str_split(mu_t s, mu_t delim);
-mu_t str_join(mu_t iter, mu_t delim);
-mu_t str_pad(mu_t s, mu_t len, mu_t pad);
-mu_t str_strip(mu_t s, mu_t dir, mu_t pad);
+mu_t str_subset(mu_t s, mint_t lower, mint_t upper);
 
 // String iteration
 bool str_next(mu_t s, muint_t *i, mu_t *c);
@@ -86,6 +79,7 @@ mu_inline mlen_t str_len(mu_t m) {
 mu_inline const mbyte_t *str_data(mu_t m) {
     return (mbyte_t *)((struct str *)((muint_t)m - MTSTR) + 1);
 }
+
 
 // String constant macro
 #define MSTR(name, s)                                                       \

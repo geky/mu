@@ -154,7 +154,7 @@ mu_t str_fromnum(mu_t n) {
 }
 
 mu_t str_fromiter(mu_t iter) {
-    return str_join(iter, MU_EMPTY_STR);
+    return fn_call(MU_JOIN, 0x21, iter, MU_EMPTY_STR);
 }
 
 mu_t str_vformat(const char *f, va_list args) {
@@ -190,6 +190,36 @@ mint_t str_cmp(mu_t a, mu_t b) {
 }
 
 
+// String iteration
+bool str_next(mu_t s, muint_t *ip, mu_t *cp) {
+    mu_assert(mu_isstr(s));
+    muint_t i = *ip;
+
+    if (i >= str_len(s)) {
+        return false;
+    }
+
+    if (cp) *cp = str_create(&str_data(s)[i], 1);
+    *ip = i + 1;
+    return true;
+}
+
+static mc_t str_step(mu_t scope, mu_t *frame) {
+    mu_t s = tbl_lookup(scope, muint(0));
+    muint_t i = num_uint(tbl_lookup(scope, muint(1)));
+
+    bool next = str_next(s, &i, &frame[0]);
+    str_dec(s);
+    tbl_insert(scope, muint(1), muint(i));
+    return next ? 1 : 0;
+}
+
+mu_t str_iter(mu_t s) {
+    mu_assert(mu_isstr(s));
+    return msbfn(0x00, str_step, mlist({s, muint(0)}));
+}
+
+
 // String operations
 mu_t str_concat(mu_t a, mu_t b) {
     mu_assert(mu_isstr(a) && mu_isstr(b));
@@ -205,273 +235,26 @@ mu_t str_concat(mu_t a, mu_t b) {
     return str_intern(d, an + bn);
 }
 
-mu_t str_subset(mu_t s, mu_t lower, mu_t upper) {
-    mu_assert(mu_isstr(s) && mu_isnum(lower) && (!upper || mu_isnum(upper)));
-    mint_t len = str_len(s);
-    muint_t a;
-    muint_t b;
+mu_t str_subset(mu_t s, mint_t lower, mint_t upper) {
+    mu_assert(mu_isstr(s));
+    lower = (lower >= 0) ? lower : lower + str_len(s);
+    upper = (upper >= 0) ? upper : upper + str_len(s);
 
-    if (num_cmp(lower, muint(len)) >= 0) {
-        a = len;
-    } else if (num_cmp(lower, mint(-len)) <= 0) {
-        a = 0;
-    } else if (num_cmp(lower, muint(0)) < 0) {
-        a = str_len(s) + num_int(lower);
-    } else {
-        a = num_uint(lower);
+    if (lower < 0) {
+        lower = 0;
     }
 
-    if (!upper) {
-        b = a + 1;
-    } else if (num_cmp(upper, muint(len)) >= 0) {
-        b = len;
-    } else if (num_cmp(upper, mint(-len)) <= 0) {
-        b = 0;
-    } else if (num_cmp(upper, muint(0)) < 0) {
-        b = str_len(s) + num_int(upper);
-    } else {
-        b = num_uint(upper);
+    if (upper > str_len(s)) {
+        upper = str_len(s);
     }
 
-    if (a > b) {
+    if (lower >= upper) {
         return MU_EMPTY_STR;
     }
 
-    mu_t d = str_create(str_data(s) + a, b - a);
+    mu_t d = str_create(str_data(s) + lower, upper - lower);
     str_dec(s);
     return d;
-}
-
-mu_t str_find(mu_t s, mu_t m) {
-    mu_assert(mu_isstr(s) && mu_isstr(m));
-    const mbyte_t *sb = str_data(s);
-    mlen_t slen = str_len(s);
-    const mbyte_t *mb = str_data(m);
-    mlen_t mlen = str_len(m);
-
-    for (muint_t i = 0; i+mlen <= slen; i++) {
-        if (memcmp(&sb[i], mb, mlen) == 0) {
-            str_dec(m);
-            str_dec(s);
-            return mint(i);
-        }
-    }
-
-    str_dec(s);
-    str_dec(m);
-    return 0;
-}
-
-mu_t str_replace(mu_t s, mu_t m, mu_t r) {
-    mu_assert(mu_isstr(s) && mu_isstr(m) && mu_isstr(r));
-    const mbyte_t *sb = str_data(s);
-    mlen_t slen = str_len(s);
-    const mbyte_t *mb = str_data(m);
-    mlen_t mlen = str_len(m);
-
-    mu_t d = buf_create(slen);
-    muint_t n = 0;
-    muint_t i = 0;
-
-    while (i+mlen <= slen) {
-        bool match = memcmp(&sb[i], mb, mlen) == 0;
-
-        if (match) {
-            buf_concat(&d, &n, str_inc(r));
-            i += mlen;
-        }
-
-        if (!match || mlen == 0) {
-            buf_push(&d, &n, sb[i]);
-            i += 1;
-        }
-    }
-
-    buf_append(&d, &n, &sb[i], slen-i);
-
-    str_dec(s);
-    str_dec(m);
-    str_dec(r);
-    return str_intern(d, n);
-}
-
-static mc_t str_split_step(mu_t scope, mu_t *frame) {
-    mu_t a = tbl_lookup(scope, muint(0));
-    const mbyte_t *ab = str_data(a);
-    mlen_t alen = str_len(a);
-    muint_t i = num_uint(tbl_lookup(scope, muint(2)));
-
-    if (i > alen) {
-        str_dec(a);
-        return 0;
-    }
-
-    mu_t s = tbl_lookup(scope, muint(1));
-    const mbyte_t *sb = str_data(s);
-    mlen_t slen = str_len(s);
-
-    muint_t j = i;
-    for (; j < alen; j++) {
-        if (j+slen <= alen && memcmp(&ab[j], sb, slen) == 0) {
-            break;
-        }
-    }
-
-    frame[0] = str_create(ab+i, j-i);
-    tbl_insert(scope, muint(2), muint(j+slen));
-    str_dec(a);
-    str_dec(s);
-    return 1;
-}
-
-mu_t str_split(mu_t s, mu_t delim) {
-    mu_assert(mu_isstr(s) && (!delim || mu_isstr(delim)));
-
-    if (!delim) {
-        delim = MU_SPACE_STR;
-    } else if (str_len(delim) == 0) {
-        return str_iter(s);
-    }
-
-    return msbfn(0x0, str_split_step, mlist({
-        s, delim, muint(0),
-    }));
-}
-
-mu_t str_join(mu_t i, mu_t delim) {
-    mu_assert(mu_isfn(i) && (!delim || mu_isstr(delim)));
-    mu_t frame[MU_FRAME];
-    mu_t b = buf_create(0);
-    muint_t n = 0;
-    bool first = true;
-
-    if (!delim) {
-        delim = MU_SPACE_STR;
-    }
-
-    while (fn_next(i, 0x1, frame)) {
-        if (!mu_isstr(frame[0])) {
-            mu_errorf("invalid value %r passed to join", frame[0]);
-        }
-
-        if (first) {
-            first = false;
-        } else {
-            buf_concat(&b, &n, str_inc(delim));
-        }
-
-        buf_concat(&b, &n, frame[0]);
-    }
-
-    fn_dec(i);
-    str_dec(delim);
-    return str_intern(b, n);
-}
-
-mu_t str_pad(mu_t s, mu_t mlen, mu_t pad) {
-    mu_assert(mu_isstr(s) && mu_isnum(mlen) &&
-              (!pad || (mu_isstr(pad) && str_len(pad) > 0)));
-    
-    if (!pad) {
-        pad = MU_SPACE_STR;
-    }
-
-    bool left;
-    muint_t len;
-
-    if (num_cmp(mlen, muint(0)) < 0) {
-        left = false;
-        len = num_uint(num_neg(mlen));
-    } else {
-        left = true;
-        len = num_uint(mlen);
-    }
-
-    if (str_len(s) >= len) {
-        str_dec(pad);
-        return s;
-    }
-
-    mu_t d = buf_create(len);
-    muint_t n = 0;
-    muint_t count = (len - str_len(s)) / str_len(pad);
-
-    if (left) {
-        buf_concat(&d, &n, s);
-    }
-
-    for (muint_t i = 0; i < count; i++) {
-        buf_concat(&d, &n, str_inc(pad));
-    }
-    
-    if (!left) {
-        buf_concat(&d, &n, s);
-    }
-
-    mu_dec(pad);
-    return str_intern(d, n);
-}
-
-mu_t str_strip(mu_t s, mu_t dir, mu_t pad) {
-    mu_assert(mu_isstr(s) && (!dir || mu_isnum(dir)) &&
-              (!pad || (mu_isstr(pad) && str_len(pad) > 0)));
-
-    if (!pad) {
-        pad = MU_SPACE_STR;
-    }
-
-    const mbyte_t *pos = str_data(s);
-    const mbyte_t *end = pos + str_len(s);
-
-    const mbyte_t *pb = str_data(pad);
-    mlen_t plen = str_len(pad);
-
-    if (!dir || num_cmp(dir, muint(0)) <= 0) {
-        while (end-pos >= plen && memcmp(pos, pb, plen) == 0) {
-            pos += plen;
-        }
-    }
-            
-    if (!dir || num_cmp(dir, muint(0)) >= 0) {
-        while (end-pos >= plen && memcmp(end-plen, pb, plen) == 0) {
-            end -= plen;
-        }
-    }
-
-    mu_t d = str_create(pos, end-pos);
-    str_dec(s);
-    str_dec(pad);
-    return d;
-}
-
-
-// String iteration
-bool str_next(mu_t s, muint_t *ip, mu_t *cp) {
-    mu_assert(mu_isstr(s));
-    muint_t i = *ip;
-
-    if (i >= str_len(s)) {
-        return false;
-    }
-
-    if (cp) *cp = str_create(&str_data(s)[i], 1);
-    *ip = i + 1;
-    return true;
-}
-
-mc_t str_step(mu_t scope, mu_t *frame) {
-    mu_t s = tbl_lookup(scope, muint(0));
-    muint_t i = num_uint(tbl_lookup(scope, muint(1)));
-
-    bool next = str_next(s, &i, &frame[0]);
-    str_dec(s);
-    tbl_insert(scope, muint(1), muint(i));
-    return next ? 1 : 0;
-}
-
-mu_t str_iter(mu_t s) {
-    mu_assert(mu_isstr(s));
-    return msbfn(0x00, str_step, mlist({s, muint(0)}));
 }
 
 
@@ -632,3 +415,292 @@ mu_t str_hex(mu_t s) {
     mu_assert(mu_isstr(s));
     return str_base(s, 'x', 2, 0xf, 4);
 }
+
+
+// String related functions in Mu
+static mc_t mu_bfn_str(mu_t *frame) {
+    mu_t m = frame[0];
+
+    switch (mu_type(m)) {
+        case MTNIL:
+            frame[0] = MU_EMPTY_STR;
+            return 1;
+
+        case MTNUM:
+            if (m == muint((mbyte_t)num_uint(m))) {
+                frame[0] = str_fromnum(m);
+                return 1;
+            }
+            break;
+
+        case MTSTR:
+            frame[0] = frame[0];
+            return 1;
+
+        case MTTBL:
+        case MTFN:
+            frame[0] = m;
+            fn_fcall(MU_ITER, 0x11, frame);
+            frame[0] = str_fromiter(frame[0]);
+            return 1;
+
+        default:
+            break;
+    }
+
+    mu_error_cast(MU_KEY_STR, m);
+}
+
+MSTR(mu_gen_key_str, "str")
+MBFN(mu_gen_str, 0x1, mu_bfn_str)
+
+static mc_t mu_bfn_find(mu_t *frame) {
+    mu_t s = frame[0];
+    mu_t m = frame[1];
+    if (!mu_isstr(s) || !mu_isstr(m)) {
+        mu_error_arg(MU_KEY_FIND, 0x2, frame);
+    }
+
+    const mbyte_t *sb = str_data(s);
+    mlen_t slen = str_len(s);
+    const mbyte_t *mb = str_data(m);
+    mlen_t mlen = str_len(m);
+
+    for (muint_t i = 0; i+mlen <= slen; i++) {
+        if (memcmp(&sb[i], mb, mlen) == 0) {
+            str_dec(m);
+            str_dec(s);
+            frame[0] = muint(i);
+            frame[1] = muint(i + mlen);
+            return 2;
+        }
+    }
+
+    str_dec(s);
+    str_dec(m);
+    return 0;
+}
+
+MSTR(mu_gen_key_find, "find")
+MBFN(mu_gen_find, 0x2, mu_bfn_find)
+
+static mc_t mu_bfn_replace(mu_t *frame) {
+    mu_t s = frame[0];
+    mu_t m = frame[1];
+    mu_t r = frame[2];
+    if (!mu_isstr(s) || !mu_isstr(m) || !mu_isstr(r)) {
+        mu_error_arg(MU_KEY_REPLACE, 0x3, frame);
+    }
+
+    const mbyte_t *sb = str_data(s);
+    mlen_t slen = str_len(s);
+    const mbyte_t *mb = str_data(m);
+    mlen_t mlen = str_len(m);
+
+    mu_t d = buf_create(slen);
+    muint_t n = 0;
+    muint_t i = 0;
+
+    while (i+mlen <= slen) {
+        bool match = memcmp(&sb[i], mb, mlen) == 0;
+
+        if (match) {
+            buf_concat(&d, &n, str_inc(r));
+            i += mlen;
+        }
+
+        if (!match || mlen == 0) {
+            buf_push(&d, &n, sb[i]);
+            i += 1;
+        }
+    }
+
+    buf_append(&d, &n, &sb[i], slen-i);
+
+    str_dec(s);
+    str_dec(m);
+    str_dec(r);
+    frame[0] = str_intern(d, n);
+    return 1;
+}
+
+MSTR(mu_gen_key_replace, "replace")
+MBFN(mu_gen_replace, 0x3, mu_bfn_replace)
+
+
+static mc_t str_split_step(mu_t scope, mu_t *frame) {
+    mu_t a = tbl_lookup(scope, muint(0));
+    const mbyte_t *ab = str_data(a);
+    mlen_t alen = str_len(a);
+    muint_t i = num_uint(tbl_lookup(scope, muint(2)));
+
+    if (i > alen) {
+        str_dec(a);
+        return 0;
+    }
+
+    mu_t s = tbl_lookup(scope, muint(1));
+    const mbyte_t *sb = str_data(s);
+    mlen_t slen = str_len(s);
+
+    muint_t j = i;
+    for (; j < alen; j++) {
+        if (j+slen <= alen && memcmp(&ab[j], sb, slen) == 0) {
+            break;
+        }
+    }
+
+    frame[0] = str_create(ab+i, j-i);
+    tbl_insert(scope, muint(2), muint(j+slen));
+    str_dec(a);
+    str_dec(s);
+    return 1;
+}
+
+static mc_t mu_bfn_split(mu_t *frame) {
+    mu_t s     = frame[0];
+    mu_t delim = frame[1] ? frame[1] : MU_SPACE_STR;
+    if (!mu_isstr(s) || !mu_isstr(delim)) {
+        mu_error_arg(MU_KEY_SPLIT, 0x2, frame);
+    }
+
+    if (str_len(delim) == 0) {
+        frame[0] = str_iter(s);
+        return 1;
+    }
+
+    frame[0] = msbfn(0x0, str_split_step, mlist({s, delim, muint(0)}));
+    return 1;
+}
+
+MSTR(mu_gen_key_split, "split")
+MBFN(mu_gen_split, 0x2, mu_bfn_split)
+
+static mc_t mu_bfn_join(mu_t *frame) {
+    mu_t iter  = frame[0];
+    mu_t delim = frame[1] ? frame[1] : MU_SPACE_STR;
+    if (!mu_isstr(delim)) {
+        mu_error_arg(MU_KEY_JOIN, 0x2, frame);
+    }
+
+    mu_t b = buf_create(0);
+    muint_t n = 0;
+    bool first = true;
+
+    iter = fn_call(MU_ITER, 0x11, iter);
+
+    while (fn_next(iter, 0x1, frame)) {
+        if (!mu_isstr(frame[0])) {
+            mu_errorf("invalid value %r passed to join", frame[0]);
+        }
+
+        if (first) {
+            first = false;
+        } else {
+            buf_concat(&b, &n, str_inc(delim));
+        }
+
+        buf_concat(&b, &n, frame[0]);
+    }
+
+    fn_dec(iter);
+    str_dec(delim);
+    frame[0] = str_intern(b, n);
+    return 1;
+}
+
+MSTR(mu_gen_key_join, "join")
+MBFN(mu_gen_join, 0x2, mu_bfn_join)
+
+static mc_t mu_bfn_pad(mu_t *frame) {
+    mu_t s    = frame[0];
+    mu_t mlen = frame[1];
+    mu_t pad  = frame[2] ? frame[2] : MU_SPACE_STR;
+    if (!mu_isstr(s) ||
+        !mu_isnum(mlen) ||
+        (!mu_isstr(pad) || str_len(pad) == 0)) {
+        mu_error_arg(MU_KEY_PAD, 0x3, frame);
+    }
+
+    bool left;
+    muint_t len;
+
+    if (num_cmp(mlen, muint(0)) < 0) {
+        left = false;
+        len = num_uint(num_neg(mlen));
+    } else {
+        left = true;
+        len = num_uint(mlen);
+    }
+
+    if (str_len(s) >= len) {
+        str_dec(pad);
+        return 1;
+    }
+
+    mu_t d = buf_create(len);
+    muint_t n = 0;
+    muint_t count = (len - str_len(s)) / str_len(pad);
+
+    if (left) {
+        buf_concat(&d, &n, s);
+    }
+
+    for (muint_t i = 0; i < count; i++) {
+        buf_concat(&d, &n, str_inc(pad));
+    }
+    
+    if (!left) {
+        buf_concat(&d, &n, s);
+    }
+
+    mu_dec(pad);
+    frame[0] = str_intern(d, n);
+    return 1;
+}
+
+MSTR(mu_gen_key_pad, "pad")
+MBFN(mu_gen_pad, 0x3, mu_bfn_pad)
+
+static mc_t mu_bfn_strip(mu_t *frame) {
+    if (mu_isstr(frame[1])) {
+        mu_dec(frame[2]);
+        frame[2] = frame[1];
+        frame[1] = 0;
+    }
+
+    mu_t s   = frame[0];
+    mu_t dir = frame[1];
+    mu_t pad = frame[2] ? frame[2] : MU_SPACE_STR;
+    if (!mu_isstr(s) ||
+        (dir && !mu_isnum(dir)) ||
+        (!mu_isstr(pad) || str_len(pad) == 0)) {
+        mu_error_arg(MU_KEY_STR, 0x3, frame);
+    }
+
+    const mbyte_t *pos = str_data(s);
+    const mbyte_t *end = pos + str_len(s);
+
+    const mbyte_t *pb = str_data(pad);
+    mlen_t plen = str_len(pad);
+
+    if (!dir || num_cmp(dir, muint(0)) <= 0) {
+        while (end-pos >= plen && memcmp(pos, pb, plen) == 0) {
+            pos += plen;
+        }
+    }
+            
+    if (!dir || num_cmp(dir, muint(0)) >= 0) {
+        while (end-pos >= plen && memcmp(end-plen, pb, plen) == 0) {
+            end -= plen;
+        }
+    }
+
+    frame[0] = str_create(pos, end-pos);
+    str_dec(s);
+    str_dec(pad);
+    return 1;
+}
+
+MSTR(mu_gen_key_strip, "strip")
+MBFN(mu_gen_strip, 0x3, mu_bfn_strip)

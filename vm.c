@@ -328,21 +328,39 @@ reenter:
             VM_ENTRY_END
 
             VM_ENTRY_DAB(OP_LOOKUP, d, a, b)
-                regs[d] = mu_lookup(regs[a], regs[b]);
+                if (!mu_istbl(regs[a])) {
+                    mu_errorf("unable to lookup %r in %r", regs[b], regs[a]);
+                }
+
+                regs[d] = tbl_lookup(regs[a], regs[b]);
             VM_ENTRY_END
 
             VM_ENTRY_DAB(OP_LOOKDN, d, a, b)
-                mu_t scratch = mu_lookup(regs[a], regs[b]);
+                if (!mu_istbl(regs[a])) {
+                    mu_errorf("unable to lookup %r in %r", regs[b], regs[a]);
+                }
+
+                mu_t scratch = tbl_lookup(regs[a], regs[b]);
                 mu_dec(regs[a]);
                 regs[d] = scratch;
             VM_ENTRY_END
 
             VM_ENTRY_DAB(OP_INSERT, d, a, b)
-                mu_insert(regs[a], regs[b], regs[d]);
+                if (!mu_istbl(regs[a])) {
+                    mu_errorf("unable to insert %r to %r in %r",
+                            regs[d], regs[b], regs[a]);
+                }
+
+                tbl_insert(regs[a], regs[b], regs[d]);
             VM_ENTRY_END
 
             VM_ENTRY_DAB(OP_ASSIGN, d, a, b)
-                mu_assign(regs[a], regs[b], regs[d]);
+                if (!mu_istbl(regs[a])) {
+                    mu_errorf("unable to assign %r to %r in %r",
+                            regs[d], regs[b], regs[a]);
+                }
+
+                tbl_assign(regs[a], regs[b], regs[d]);
             VM_ENTRY_END
 
             VM_ENTRY_DJ(OP_JUMP, d, j)
@@ -362,8 +380,12 @@ reenter:
             VM_ENTRY_END
 
             VM_ENTRY_DA(OP_CALL, d, a)
+                if (!mu_isfn(regs[d])) {
+                    mu_errorf("unable to call %r", regs[d]);
+                }
+
                 mu_fcopy(a >> 4, frame, &regs[d+1]);
-                mu_fcall(regs[d], a, frame);
+                fn_fcall(regs[d], a, frame);
                 mu_dec(regs[d]);
                 mu_fcopy(0xf & a, &regs[d], frame);
             VM_ENTRY_END
@@ -384,14 +406,16 @@ reenter:
                 // Use a direct goto to garuntee a tail call when the target
                 // is another mu function. Otherwise, we just try our hardest
                 // to get a tail call emitted.
-                if (mu_type(scratch) == MTFN && !fn_isbuiltin(scratch)) {
+                if (!mu_isfn(scratch)) {
+                    mu_errorf("unable to call %r", scratch);
+                } else if (!fn_isbuiltin(scratch)) {
                     code = fn_code(scratch);
                     mu_fconvert(code->args, a, frame);
                     scope = tbl_extend(code->scope, fn_closure(scratch));
                     fn_dec(scratch);
                     goto reenter;
                 } else {
-                    return mu_tcall(scratch, a, frame);
+                    return fn_tcall(scratch, a, frame);
                 }
             VM_ENTRY_END
         VM_DISPATCH_END

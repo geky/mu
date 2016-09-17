@@ -17,10 +17,10 @@
 
 
 // Number constants
-MFLOAT(mu_inf,  INFINITY)
-MFLOAT(mu_ninf, -INFINITY)
-MFLOAT(mu_e,    2.71828182845904523536)
-MFLOAT(mu_pi,   3.14159265358979323846)
+MSTR(mu_gen_key_inf,  "inf")    MFLOAT(mu_gen_inf,  INFINITY)
+MSTR(mu_gen_key_ninf, "ninf")   MFLOAT(mu_gen_ninf, -INFINITY)
+MSTR(mu_gen_key_e,    "e")      MFLOAT(mu_gen_e,    2.71828182845904523536)
+MSTR(mu_gen_key_pi,   "pi")     MFLOAT(mu_gen_pi,   3.14159265358979323846)
 
 
 // Number creating macro assuming NaN and -0 not possible
@@ -117,19 +117,18 @@ mu_t num_mod(mu_t a, mu_t b) {
 
 mu_t num_pow(mu_t a, mu_t b) {
     mu_assert(mu_isnum(a) && mu_isnum(b));
-    return mfloat(pow(num_float(a), num_float(b))); 
+    return mfloat(pow(num_float(a), num_float(b)));
 }
 
 mu_t num_log(mu_t a, mu_t b) {
     mu_assert(mu_isnum(a) && (!b || mu_isnum(b)));
 
-    if (!b) {
-        b = MU_E;
+    if (b) {
+        return mfloat(log(num_float(a)) / log(num_float(b)));
+    } else {
+        return mfloat(log(num_float(a)) / log(num_float(MU_E)));
     }
-
-    return mfloat(log(num_float(a)) / log(num_float(b)));
 }
-
 
 mu_t num_abs(mu_t a) {
     mu_assert(mu_isnum(a));
@@ -145,7 +144,6 @@ mu_t num_ceil(mu_t a)  {
     mu_assert(mu_isnum(a));
     return mfloat(ceil(num_float(a)));
 }
-
 
 mu_t num_cos(mu_t a)  {
     mu_assert(mu_isnum(a));
@@ -182,7 +180,6 @@ mu_t num_atan(mu_t a, mu_t b) {
     }
 }
 
-
 // Bitwise operations
 mu_t num_not(mu_t a) {
     mu_assert(mu_isnum(a));
@@ -213,42 +210,6 @@ mu_t num_shl(mu_t a, mu_t b) {
 mu_t num_shr(mu_t a, mu_t b) {
     mu_assert(mu_isnum(a) && mu_isnum(b));
     return muint((muint_t)(num_uint(a) >> num_uint(b)));
-}
-
-
-// Random number generation
-// Based on xorshift128+ with wordsize as seed/output
-#ifdef MU64
-#define XORSHIFT1 23
-#define XORSHIFT2 17
-#define XORSHIFT3 26
-#else
-#define XORSHIFT1 15
-#define XORSHIFT2 18
-#define XORSHIFT3 11
-#endif
-
-static mc_t num_random(mu_t scope, mu_t *frame) {
-    muint_t *a = buf_data(scope);
-    muint_t x = a[0];
-    muint_t y = a[1];
-
-    x ^= x << XORSHIFT1;
-    x ^= x >> XORSHIFT2;
-    x ^= y ^ (y >> XORSHIFT3);
-
-    a[0] = y;
-    a[1] = x;
-    frame[0] = num_div(muint(x + y), num_add(muint((muint_t)-1), muint(1)));
-    return 1;
-}
-
-mu_t num_seed(mu_t m) {
-    mu_assert(!m || mu_isnum(m));
-    if (!m) m = muint(0);
-
-    return msbfn(0x0, num_random, mbuf(
-            (mu_t[]){m, m}, 2*sizeof(muint_t)));
 }
 
 
@@ -343,7 +304,7 @@ static void num_base_ipart(mu_t *s, muint_t *i, mu_t n, mu_t base) {
     }
 }
 
-static void num_base_fpart(mu_t *s, muint_t *i, mu_t n, 
+static void num_base_fpart(mu_t *s, muint_t *i, mu_t n,
                            mu_t base, muint_t digits) {
     mu_t error = num_pow(base, mint(-digits));
     mu_t digit = mint(-1);
@@ -369,7 +330,7 @@ static void num_base_fpart(mu_t *s, muint_t *i, mu_t n,
 
 static mu_t num_base(mu_t n, char c, mu_t base, char expc, mu_t expbase) {
     if (n == muint(0)) {
-        if (c) return mstr("0%bc0", c);
+        if (c) return mstr("0%c0", c);
         else   return mstr("0");
     } else if (n == MU_INF) {
         return mstr("+inf");
@@ -390,7 +351,7 @@ static mu_t num_base(mu_t n, char c, mu_t base, char expc, mu_t expbase) {
 
         mu_t exp = num_floor(num_log(n, expbase));
         mu_t sig = num_floor(num_log(n, base));
-        mu_t digits = num_ceil(num_div(muint(MU_DIGITS), 
+        mu_t digits = num_ceil(num_div(muint(MU_DIGITS),
                                num_log(base, muint(2))));
 
         bool scientific = num_cmp(sig, digits) >= 0 ||
@@ -438,3 +399,344 @@ mu_t num_hex(mu_t n) {
     mu_assert(mu_isnum(n));
     return num_base(n, 'x', muint(16), 'p', muint(2));
 }
+
+
+// Number related Mu functions
+static mc_t mu_bfn_num(mu_t *frame) {
+    mu_t m = frame[0];
+
+    switch (mu_type(m)) {
+        case MTNIL:
+            frame[0] = muint(0);
+            return 1;
+
+        case MTNUM:
+            frame[0] = m;
+            return 1;
+
+        case MTSTR:
+            if (str_len(m) == 1) {
+                frame[0] = num_fromstr(m);
+                return 1;
+            }
+            break;
+
+        default:
+            break;
+    }
+
+    mu_error_cast(MU_KEY_NUM, m);
+}
+
+MSTR(mu_gen_key_num, "num")
+MBFN(mu_gen_num, 0x1, mu_bfn_num)
+
+static mc_t mu_bfn_add(mu_t *frame) {
+    mu_t a = frame[0];
+    mu_t b = frame[1];
+    if (!mu_isnum(a) || (b && !mu_isnum(b))) {
+        mu_error_op(MU_KEY_ADD, 0x2, frame);
+    }
+
+    if (!b) {
+        frame[0] = a;
+    } else {
+        frame[0] = num_add(a, b);
+    }
+
+    return 1;
+}
+
+MSTR(mu_gen_key_add, "+")
+MBFN(mu_gen_add, 0x2, mu_bfn_add)
+
+static mc_t mu_bfn_sub(mu_t *frame) {
+    mu_t a = frame[0];
+    mu_t b = frame[1];
+    if (!mu_isnum(a) || (b && !mu_isnum(b))) {
+        mu_error_op(MU_KEY_SUB, 0x2, frame);
+    }
+
+    if (!b) {
+        frame[0] = num_neg(a);
+    } else {
+        frame[0] = num_sub(a, b);
+    }
+
+    return 1;
+}
+
+MSTR(mu_gen_key_sub, "-")
+MBFN(mu_gen_sub, 0x2, mu_bfn_sub)
+
+static mc_t mu_bfn_mul(mu_t *frame) {
+    mu_t a = frame[0];
+    mu_t b = frame[1];
+    if (!mu_isnum(a) || !mu_isnum(b)) {
+        mu_error_op(MU_KEY_MUL, 0x2, frame);
+    }
+
+    frame[0] = num_mul(a, b);
+    return 1;
+}
+
+MSTR(mu_gen_key_mul, "*")
+MBFN(mu_gen_mul, 0x2, mu_bfn_mul)
+
+static mc_t mu_bfn_div(mu_t *frame) {
+    mu_t a = frame[0];
+    mu_t b = frame[1];
+    if (!mu_isnum(a) || !mu_isnum(b)) {
+        mu_error_op(MU_KEY_DIV, 0x2, frame);
+    }
+
+    frame[0] = num_div(a, b);
+    return 1;
+}
+
+MSTR(mu_gen_key_div, "/")
+MBFN(mu_gen_div, 0x2, mu_bfn_div)
+
+static mc_t mu_bfn_abs(mu_t *frame) {
+    mu_t a = frame[0];
+    if (!mu_isnum(a)) {
+        mu_error_arg(MU_KEY_ABS, 0x1, frame);
+    }
+
+    frame[0] = num_abs(a);
+    return 1;
+}
+
+MSTR(mu_gen_key_abs, "abs")
+MBFN(mu_gen_abs, 0x1, mu_bfn_abs)
+
+static mc_t mu_bfn_floor(mu_t *frame) {
+    mu_t a = frame[0];
+    if (!mu_isnum(a)) {
+        mu_error_arg(MU_KEY_FLOOR, 0x1, frame);
+    }
+
+    frame[0] = num_floor(a);
+    return 1;
+}
+
+MSTR(mu_gen_key_floor, "floor")
+MBFN(mu_gen_floor, 0x1, mu_bfn_floor)
+
+static mc_t mu_bfn_ceil(mu_t *frame) {
+    mu_t a = frame[0];
+    if (!mu_isnum(a)) {
+        mu_error_arg(MU_KEY_CEIL, 0x1, frame);
+    }
+
+    frame[0] = num_ceil(a);
+    return 1;
+}
+
+MSTR(mu_gen_key_ceil, "ceil")
+MBFN(mu_gen_ceil, 0x1, mu_bfn_ceil)
+
+static mc_t mu_bfn_idiv(mu_t *frame) {
+    mu_t a = frame[0];
+    mu_t b = frame[1];
+    if (!mu_isnum(a) || !mu_isnum(b)) {
+        mu_error_op(MU_KEY_IDIV, 0x2, frame);
+    }
+
+    frame[0] = num_idiv(a, b);
+    return 1;
+}
+
+MSTR(mu_gen_key_idiv, "//")
+MBFN(mu_gen_idiv, 0x2, mu_bfn_idiv)
+
+static mc_t mu_bfn_mod(mu_t *frame) {
+    mu_t a = frame[0];
+    mu_t b = frame[1];
+    if (!mu_isnum(a) || !mu_isnum(b)) {
+        mu_error_op(MU_KEY_MOD, 0x2, frame);
+    }
+
+    frame[0] = num_mod(a, b);
+    return 1;
+}
+
+MSTR(mu_gen_key_mod, "%")
+MBFN(mu_gen_mod, 0x2, mu_bfn_mod)
+
+static mc_t mu_bfn_pow(mu_t *frame) {
+    mu_t a = frame[0];
+    mu_t b = frame[1];
+    if (!mu_isnum(a) || !mu_isnum(b)) {
+        mu_error_arg(MU_KEY_POW, 0x2, frame);
+    }
+
+    frame[0] = num_pow(a, b);
+    return 1;
+}
+
+MSTR(mu_gen_key_pow, "^")
+MBFN(mu_gen_pow, 0x2, mu_bfn_pow)
+
+static mc_t mu_bfn_log(mu_t *frame) {
+    mu_t a = frame[0];
+    mu_t b = frame[1];
+    if (!mu_isnum(a) || (b && !mu_isnum(b))) {
+        mu_error_arg(MU_KEY_LOG, 0x2, frame);
+    }
+
+    frame[0] = num_log(a, b);
+    return 1;
+}
+
+MSTR(mu_gen_key_log, "log")
+MBFN(mu_gen_log, 0x2, mu_bfn_log)
+
+static mc_t mu_bfn_cos(mu_t *frame) {
+    mu_t a = frame[0];
+    if (!mu_isnum(a)) {
+        mu_error_arg(MU_KEY_COS, 0x1, frame);
+    }
+
+    frame[0] = num_cos(a);
+    return 1;
+}
+
+MSTR(mu_gen_key_cos, "cos")
+MBFN(mu_gen_cos, 0x1, mu_bfn_cos)
+
+static mc_t mu_bfn_acos(mu_t *frame) {
+    mu_t a = frame[0];
+    if (!mu_isnum(a)) {
+        mu_error_arg(MU_KEY_ACOS, 0x1, frame);
+    }
+
+    frame[0] = num_acos(a);
+    return 1;
+}
+
+MSTR(mu_gen_key_acos, "acos")
+MBFN(mu_gen_acos, 0x1, mu_bfn_acos)
+
+static mc_t mu_bfn_sin(mu_t *frame) {
+    mu_t a = frame[0];
+    if (!mu_isnum(a)) {
+        mu_error_arg(MU_KEY_SIN, 0x1, frame);
+    }
+
+    frame[0] = num_sin(a);
+    return 1;
+}
+
+MSTR(mu_gen_key_sin, "sin")
+MBFN(mu_gen_sin, 0x1, mu_bfn_sin)
+
+static mc_t mu_bfn_asin(mu_t *frame) {
+    mu_t a = frame[0];
+    if (!mu_isnum(a)) {
+        mu_error_arg(MU_KEY_ASIN, 0x1, frame);
+    }
+
+    frame[0] = num_asin(a);
+    return 1;
+}
+
+MSTR(mu_gen_key_asin, "asin")
+MBFN(mu_gen_asin, 0x1, mu_bfn_asin)
+
+static mc_t mu_bfn_tan(mu_t *frame) {
+    mu_t a = frame[0];
+    if (!mu_isnum(a)) {
+        mu_error_arg(MU_KEY_TAN, 0x1, frame);
+    }
+
+    frame[0] = num_tan(a);
+    return 1;
+}
+
+MSTR(mu_gen_key_tan, "tan")
+MBFN(mu_gen_tan, 0x1, mu_bfn_tan)
+
+static mc_t mu_bfn_atan(mu_t *frame) {
+    mu_t a = frame[0];
+    mu_t b = frame[1];
+    if (!mu_isnum(a) || (b && !mu_isnum(b))) {
+        mu_error_arg(MU_KEY_ATAN, 0x2, frame);
+    }
+
+    frame[0] = num_atan(a, b);
+    return 1;
+}
+
+MSTR(mu_gen_key_atan, "atan")
+MBFN(mu_gen_atan, 0x2, mu_bfn_atan)
+
+static mc_t mu_bfn_shl(mu_t *frame) {
+    mu_t a = frame[0];
+    mu_t b = frame[1];
+    if (!mu_isnum(a) || !mu_isnum(b)) {
+        mu_error_op(MU_KEY_SHL, 0x2, frame);
+    }
+
+    frame[0] = num_shl(a, b);
+    return 1;
+}
+
+MSTR(mu_gen_key_shl, "<<")
+MBFN(mu_gen_shl, 0x2, mu_bfn_shl)
+
+static mc_t mu_bfn_shr(mu_t *frame) {
+    mu_t a = frame[0];
+    mu_t b = frame[1];
+    if (!mu_isnum(a) || !mu_isnum(b)) {
+        mu_error_op(MU_KEY_SHR, 0x2, frame);
+    }
+
+    frame[0] = num_shr(a, b);
+    return 1;
+}
+
+MSTR(mu_gen_key_shr, ">>")
+MBFN(mu_gen_shr, 0x2, mu_bfn_shr)
+
+
+// Random number generation
+// Based on xorshift128+ with wordsize as seed/output
+#ifdef MU64
+#define XORSHIFT1 23
+#define XORSHIFT2 17
+#define XORSHIFT3 26
+#else
+#define XORSHIFT1 15
+#define XORSHIFT2 18
+#define XORSHIFT3 11
+#endif
+
+static mc_t num_random(mu_t scope, mu_t *frame) {
+    muint_t *a = buf_data(scope);
+    muint_t x = a[0];
+    muint_t y = a[1];
+
+    x ^= x << XORSHIFT1;
+    x ^= x >> XORSHIFT2;
+    x ^= y ^ (y >> XORSHIFT3);
+
+    a[0] = y;
+    a[1] = x;
+    frame[0] = num_div(muint(x + y), num_add(muint((muint_t)-1), muint(1)));
+    return 1;
+}
+
+static mc_t num_seed(mu_t *frame) {
+    mu_t seed = frame[0] ? frame[0] : muint(0);
+    if (!mu_isnum(seed)) {
+        mu_error_arg(MU_KEY_SEED, 0x1, frame);
+    }
+
+    frame[0] = msbfn(0x0, num_random, mbuf(
+            (mu_t[]){seed, seed}, 2*sizeof(mu_t)));
+    return 1;
+}
+
+MSTR(mu_gen_key_seed, "seed")
+MBFN(mu_gen_seed, 0x1, num_seed)

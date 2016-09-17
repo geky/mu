@@ -70,14 +70,14 @@ mu_inline void *buf_data(mu_t b) {
 
 
 // Buffer macro for allocating buffers in global space
-#define MBUF(name, n)                                           \
-static struct {                                                 \
-    struct buf buf;                                             \
-    mbyte_t data[n];                                            \
-} _mu_struct_##name = {{0, n}, 0}                               \
-                                                                \
-mu_pure mu_t name(void) {                                       \
-    return (mu_t)((muint_t)&_mu_struct_##name + MTBUF);         \
+#define MBUF(name, n)                                                       \
+mu_pure mu_t name(void) {                                                   \
+    static struct {                                                         \
+        struct buf buf;                                                     \
+        mbyte_t data[n];                                                    \
+    } inst = {{0, n}, 0}                                                    \
+                                                                            \
+    return (mu_t)((muint_t)&inst + MTBUF);                                  \
 }
 
 
