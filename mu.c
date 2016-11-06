@@ -17,14 +17,16 @@ MSTR(mu_gen_key_false, "false")     // nil
 // Mu type destructors
 extern void str_destroy(mu_t);
 extern void buf_destroy(mu_t);
+extern void cbuf_destroy(mu_t);
 extern void tbl_destroy(mu_t);
 extern void fn_destroy(mu_t);
 
 static void (*const mu_attr_destroy[8])(mu_t) = {
-    [MTSTR] = str_destroy,
-    [MTBUF] = buf_destroy,
-    [MTTBL] = tbl_destroy,
-    [MTFN]  = fn_destroy,
+    [MTSTR]  = str_destroy,
+    [MTBUF]  = buf_destroy,
+    [MTCBUF] = cbuf_destroy,
+    [MTTBL]  = tbl_destroy,
+    [MTFN]   = fn_destroy,
 };
 
 void mu_destroy(mu_t m) {
@@ -50,13 +52,13 @@ static mu_t (*const mu_attr_iter[8])(mu_t) = {
 MSTR(mu_gen_key_cdata, "cdata")
 
 static mu_t (*const mu_attr_name[8])(void) = {
-    [MTNIL] = mu_gen_key_nil,
-    [MTNUM] = mu_gen_key_num,
-    [MTSTR] = mu_gen_key_str,
-    [MTTBL] = mu_gen_key_tbl,
-    [MTFN]  = mu_gen_key_fn,
-    [MTBUF] = mu_gen_key_cdata,
-    [MTCD]  = mu_gen_key_cdata
+    [MTNIL]  = mu_gen_key_nil,
+    [MTNUM]  = mu_gen_key_num,
+    [MTSTR]  = mu_gen_key_str,
+    [MTTBL]  = mu_gen_key_tbl,
+    [MTFN]   = mu_gen_key_fn,
+    [MTBUF]  = mu_gen_key_cdata,
+    [MTCBUF] = mu_gen_key_cdata,
 };
 
 static mu_t nil_repr(mu_t m) {
@@ -205,7 +207,7 @@ MBFN(mu_gen_import, 0x1, mu_bfn_import)
 
 // Evaluation and entry into Mu
 void mu_feval(const char *s, muint_t n, mu_t scope, mcnt_t fc, mu_t *frame) {
-    struct code *c = mu_compile(s, n);
+    mu_t c = mu_compile(s, n);
     mcnt_t rets = mu_exec(c, mu_inc(scope), frame);
     mu_frame_convert(rets, fc, frame);
 }

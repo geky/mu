@@ -20,6 +20,9 @@ void buf_push(mu_t *b, muint_t *i, mbyte_t byte);
 void buf_append(mu_t *b, muint_t *i, const void *c, muint_t n);
 void buf_concat(mu_t *b, muint_t *i, mu_t c);
 
+// Set destructor for a buffer
+void buf_setdtor(mu_t *b, void (*dtor)(mu_t));
+
 // Formatting buffers with format strings
 void buf_vformat(mu_t *b, muint_t *i, const char *f, va_list args);
 void buf_format(mu_t *b, muint_t *i, const char *fmt, ...);
@@ -33,6 +36,16 @@ void buf_format(mu_t *b, muint_t *i, const char *fmt, ...);
 struct buf {
     mref_t ref;     // reference count
     mlen_t len;     // length of allocated data
+    // data follows
+};
+
+// Same buffer structure but with a destructor as
+// an additional field. The destructor also acts as
+// an identifier for different types of dbufs.
+struct cbuf {
+    mref_t ref;         // reference count
+    mlen_t len;         // length of allocated data
+    void (*dtor)(mu_t); // destructor
     // data follows
 };
 
@@ -53,19 +66,26 @@ mu_inline mu_t buf_inc(mu_t b) {
 
 mu_inline void buf_dec(mu_t m) {
     mu_assert(mu_isbuf(m));
-    extern void buf_destroy(mu_t);
-    if (ref_dec(m)) {
-        buf_destroy(m);
-    }
+    mu_dec(m);
 }
 
 // Buffer access functions
 mu_inline mlen_t buf_len(mu_t b) {
-    return ((struct buf *)((muint_t)b - MTBUF))->len;
+    return ((struct buf *)(~7 & (muint_t)b))->len;
 }
 
 mu_inline void *buf_data(mu_t b) {
-    return (struct buf *)((muint_t)b - MTBUF) + 1;
+    return (void *)((muint_t)b - MTBUF + sizeof(struct buf) +
+        ((sizeof(struct cbuf)-MTCBUF)-(sizeof(struct buf)-MTBUF))
+            * (((MTCBUF^MTBUF) & (muint_t)b) / (MTCBUF^MTBUF)));
+}
+
+mu_inline void (*buf_dtor(mu_t b))(mu_t) {
+    if ((MTCBUF^MTBUF) & (muint_t)b) {
+        return ((struct cbuf *)((muint_t)b - MTCBUF))->dtor;
+    } else {
+        return 0;
+    }
 }
 
 

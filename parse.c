@@ -238,8 +238,6 @@ struct match {
 // Parsing state
 struct parse {
     mu_t imms;
-    mu_t fns;
-
     mu_t bcode;
     mlen_t bcount;
 
@@ -592,12 +590,6 @@ static muint_t imm(struct parse *p, mu_t m) {
     return index;
 }
 
-static muint_t fn(struct parse *p, struct code *code) {
-    muint_t index = tbl_len(p->fns);
-    tbl_insert(p->fns, muint(index), mu_wrap(code));
-    return index;
-}
-
 // More complicated encoding operations
 static muint_t offset(struct expr *e) {
     if (e->state == P_INDIRECT) {
@@ -646,42 +638,36 @@ static void encode_store(struct parse *p, struct expr *e,
 }
 
 // Completing a parse and generating the final code object
-static struct code *compile(struct parse *p) {
-    struct code *code = ref_alloc(
-        sizeof(struct code) +
-        sizeof(mu_t)*tbl_len(p->imms) +
-        sizeof(struct code *)*tbl_len(p->fns) +
-        p->bcount);
+static mu_t compile(struct parse *p) {
+    mu_t b = buf_create(
+            sizeof(struct code) +
+            sizeof(mu_t)*tbl_len(p->imms) +
+            p->bcount);
 
+    extern void code_destroy(mu_t);
+    buf_setdtor(&b, code_destroy);
+
+    struct code *code = buf_data(b);
     code->args = p->args;
     code->flags = FN_SCOPED;
     code->regs = p->regs;
     code->scope = p->scope;
     code->icount = tbl_len(p->imms);
-    code->fcount = tbl_len(p->fns);
     code->bcount = p->bcount;
 
-    mu_t *imms = code_imms(code);
-    struct code **fns = code_fns(code);
-    mbyte_t *bcode = (mbyte_t *)code_bcode(code);
-
+    mu_t *imms = code_imms(b);
     mu_t k, v;
     for (muint_t i = 0; tbl_next(p->imms, &i, &k, &v);) {
         imms[num_uint(v)] = (k == IMM_NIL) ? 0 : k;
     }
 
-    for (muint_t i = 0; tbl_next(p->fns, &i, &k, &v);) {
-        fns[num_uint(k)] = mu_unwrap(v);
-    }
-
+    mbyte_t *bcode = code_bcode(b);
     memcpy(bcode, buf_data(p->bcode), p->bcount);
 
     tbl_dec(p->imms);
-    tbl_dec(p->fns);
     buf_dec(p->bcode);
     mu_dec(p->m.val);
-
-    return code;
+    return b;
 }
 
 
@@ -800,7 +786,6 @@ static void p_fn(struct parse *p, bool weak) {
         .bcount = 0,
 
         .imms = tbl_create(0),
-        .fns = tbl_create(0),
         .bchain = -1,
         .cchain = -1,
 
@@ -823,9 +808,9 @@ static void p_fn(struct parse *p, bool weak) {
 
     p->l = q.l;
 
-    struct code *c = compile(&q);
-    c->flags |= weak ? FN_WEAK : 0;
-    encode(p, OP_FN, p->sp+1, fn(p, c), 0, +1);
+    mu_t c = compile(&q);
+    code_header(c)->flags |= weak ? FN_WEAK : 0;
+    encode(p, OP_FN, p->sp+1, imm(p, c), 0, +1);
 }
 
 static void p_if(struct parse *p, bool expr) {
@@ -1485,11 +1470,10 @@ mu_t mu_nparse(const mbyte_t **ppos, const mbyte_t *end) {
     return val;
 }
 
-struct code *mu_compile(const char *s, muint_t n) {
+mu_t mu_compile(const char *s, muint_t n) {
     struct parse p = {
         .bcode = buf_create(0),
         .imms = tbl_create(0),
-        .fns = tbl_create(0),
         .bchain = -1,
         .cchain = -1,
 
@@ -1508,11 +1492,10 @@ struct code *mu_compile(const char *s, muint_t n) {
     return compile(&p);
 }
 
-struct code *mu_ncompile(const mbyte_t **pos, const mbyte_t *end) {
+mu_t mu_ncompile(const mbyte_t **pos, const mbyte_t *end) {
     struct parse p = {
         .bcode = buf_create(0),
         .imms = tbl_create(0),
-        .fns = tbl_create(0),
         .bchain = -1,
         .cchain = -1,
 

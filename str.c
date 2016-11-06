@@ -94,10 +94,16 @@ static void str_table_remove(mint_t i) {
 // This can avoid unnecessary allocations sometimes since
 // buf's internal structure is reused for interned strings
 mu_t str_intern(mu_t b, muint_t n) {
+    mu_assert(mu_isbuf(b));
+
     mint_t i = str_table_find(buf_data(b), n);
     if (i >= 0) {
         buf_dec(b);
         return str_inc(str_table[i]);
+    }
+
+    if (buf_dtor(b)) {
+        buf_setdtor(&b, 0);
     }
 
     if (buf_len(b) != n) {

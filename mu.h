@@ -13,13 +13,13 @@
 // Three bit type specifier located in lowest bits of each variable
 // 3b00x indicates type is not reference counted
 enum mtype {
-    MTNIL   = 0, // nil
-    MTNUM   = 1, // number
-    MTCD    = 3, // cdata
-    MTSTR   = 7, // string
-    MTBUF   = 6, // buffer
-    MTTBL   = 4, // table
-    MTFN    = 5, // function
+    MTNIL  = 0, // nil
+    MTNUM  = 1, // number
+    MTSTR  = 3, // string
+    MTBUF  = 2, // buffer
+    MTCBUF = 6, // managed buffer
+    MTTBL  = 4, // table
+    MTFN   = 5, // function
 };
 
 // Declaration of mu type
@@ -36,11 +36,10 @@ mu_inline mref_t mu_ref(mu_t m) { return *(mref_t *)(~7 & (muint_t)m); }
 mu_inline bool mu_isnil(mu_t m) { return !m; }
 mu_inline bool mu_isnum(mu_t m) { return mu_type(m) == MTNUM; }
 mu_inline bool mu_isstr(mu_t m) { return mu_type(m) == MTSTR; }
-mu_inline bool mu_iscd(mu_t m)  { return mu_type(m) == MTCD;  }
-mu_inline bool mu_isbuf(mu_t m) { return mu_type(m) == MTBUF; }
+mu_inline bool mu_isbuf(mu_t m) { return (3 & (muint_t)m) == MTBUF; }
 mu_inline bool mu_istbl(mu_t m) { return mu_type(m) == MTTBL; }
 mu_inline bool mu_isfn(mu_t m)  { return mu_type(m) == MTFN;  }
-mu_inline bool mu_isref(mu_t m) { return 4 & (muint_t)m; }
+mu_inline bool mu_isref(mu_t m) { return 6 & (muint_t)m; }
 
 
 // Smallest addressable unit
@@ -87,17 +86,6 @@ mu_inline void mu_dec(mu_t m) {
         extern void mu_destroy(mu_t m);
         mu_destroy(m);
     }
-}
-
-// Wrapping C data into Mu variables
-mu_inline mu_t mu_wrap(void *data) {
-    mu_assert((7 & (muint_t)data) == 0); // Must be aligned
-    return (mu_t)((muint_t)data + MTCD);
-}
-
-mu_inline void *mu_unwrap(mu_t data) {
-    mu_assert(mu_iscd(data));
-    return (void *)((muint_t)data - MTCD);
 }
 
 

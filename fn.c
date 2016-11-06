@@ -14,15 +14,15 @@ mu_inline struct fn *fn(mu_t f) {
 
 
 // Creation functions
-mu_t fn_create(struct code *c, mu_t closure) {
-    if (c->flags & FN_WEAK) {
+mu_t fn_create(mu_t c, mu_t closure) {
+    if (code_header(c)->flags & FN_WEAK) {
         mu_assert(mu_ref(closure) > 1);
         mu_dec(closure);
     }
 
     struct fn *f = ref_alloc(sizeof(struct fn));
-    f->args = c->args;
-    f->flags = c->flags;
+    f->args = code_header(c)->args;
+    f->flags = code_header(c)->flags;
     f->closure = closure;
     f->fn.code = c;
     return (mu_t)((muint_t)f + MTFN);
@@ -60,19 +60,10 @@ void fn_destroy(mu_t f) {
     ref_dealloc(fn(f), sizeof(struct fn));
 }
 
-void code_destroy(struct code *c) {
-    for (muint_t i = 0; i < c->icount; i++) {
+void code_destroy(mu_t c) {
+    for (muint_t i = 0; i < code_imms_len(c); i++) {
         mu_dec(code_imms(c)[i]);
     }
-
-    for (muint_t i = 0; i < c->fcount; i++) {
-        code_dec(code_fns(c)[i]);
-    }
-
-    ref_dealloc(c, sizeof(struct code) +
-                   c->icount*sizeof(mu_t) +
-                   c->fcount*sizeof(struct code *) +
-                   c->bcount);
 }
 
 
@@ -94,8 +85,8 @@ mcnt_t fn_tcall(mu_t f, mcnt_t fc, mu_t *frame) {
         }
 
         case FN_SCOPED: {
-            struct code *c = fn_code(f);
-            mu_t scope = tbl_extend(c->scope, fn_closure(f));
+            mu_t c = code_inc(fn(f)->fn.code);
+            mu_t scope = tbl_extend(code_header(c)->scope, fn_closure(f));
             fn_dec(f);
             return mu_exec(c, scope, frame);
         }

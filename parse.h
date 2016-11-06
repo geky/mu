@@ -12,8 +12,8 @@ mu_t mu_parse(const char *s, muint_t n);
 mu_t mu_nparse(const mbyte_t **pos, const mbyte_t *end);
 
 // Compile Mu source code into code objects
-struct code *mu_compile(const char *s, muint_t n);
-struct code *mu_ncompile(const mbyte_t **pos, const mbyte_t *end);
+mu_t mu_compile(const char *s, muint_t n);
+mu_t mu_ncompile(const mbyte_t **pos, const mbyte_t *end);
 
 
 // Conversion to/from ascii

@@ -113,27 +113,19 @@ static const char *const op_names[16] = {
     [OP_RET]    = "ret",
 };
 
-void mu_dis(struct code *code) {
-    mu_t *imms = code_imms(code);
-    struct code **fns = code_fns(code);
-    const uint16_t *pc = code_bcode(code);
-    const uint16_t *end = pc + code->bcount/2;
+void mu_dis(mu_t c) {
+    mu_t *imms = code_imms(c);
+    const uint16_t *pc = code_bcode(c);
+    const uint16_t *end = pc + code_bcode_len(c)/2;
 
-    mu_printf("-- dis 0x%wx --", code);
+    mu_printf("-- dis 0x%wx --", c);
     mu_printf("regs: %qu, scope: %qu, args: %bx",
-           code->regs, code->scope, code->args);
+           code_header(c)->regs, code_header(c)->scope, code_header(c)->args);
 
-    if (code->icount > 0) {
+    if (code_imms_len(c) > 0) {
         mu_printf("imms:");
-        for (muint_t i = 0; i < code->icount; i++) {
+        for (muint_t i = 0; i < code_imms_len(c); i++) {
             mu_printf("%wx (%r)", imms[i], mu_inc(imms[i]));
-        }
-    }
-
-    if (code->fcount > 0) {
-        mu_printf("fns:");
-        for (muint_t i = 0; i < code->fcount; i++) {
-            mu_printf("%wx", fns[i]);
         }
     }
 
@@ -279,27 +271,27 @@ void mu_dis(struct code *code) {
         }
 
 
-// Execute bytecode
-mcnt_t mu_exec(struct code *code, mu_t scope, mu_t *frame) {
+
+mcnt_t mu_exec(mu_t c, mu_t scope, mu_t *frame) {
+    mu_assert(mu_iscode(c));
+
     // Allocate temporary variables
     const uint16_t *pc;
     mu_t *imms;
-    struct code **fns;
 
 #ifdef MU_DISASSEMBLE
-    mu_dis(code);
+    mu_dis(c);
 #endif
 
 reenter:
     {   // Setup the registers and scope
-        mu_t regs[code->regs];
+        mu_t regs[code_header(c)->regs];
         regs[0] = scope;
-        mu_frame_move(code->args, &regs[1], frame);
+        mu_frame_move(code_header(c)->args, &regs[1], frame);
 
         // Setup other state
-        imms = code_imms(code);
-        fns = code_fns(code);
-        pc = code_bcode(code);
+        imms = code_imms(c);
+        pc = code_bcode(c);
 
         // Enter main execution loop
         VM_DISPATCH(pc)
@@ -308,7 +300,7 @@ reenter:
             VM_ENTRY_END
 
             VM_ENTRY_DI(OP_FN, d, i)
-                regs[d] = fn_create(code_inc(fns[i]), mu_inc(regs[0]));
+                regs[d] = fn_create(code_inc(imms[i]), mu_inc(regs[0]));
             VM_ENTRY_END
 
             VM_ENTRY_DI(OP_TBL, d, i)
@@ -393,7 +385,7 @@ reenter:
             VM_ENTRY_DA(OP_RET, d, a)
                 mu_frame_move(a, frame, &regs[d]);
                 tbl_dec(scope);
-                code_dec(code);
+                code_dec(c);
                 return a;
             VM_ENTRY_END
 
@@ -401,17 +393,20 @@ reenter:
                 mu_t scratch = regs[d];
                 mu_frame_move(a, frame, &regs[d+1]);
                 tbl_dec(scope);
-                code_dec(code);
+                code_dec(c);
 
                 // Use a direct goto to garuntee a tail call when the target
                 // is another mu function. Otherwise, we just try our hardest
                 // to get a tail call emitted.
                 if (!mu_isfn(scratch)) {
                     mu_errorf("unable to call %r", scratch);
-                } else if (!fn_isbuiltin(scratch)) {
-                    code = fn_code(scratch);
-                    mu_frame_convert(a, code->args, frame);
-                    scope = tbl_extend(code->scope, fn_closure(scratch));
+                }
+
+                c = fn_code(scratch);
+                if (c) {
+                    mu_frame_convert(a, code_header(c)->args, frame);
+                    scope = tbl_extend(code_header(c)->scope,
+                                fn_closure(scratch));
                     fn_dec(scratch);
                     goto reenter;
                 } else {

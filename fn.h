@@ -5,6 +5,7 @@
 #ifndef MU_FN_H
 #define MU_FN_H
 #include "mu.h"
+#include "buf.h"
 
 
 // Function frame type
@@ -17,7 +18,7 @@ typedef mcnt_t msbfn_t(mu_t closure, mu_t *frame);
 
 
 // Creation functions
-mu_t fn_create(struct code *c, mu_t closure);
+mu_t fn_create(mu_t code, mu_t closure);
 
 // Conversion operations
 mu_t fn_frombfn(mcnt_t args, mbfn_t *bfn);
@@ -43,14 +44,12 @@ enum fn_flags {
 // Definition of code structure used to represent the
 // executable component of Mu functions.
 struct code {
-    mref_t ref;     // reference count
     mcnt_t args;    // argument count
     uint8_t flags;  // function flags
     muintq_t regs;  // number of registers
     muintq_t scope; // size of scope
 
     mlen_t icount;  // number of immediate values
-    mlen_t fcount;  // number of code objects
     mlen_t bcount;  // number of bytecode instructions
 
     // data that follows code header
@@ -60,29 +59,40 @@ struct code {
 };
 
 // Code reference counting
-mu_inline struct code *code_inc(struct code *c) {
-    ref_inc(c);
-    return c;
+mu_inline bool mu_iscode(mu_t m) {
+    extern void code_destroy(mu_t);
+    return mu_isbuf(m) && buf_dtor(m) == code_destroy;
 }
 
-mu_inline void code_dec(struct code *c) {
-    extern void code_destroy(struct code *);
-    if (ref_dec(c)) {
-        code_destroy(c);
-    }
+mu_inline mu_t code_inc(mu_t c) {
+    mu_assert(mu_iscode(c));
+    return buf_inc(c);
+}
+
+mu_inline void code_dec(mu_t c) {
+    mu_assert(mu_iscode(c));
+    buf_dec(c);
 }
 
 // Code access functions
-mu_inline mu_t *code_imms(struct code *c) {
-    return (mu_t *)(c + 1);
+mu_inline struct code *code_header(mu_t c) {
+    return ((struct code *)buf_data(c));
 }
 
-mu_inline struct code **code_fns(struct code *c) {
-    return (struct code **)((mu_t *)(c + 1) + c->icount);
+mu_inline mlen_t code_imms_len(mu_t c) {
+    return ((struct code *)buf_data(c))->icount;
 }
 
-mu_inline void *code_bcode(struct code *c) {
-    return (void *)((struct code **)((mu_t *)(c + 1) + c->icount) + c->fcount);
+mu_inline mlen_t code_bcode_len(mu_t c) {
+    return ((struct code *)buf_data(c))->bcount;
+}
+
+mu_inline mu_t *code_imms(mu_t c) {
+    return (mu_t *)((struct code *)buf_data(c) + 1);
+}
+
+mu_inline void *code_bcode(mu_t c) {
+    return (mu_t *)((struct code *)buf_data(c) + 1) + code_imms_len(c);
 }
 
 
@@ -99,9 +109,9 @@ struct fn {
     mu_t closure;   // function closure
 
     union {
-        mbfn_t *bfn;       // c function
-        msbfn_t *sbfn;     // scoped c function
-        struct code *code; // compiled mu code
+        mbfn_t *bfn;    // c function
+        msbfn_t *sbfn;  // scoped c function
+        mu_t code;      // compiled mu code
     } fn;
 };
 
@@ -130,12 +140,12 @@ mu_inline void fn_dec(mu_t f) {
 }
 
 // Function access
-mu_inline bool fn_isbuiltin(mu_t m) {
-    return ((struct fn *)((muint_t)m - MTFN))->flags & FN_BUILTIN;
-}
-
-mu_inline struct code *fn_code(mu_t m) {
-    return code_inc(((struct fn *)((muint_t)m - MTFN))->fn.code);
+mu_inline mu_t fn_code(mu_t m) {
+    if (!(((struct fn *)((muint_t)m - MTFN))->flags & FN_BUILTIN)) {
+        return code_inc(((struct fn *)((muint_t)m - MTFN))->fn.code);
+    } else {
+        return 0;
+    }
 }
 
 mu_inline mu_t fn_closure(mu_t m) {
