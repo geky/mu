@@ -8,21 +8,15 @@
 #include "buf.h"
 
 
-// Function frame type
-//typedef uint8_t mcnt_t;
-
 // Definition of C Function types
-struct code;
 typedef mcnt_t mbfn_t(mu_t *frame);
 typedef mcnt_t msbfn_t(mu_t closure, mu_t *frame);
 
 
-// Creation functions
-mu_t fn_create(mu_t code, mu_t closure);
-
 // Conversion operations
 mu_t fn_frombfn(mcnt_t args, mbfn_t *bfn);
 mu_t fn_fromsbfn(mcnt_t args, msbfn_t *sbfn, mu_t closure);
+mu_t fn_fromcode(mu_t code, mu_t closure);
 
 // Function calls
 mcnt_t fn_tcall(mu_t f, mcnt_t fc, mu_t *frame);
@@ -60,7 +54,7 @@ struct code {
 // Code reference counting
 mu_inline bool mu_iscode(mu_t m) {
     extern void code_destroy(mu_t);
-    return mu_isbuf(m) && buf_dtor(m) == code_destroy;
+    return mu_isbuf(m) && buf_getdtor(m) == code_destroy;
 }
 
 mu_inline mu_t code_inc(mu_t c) {
@@ -74,24 +68,24 @@ mu_inline void code_dec(mu_t c) {
 }
 
 // Code access functions
-mu_inline struct code *code_header(mu_t c) {
-    return ((struct code *)buf_data(c));
+mu_inline struct code *code_getheader(mu_t c) {
+    return ((struct code *)buf_getdata(c));
 }
 
-mu_inline mlen_t code_imms_len(mu_t c) {
-    return ((struct code *)buf_data(c))->icount;
+mu_inline mlen_t code_getimmslen(mu_t c) {
+    return ((struct code *)buf_getdata(c))->icount;
 }
 
-mu_inline mlen_t code_bcode_len(mu_t c) {
-    return ((struct code *)buf_data(c))->bcount;
+mu_inline mlen_t code_getbcodelen(mu_t c) {
+    return ((struct code *)buf_getdata(c))->bcount;
 }
 
-mu_inline mu_t *code_imms(mu_t c) {
-    return ((struct code *)buf_data(c))->data;
+mu_inline mu_t *code_getimms(mu_t c) {
+    return ((struct code *)buf_getdata(c))->data;
 }
 
-mu_inline void *code_bcode(mu_t c) {
-    return code_imms(c) + code_imms_len(c);
+mu_inline void *code_getbcode(mu_t c) {
+    return code_getimms(c) + code_getimmslen(c);
 }
 
 
@@ -114,15 +108,6 @@ struct fn {
     } fn;
 };
 
-// Function creating functions
-mu_inline mu_t mbfn(mcnt_t args, mbfn_t *bfn) {
-    return fn_frombfn(args, bfn);
-}
-
-mu_inline mu_t msbfn(mcnt_t args, msbfn_t *sbfn, mu_t closure) {
-    return fn_fromsbfn(args, sbfn, closure);
-}
-
 // Function reference counting
 mu_inline mu_t fn_inc(mu_t f) {
     mu_assert(mu_isfn(f));
@@ -139,7 +124,7 @@ mu_inline void fn_dec(mu_t f) {
 }
 
 // Function access
-mu_inline mu_t fn_code(mu_t m) {
+mu_inline mu_t fn_getcode(mu_t m) {
     if (!(((struct fn *)((muint_t)m - MTFN))->flags & FN_BUILTIN)) {
         return code_inc(((struct fn *)((muint_t)m - MTFN))->fn.code);
     } else {
@@ -147,13 +132,13 @@ mu_inline mu_t fn_code(mu_t m) {
     }
 }
 
-mu_inline mu_t fn_closure(mu_t m) {
+mu_inline mu_t fn_getclosure(mu_t m) {
     return mu_inc(((struct fn *)((muint_t)m - MTFN))->closure);
 }
 
 
 // Function constant macro
-#define MBFN(name, args, bfn)                                               \
+#define MU_GEN_BFN(name, args, bfn)                                         \
 mu_pure mu_t name(void) {                                                   \
     static const struct fn inst = {0, args, FN_BUILTIN, 0, {bfn}};          \
     return (mu_t)((muint_t)&inst + MTFN);                                   \

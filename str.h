@@ -9,11 +9,10 @@
 
 
 // String creation functions
-mu_t str_create(const mbyte_t *s, muint_t n);
 mu_t str_intern(mu_t buf, muint_t n);
 
 // Conversion operations
-mu_t str_fromnum(mu_t n);
+mu_t str_fromdata(const mbyte_t *s, muint_t n);
 mu_t str_fromiter(mu_t iter);
 
 // Formatting
@@ -51,10 +50,6 @@ struct str {
 };
 
 
-// String creation functions
-#define mstr(...) str_format(__VA_ARGS__)
-
-
 // Reference counting
 mu_inline mu_t str_inc(mu_t m) {
     mu_assert(mu_isstr(m));
@@ -72,17 +67,17 @@ mu_inline void str_dec(mu_t m) {
 
 // String access functions
 // we don't define a string struct 
-mu_inline mlen_t str_len(mu_t m) {
+mu_inline mlen_t str_getlen(mu_t m) {
     return ((struct str *)((muint_t)m - MTSTR))->len;
 }
 
-mu_inline const mbyte_t *str_data(mu_t m) {
+mu_inline const mbyte_t *str_getdata(mu_t m) {
     return ((struct str *)((muint_t)m - MTSTR))->data;
 }
 
 
 // String constant macro
-#define MSTR(name, s)                                                       \
+#define MU_GEN_STR(name, s)                                                 \
 mu_pure mu_t name(void) {                                                   \
     static mu_t ref = 0;                                                    \
     static const struct {                                                   \

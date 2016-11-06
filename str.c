@@ -9,8 +9,8 @@
 
 #define MU_EMPTY_STR mu_empty_str()
 #define MU_SPACE_STR mu_space_str()
-MSTR(mu_empty_str, "")
-MSTR(mu_space_str, " ")
+MU_GEN_STR(mu_empty_str, "")
+MU_GEN_STR(mu_space_str, " ")
 
 
 // String interning
@@ -36,9 +36,9 @@ static mint_t str_table_find(const mbyte_t *s, mlen_t len) {
     // strings are sorted first by length to avoid comparisons
     while (min <= max) {
         mint_t mid = (max + min) / 2;
-        mint_t cmp = len > str_len(str_table[mid]) ? +1 :
-                     len < str_len(str_table[mid]) ? -1 :
-                     memcmp(s, str_data(str_table[mid]), len);
+        mint_t cmp = len > str_getlen(str_table[mid]) ? +1 :
+                     len < str_getlen(str_table[mid]) ? -1 :
+                     memcmp(s, str_getdata(str_table[mid]), len);
 
         if (cmp == 0) {
             return mid;
@@ -96,17 +96,17 @@ static void str_table_remove(mint_t i) {
 mu_t str_intern(mu_t b, muint_t n) {
     mu_assert(mu_isbuf(b));
 
-    mint_t i = str_table_find(buf_data(b), n);
+    mint_t i = str_table_find(buf_getdata(b), n);
     if (i >= 0) {
         buf_dec(b);
         return str_inc(str_table[i]);
     }
 
-    if (buf_dtor(b)) {
+    if (buf_getdtor(b)) {
         buf_setdtor(&b, 0);
     }
 
-    if (buf_len(b) != n) {
+    if (buf_getlen(b) != n) {
         buf_resize(&b, n);
     }
 
@@ -115,7 +115,7 @@ mu_t str_intern(mu_t b, muint_t n) {
     return str_inc(s);
 }
 
-mu_t str_create(const mbyte_t *s, muint_t n) {
+mu_t str_fromdata(const mbyte_t *s, muint_t n) {
     if (n > (mlen_t)-1) {
         mu_errorf("exceeded max length in string");
     }
@@ -127,7 +127,7 @@ mu_t str_create(const mbyte_t *s, muint_t n) {
 
     // create new string and insert
     mu_t b = buf_create(n);
-    memcpy(buf_data(b), s, n);
+    memcpy(buf_getdata(b), s, n);
 
     mu_t ns = (mu_t)((muint_t)b - MTBUF + MTSTR);
     str_table_insert(~i, ns);
@@ -135,11 +135,11 @@ mu_t str_create(const mbyte_t *s, muint_t n) {
 }
 
 void str_destroy(mu_t s) {
-    mint_t i = str_table_find(str_data(s), str_len(s));
+    mint_t i = str_table_find(str_getdata(s), str_getlen(s));
     mu_assert(i >= 0);
     str_table_remove(i);
 
-    ref_dealloc(s, mu_offsetof(struct str, data) + str_len(s));
+    ref_dealloc(s, mu_offsetof(struct str, data) + str_getlen(s));
 }
 
 
@@ -152,11 +152,6 @@ mu_t str_init(const struct str *s) {
     }
 
     return m;
-}
-
-mu_t str_fromnum(mu_t n) {
-    mu_assert(n == muint((mbyte_t)num_uint(n)));
-    return str_create((mbyte_t[]){num_uint(n)}, 1);
 }
 
 mu_t str_fromiter(mu_t iter) {
@@ -187,9 +182,9 @@ mint_t str_cmp(mu_t a, mu_t b) {
         return 0;
     }
 
-    muint_t alen = str_len(a);
-    muint_t blen = str_len(b);
-    mint_t cmp = memcmp(str_data(a), str_data(b), 
+    muint_t alen = str_getlen(a);
+    muint_t blen = str_getlen(b);
+    mint_t cmp = memcmp(str_getdata(a), str_getdata(b), 
                         alen < blen ? alen : blen);
 
     return cmp != 0 ? cmp : alen - blen;
@@ -201,40 +196,41 @@ bool str_next(mu_t s, muint_t *ip, mu_t *cp) {
     mu_assert(mu_isstr(s));
     muint_t i = *ip;
 
-    if (i >= str_len(s)) {
+    if (i >= str_getlen(s)) {
         return false;
     }
 
-    if (cp) *cp = str_create(&str_data(s)[i], 1);
+    if (cp) *cp = str_fromdata(&str_getdata(s)[i], 1);
     *ip = i + 1;
     return true;
 }
 
 static mcnt_t str_step(mu_t scope, mu_t *frame) {
-    mu_t s = tbl_lookup(scope, muint(0));
-    muint_t i = num_uint(tbl_lookup(scope, muint(1)));
+    mu_t s = tbl_lookup(scope, num_fromuint(0));
+    muint_t i = num_getuint(tbl_lookup(scope, num_fromuint(1)));
 
     bool next = str_next(s, &i, &frame[0]);
     str_dec(s);
-    tbl_insert(scope, muint(1), muint(i));
+    tbl_insert(scope, num_fromuint(1), num_fromuint(i));
     return next ? 1 : 0;
 }
 
 mu_t str_iter(mu_t s) {
     mu_assert(mu_isstr(s));
-    return msbfn(0x00, str_step, mlist({s, muint(0)}));
+    return fn_fromsbfn(0x00, str_step,
+            tbl_fromlist((mu_t[]){s, num_fromuint(0)}, 2));
 }
 
 
 // String operations
 mu_t str_concat(mu_t a, mu_t b) {
     mu_assert(mu_isstr(a) && mu_isstr(b));
-    muint_t an = str_len(a);
-    muint_t bn = str_len(b);
+    muint_t an = str_getlen(a);
+    muint_t bn = str_getlen(b);
     mu_t d = buf_create(an + bn);
 
-    memcpy((mbyte_t *)buf_data(d), str_data(a), an);
-    memcpy((mbyte_t *)buf_data(d)+an, str_data(b), bn);
+    memcpy((mbyte_t *)buf_getdata(d), str_getdata(a), an);
+    memcpy((mbyte_t *)buf_getdata(d)+an, str_getdata(b), bn);
 
     str_dec(a);
     str_dec(b);
@@ -243,22 +239,22 @@ mu_t str_concat(mu_t a, mu_t b) {
 
 mu_t str_subset(mu_t s, mint_t lower, mint_t upper) {
     mu_assert(mu_isstr(s));
-    lower = (lower >= 0) ? lower : lower + str_len(s);
-    upper = (upper >= 0) ? upper : upper + str_len(s);
+    lower = (lower >= 0) ? lower : lower + str_getlen(s);
+    upper = (upper >= 0) ? upper : upper + str_getlen(s);
 
     if (lower < 0) {
         lower = 0;
     }
 
-    if (upper > str_len(s)) {
-        upper = str_len(s);
+    if (upper > str_getlen(s)) {
+        upper = str_getlen(s);
     }
 
     if (lower >= upper) {
         return MU_EMPTY_STR;
     }
 
-    mu_t d = str_create(str_data(s) + lower, upper - lower);
+    mu_t d = str_fromdata(str_getdata(s) + lower, upper - lower);
     str_dec(s);
     return d;
 }
@@ -354,9 +350,9 @@ mu_t str_parse(const mbyte_t **ppos, const mbyte_t *end) {
 // Returns a string representation of a string
 mu_t str_repr(mu_t m) {
     mu_assert(mu_isstr(m));
-    const mbyte_t *pos = str_data(m);
-    const mbyte_t *end = pos + str_len(m);
-    mu_t b = buf_create(2 + str_len(m));
+    const mbyte_t *pos = str_getdata(m);
+    const mbyte_t *end = pos + str_getlen(m);
+    mu_t b = buf_create(2 + str_getlen(m));
     muint_t n = 0;
 
     buf_push(&b, &n, '\'');
@@ -383,12 +379,13 @@ mu_t str_repr(mu_t m) {
     return str_intern(b, n);
 }
 
-static mu_t str_base(mu_t m, char b, muint_t size, muint_t mask, muint_t shift) {
-    const mbyte_t *s = str_data(m);
-    mlen_t len = str_len(m);
+static mu_t str_base(mu_t m, char b,
+        muint_t size, muint_t mask, muint_t shift) {
+    const mbyte_t *s = str_getdata(m);
+    mlen_t len = str_getlen(m);
 
     mu_t buf = buf_create(2 + (2+size)*len);
-    mbyte_t *d = buf_data(buf);
+    mbyte_t *d = buf_getdata(buf);
     d[0] = '\'';
 
     for (muint_t i = 0; i < len; i++) {
@@ -427,14 +424,14 @@ mu_t str_hex(mu_t s) {
 static mcnt_t mu_bfn_str(mu_t *frame) {
     mu_t m = frame[0];
 
-    switch (mu_type(m)) {
+    switch (mu_gettype(m)) {
         case MTNIL:
             frame[0] = MU_EMPTY_STR;
             return 1;
 
         case MTNUM:
-            if (m == muint((mbyte_t)num_uint(m))) {
-                frame[0] = str_fromnum(m);
+            if (m == num_fromuint((mbyte_t)num_getuint(m))) {
+                frame[0] = str_fromdata((mbyte_t[]){num_getuint(m)}, 1);
                 return 1;
             }
             break;
@@ -457,8 +454,8 @@ static mcnt_t mu_bfn_str(mu_t *frame) {
     mu_error_cast(MU_KEY_STR, m);
 }
 
-MSTR(mu_gen_key_str, "str")
-MBFN(mu_gen_str, 0x1, mu_bfn_str)
+MU_GEN_STR(mu_gen_key_str, "str")
+MU_GEN_BFN(mu_gen_str, 0x1, mu_bfn_str)
 
 static mcnt_t mu_bfn_find(mu_t *frame) {
     mu_t s = frame[0];
@@ -467,17 +464,17 @@ static mcnt_t mu_bfn_find(mu_t *frame) {
         mu_error_arg(MU_KEY_FIND, 0x2, frame);
     }
 
-    const mbyte_t *sb = str_data(s);
-    mlen_t slen = str_len(s);
-    const mbyte_t *mb = str_data(m);
-    mlen_t mlen = str_len(m);
+    const mbyte_t *sb = str_getdata(s);
+    mlen_t slen = str_getlen(s);
+    const mbyte_t *mb = str_getdata(m);
+    mlen_t mlen = str_getlen(m);
 
     for (muint_t i = 0; i+mlen <= slen; i++) {
         if (memcmp(&sb[i], mb, mlen) == 0) {
             str_dec(m);
             str_dec(s);
-            frame[0] = muint(i);
-            frame[1] = muint(i + mlen);
+            frame[0] = num_fromuint(i);
+            frame[1] = num_fromuint(i + mlen);
             return 2;
         }
     }
@@ -487,8 +484,8 @@ static mcnt_t mu_bfn_find(mu_t *frame) {
     return 0;
 }
 
-MSTR(mu_gen_key_find, "find")
-MBFN(mu_gen_find, 0x2, mu_bfn_find)
+MU_GEN_STR(mu_gen_key_find, "find")
+MU_GEN_BFN(mu_gen_find, 0x2, mu_bfn_find)
 
 static mcnt_t mu_bfn_replace(mu_t *frame) {
     mu_t s = frame[0];
@@ -498,10 +495,10 @@ static mcnt_t mu_bfn_replace(mu_t *frame) {
         mu_error_arg(MU_KEY_REPLACE, 0x3, frame);
     }
 
-    const mbyte_t *sb = str_data(s);
-    mlen_t slen = str_len(s);
-    const mbyte_t *mb = str_data(m);
-    mlen_t mlen = str_len(m);
+    const mbyte_t *sb = str_getdata(s);
+    mlen_t slen = str_getlen(s);
+    const mbyte_t *mb = str_getdata(m);
+    mlen_t mlen = str_getlen(m);
 
     mu_t d = buf_create(slen);
     muint_t n = 0;
@@ -530,24 +527,24 @@ static mcnt_t mu_bfn_replace(mu_t *frame) {
     return 1;
 }
 
-MSTR(mu_gen_key_replace, "replace")
-MBFN(mu_gen_replace, 0x3, mu_bfn_replace)
+MU_GEN_STR(mu_gen_key_replace, "replace")
+MU_GEN_BFN(mu_gen_replace, 0x3, mu_bfn_replace)
 
 
 static mcnt_t str_split_step(mu_t scope, mu_t *frame) {
-    mu_t a = tbl_lookup(scope, muint(0));
-    const mbyte_t *ab = str_data(a);
-    mlen_t alen = str_len(a);
-    muint_t i = num_uint(tbl_lookup(scope, muint(2)));
+    mu_t a = tbl_lookup(scope, num_fromuint(0));
+    const mbyte_t *ab = str_getdata(a);
+    mlen_t alen = str_getlen(a);
+    muint_t i = num_getuint(tbl_lookup(scope, num_fromuint(2)));
 
     if (i > alen) {
         str_dec(a);
         return 0;
     }
 
-    mu_t s = tbl_lookup(scope, muint(1));
-    const mbyte_t *sb = str_data(s);
-    mlen_t slen = str_len(s);
+    mu_t s = tbl_lookup(scope, num_fromuint(1));
+    const mbyte_t *sb = str_getdata(s);
+    mlen_t slen = str_getlen(s);
 
     muint_t j = i;
     for (; j < alen; j++) {
@@ -556,8 +553,8 @@ static mcnt_t str_split_step(mu_t scope, mu_t *frame) {
         }
     }
 
-    frame[0] = str_create(ab+i, j-i);
-    tbl_insert(scope, muint(2), muint(j+slen));
+    frame[0] = str_fromdata(ab+i, j-i);
+    tbl_insert(scope, num_fromuint(2), num_fromuint(j+slen));
     str_dec(a);
     str_dec(s);
     return 1;
@@ -570,17 +567,18 @@ static mcnt_t mu_bfn_split(mu_t *frame) {
         mu_error_arg(MU_KEY_SPLIT, 0x2, frame);
     }
 
-    if (str_len(delim) == 0) {
+    if (str_getlen(delim) == 0) {
         frame[0] = str_iter(s);
         return 1;
     }
 
-    frame[0] = msbfn(0x0, str_split_step, mlist({s, delim, muint(0)}));
+    frame[0] = fn_fromsbfn(0x0, str_split_step,
+            tbl_fromlist((mu_t[]){s, delim, num_fromuint(0)}, 3));
     return 1;
 }
 
-MSTR(mu_gen_key_split, "split")
-MBFN(mu_gen_split, 0x2, mu_bfn_split)
+MU_GEN_STR(mu_gen_key_split, "split")
+MU_GEN_BFN(mu_gen_split, 0x2, mu_bfn_split)
 
 static mcnt_t mu_bfn_join(mu_t *frame) {
     mu_t iter  = frame[0];
@@ -615,8 +613,8 @@ static mcnt_t mu_bfn_join(mu_t *frame) {
     return 1;
 }
 
-MSTR(mu_gen_key_join, "join")
-MBFN(mu_gen_join, 0x2, mu_bfn_join)
+MU_GEN_STR(mu_gen_key_join, "join")
+MU_GEN_BFN(mu_gen_join, 0x2, mu_bfn_join)
 
 static mcnt_t mu_bfn_pad(mu_t *frame) {
     mu_t s    = frame[0];
@@ -624,29 +622,29 @@ static mcnt_t mu_bfn_pad(mu_t *frame) {
     mu_t pad  = frame[2] ? frame[2] : MU_SPACE_STR;
     if (!mu_isstr(s) ||
         !mu_isnum(mlen) ||
-        (!mu_isstr(pad) || str_len(pad) == 0)) {
+        (!mu_isstr(pad) || str_getlen(pad) == 0)) {
         mu_error_arg(MU_KEY_PAD, 0x3, frame);
     }
 
     bool left;
     muint_t len;
 
-    if (num_cmp(mlen, muint(0)) < 0) {
+    if (num_cmp(mlen, num_fromuint(0)) < 0) {
         left = false;
-        len = num_uint(num_neg(mlen));
+        len = num_getuint(num_neg(mlen));
     } else {
         left = true;
-        len = num_uint(mlen);
+        len = num_getuint(mlen);
     }
 
-    if (str_len(s) >= len) {
+    if (str_getlen(s) >= len) {
         str_dec(pad);
         return 1;
     }
 
     mu_t d = buf_create(len);
     muint_t n = 0;
-    muint_t count = (len - str_len(s)) / str_len(pad);
+    muint_t count = (len - str_getlen(s)) / str_getlen(pad);
 
     if (left) {
         buf_concat(&d, &n, s);
@@ -665,8 +663,8 @@ static mcnt_t mu_bfn_pad(mu_t *frame) {
     return 1;
 }
 
-MSTR(mu_gen_key_pad, "pad")
-MBFN(mu_gen_pad, 0x3, mu_bfn_pad)
+MU_GEN_STR(mu_gen_key_pad, "pad")
+MU_GEN_BFN(mu_gen_pad, 0x3, mu_bfn_pad)
 
 static mcnt_t mu_bfn_strip(mu_t *frame) {
     if (mu_isstr(frame[1])) {
@@ -680,33 +678,33 @@ static mcnt_t mu_bfn_strip(mu_t *frame) {
     mu_t pad = frame[2] ? frame[2] : MU_SPACE_STR;
     if (!mu_isstr(s) ||
         (dir && !mu_isnum(dir)) ||
-        (!mu_isstr(pad) || str_len(pad) == 0)) {
+        (!mu_isstr(pad) || str_getlen(pad) == 0)) {
         mu_error_arg(MU_KEY_STR, 0x3, frame);
     }
 
-    const mbyte_t *pos = str_data(s);
-    const mbyte_t *end = pos + str_len(s);
+    const mbyte_t *pos = str_getdata(s);
+    const mbyte_t *end = pos + str_getlen(s);
 
-    const mbyte_t *pb = str_data(pad);
-    mlen_t plen = str_len(pad);
+    const mbyte_t *pb = str_getdata(pad);
+    mlen_t plen = str_getlen(pad);
 
-    if (!dir || num_cmp(dir, muint(0)) <= 0) {
+    if (!dir || num_cmp(dir, num_fromuint(0)) <= 0) {
         while (end-pos >= plen && memcmp(pos, pb, plen) == 0) {
             pos += plen;
         }
     }
             
-    if (!dir || num_cmp(dir, muint(0)) >= 0) {
+    if (!dir || num_cmp(dir, num_fromuint(0)) >= 0) {
         while (end-pos >= plen && memcmp(end-plen, pb, plen) == 0) {
             end -= plen;
         }
     }
 
-    frame[0] = str_create(pos, end-pos);
+    frame[0] = str_fromdata(pos, end-pos);
     str_dec(s);
     str_dec(pad);
     return 1;
 }
 
-MSTR(mu_gen_key_strip, "strip")
-MBFN(mu_gen_strip, 0x3, mu_bfn_strip)
+MU_GEN_STR(mu_gen_key_strip, "strip")
+MU_GEN_BFN(mu_gen_strip, 0x3, mu_bfn_strip)

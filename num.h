@@ -9,9 +9,6 @@
 
 // Conversion operations
 mu_t num_fromfloat(mfloat_t);
-mu_t num_fromuint(muint_t);
-mu_t num_fromint(mint_t);
-mu_t num_fromstr(mu_t);
 
 // Comparison operation
 mint_t num_cmp(mu_t, mu_t);
@@ -57,36 +54,34 @@ mu_t num_hex(mu_t);
 
 
 // Number creating functions
-mu_inline mu_t mfloat(mfloat_t n) { return num_fromfloat(n); }
-
-mu_inline mu_t muint(muint_t n) {
+mu_inline mu_t num_fromuint(muint_t n) {
     return (mu_t)(MTNUM + (~7 &
         ((union { mfloat_t n; muint_t u; }){(mfloat_t)n}).u));
 }
 
-mu_inline mu_t mint(mint_t n) {
+mu_inline mu_t num_fromint(mint_t n) {
     return (mu_t)(MTNUM + (~7 &
         ((union { mfloat_t n; muint_t u; }){(mfloat_t)n}).u));
 }
 
 // Number accessing functions
-mu_inline mfloat_t num_float(mu_t m) {
+mu_inline mfloat_t num_getfloat(mu_t m) {
     return ((union { muint_t u; mfloat_t n; }){(muint_t)m - MTNUM}).n;
 }
 
-mu_inline muint_t num_uint(mu_t m) { return (muint_t)num_float(m); }
-mu_inline mint_t  num_int(mu_t m)  { return (mint_t)num_float(m); }
+mu_inline muint_t num_getuint(mu_t m) { return (muint_t)num_getfloat(m); }
+mu_inline mint_t  num_getint(mu_t m)  { return (mint_t)num_getfloat(m); }
 
 
 // Number constant macro
-#define MFLOAT(name, num)                                                   \
+#define MU_GEN_FLOAT(name, num)                                             \
 mu_pure mu_t name(void) {                                                   \
     return (mu_t)(MTNUM + (~7 &                                             \
         ((union { mfloat_t n; muint_t u; }){(mfloat_t)num}).u));            \
 }
 
-#define MUINT(name, num) MFLOAT(name, (muint_t)num)
-#define MINT(name, num)  MFLOAT(name, (mint_t)num)
+#define MU_GEN_UINT(name, num) MU_GEN_FLOAT(name, (muint_t)num)
+#define MU_GEN_INT(name, num)  MU_GEN_FLOAT(name, (mint_t)num)
 
 
 #endif

@@ -14,15 +14,15 @@ mu_inline struct fn *fn(mu_t f) {
 
 
 // Creation functions
-mu_t fn_create(mu_t c, mu_t closure) {
-    if (code_header(c)->flags & FN_WEAK) {
-        mu_assert(mu_ref(closure) > 1);
+mu_t fn_fromcode(mu_t c, mu_t closure) {
+    if (code_getheader(c)->flags & FN_WEAK) {
+        mu_assert(mu_getref(closure) > 1);
         mu_dec(closure);
     }
 
     struct fn *f = ref_alloc(sizeof(struct fn));
-    f->args = code_header(c)->args;
-    f->flags = code_header(c)->flags;
+    f->args = code_getheader(c)->args;
+    f->flags = code_getheader(c)->flags;
     f->closure = closure;
     f->fn.code = c;
     return (mu_t)((muint_t)f + MTFN);
@@ -61,8 +61,8 @@ void fn_destroy(mu_t f) {
 }
 
 void code_destroy(mu_t c) {
-    for (muint_t i = 0; i < code_imms_len(c); i++) {
-        mu_dec(code_imms(c)[i]);
+    for (muint_t i = 0; i < code_getimmslen(c); i++) {
+        mu_dec(code_getimms(c)[i]);
     }
 }
 
@@ -86,7 +86,7 @@ mcnt_t fn_tcall(mu_t f, mcnt_t fc, mu_t *frame) {
 
         case FN_SCOPED: {
             mu_t c = code_inc(fn(f)->fn.code);
-            mu_t scope = tbl_extend(code_header(c)->scope, fn_closure(f));
+            mu_t scope = tbl_extend(code_getheader(c)->scope, fn_getclosure(f));
             fn_dec(f);
             return mu_exec(c, scope, frame);
         }
@@ -141,7 +141,7 @@ bool fn_next(mu_t f, mcnt_t fc, mu_t *frame) {
             return false;
         }
     } else {
-        mu_t m = tbl_lookup(frame[0], muint(0));
+        mu_t m = tbl_lookup(frame[0], num_fromuint(0));
         if (m) {
             mu_dec(m);
             return true;
@@ -157,7 +157,7 @@ bool fn_next(mu_t f, mcnt_t fc, mu_t *frame) {
 static mcnt_t mu_bfn_fn(mu_t *frame) {
     mu_t m = frame[0];
 
-    switch (mu_type(m)) {
+    switch (mu_gettype(m)) {
         case MTNIL:
             mu_dec(m);
             frame[0] = MU_ID;
@@ -174,21 +174,21 @@ static mcnt_t mu_bfn_fn(mu_t *frame) {
     mu_error_cast(MU_KEY_FN2, m);
 }
 
-MSTR(mu_gen_key_fn2, "fn_")
-MBFN(mu_gen_fn, 0x1, mu_bfn_fn)
+MU_GEN_STR(mu_gen_key_fn2, "fn_")
+MU_GEN_BFN(mu_gen_fn, 0x1, mu_bfn_fn)
 
 // Default function
 static mcnt_t mu_bfn_id(mu_t *frame) {
     return 0xf;
 }
 
-MSTR(mu_gen_key_id, "id")
-MBFN(mu_gen_id, 0xf, mu_bfn_id)
+MU_GEN_STR(mu_gen_key_id, "id")
+MU_GEN_BFN(mu_gen_id, 0xf, mu_bfn_id)
 
 // Binds arguments to function
 static mcnt_t fn_bound(mu_t scope, mu_t *frame) {
-    mu_t f = tbl_lookup(scope, muint(0));
-    mu_t args = tbl_lookup(scope, muint(1));
+    mu_t f = tbl_lookup(scope, num_fromuint(0));
+    mu_t args = tbl_lookup(scope, num_fromuint(1));
 
     frame[0] = tbl_concat(args, frame[0], 0);
     return fn_tcall(f, 0xf, frame);
@@ -200,17 +200,18 @@ static mcnt_t mu_bfn_bind(mu_t *frame) {
         mu_error_arg(MU_KEY_BIND, 0x2, (mu_t[]){f, frame[0]});
     }
 
-    frame[0] = msbfn(0xf, fn_bound, mlist({f, frame[0]}));
+    frame[0] = fn_fromsbfn(0xf, fn_bound,
+            tbl_fromlist((mu_t[]){f, frame[0]}, 2));
     return 1;
 }
 
-MSTR(mu_gen_key_bind, "bind")
-MBFN(mu_gen_bind, 0xf, mu_bfn_bind)
+MU_GEN_STR(mu_gen_key_bind, "bind")
+MU_GEN_BFN(mu_gen_bind, 0xf, mu_bfn_bind)
 
 static mcnt_t fn_composed(mu_t fs, mu_t *frame) {
     mcnt_t c = 0xf;
-    for (muint_t i = tbl_len(fs)-1; i+1 > 0; i--) {
-        mu_t f = tbl_lookup(fs, muint(i));
+    for (muint_t i = tbl_getlen(fs)-1; i+1 > 0; i--) {
+        mu_t f = tbl_lookup(fs, num_fromuint(i));
         c = fn_tcall(f, c, frame);
     }
 
@@ -225,10 +226,10 @@ static mcnt_t mu_bfn_comp(mu_t *frame) {
         }
     }
 
-    frame[0] = msbfn(0xf, fn_composed, frame[0]);
+    frame[0] = fn_fromsbfn(0xf, fn_composed, frame[0]);
     return 1;
 }
 
-MSTR(mu_gen_key_comp, "comp")
-MBFN(mu_gen_comp, 0xf, mu_bfn_comp)
+MU_GEN_STR(mu_gen_key_comp, "comp")
+MU_GEN_BFN(mu_gen_comp, 0xf, mu_bfn_comp)
 

@@ -30,13 +30,13 @@ mu_t buf_create(muint_t n) {
 }
 
 void buf_destroy(mu_t b) {
-    ref_dealloc(b, mu_offsetof(struct buf, data) + buf_len(b));
+    ref_dealloc(b, mu_offsetof(struct buf, data) + buf_getlen(b));
 }
 
 void cbuf_destroy(mu_t b) {
-    buf_dtor(b)(b);
+    buf_getdtor(b)(b);
     ref_dealloc(b, mu_offsetof(struct buf, data) +
-            buf_len(b) + sizeof(void (*)(mu_t)));
+            buf_getlen(b) + sizeof(void (*)(mu_t)));
 }
 
 void buf_resize(mu_t *b, muint_t n) {
@@ -44,24 +44,25 @@ void buf_resize(mu_t *b, muint_t n) {
         mu_errorf("exceeded max length in buffer");
     }
 
-    mu_t nb = cbuf_create(n, buf_dtor(*b));
-    memcpy(buf_data(nb), buf_data(*b), (n < buf_len(*b)) ? n : buf_len(*b));
+    mu_t nb = cbuf_create(n, buf_getdtor(*b));
+    memcpy(buf_getdata(nb), buf_getdata(*b),
+            (n < buf_getlen(*b)) ? n : buf_getlen(*b));
 
     buf_dec(*b);
     *b = nb;
 }
 
 void buf_expand(mu_t *b, muint_t n) {
-    if (buf_len(*b) >= n) {
+    if (buf_getlen(*b) >= n) {
         return;
     }
 
     muint_t overhead = mu_offsetof(struct buf, data);
-    if (buf_dtor(*b)) {
+    if (buf_getdtor(*b)) {
         overhead += sizeof(void (*)(mu_t));
     }
 
-    muint_t size = overhead + buf_len(*b);
+    muint_t size = overhead + buf_getlen(*b);
     if (size < MU_MINALLOC) {
         size = MU_MINALLOC;
     }
@@ -74,8 +75,8 @@ void buf_expand(mu_t *b, muint_t n) {
 }
 
 void buf_setdtor(mu_t *b, void (*dtor)(mu_t)) {
-    mu_t nb = cbuf_create(buf_len(*b), dtor);
-    memcpy(buf_data(nb), buf_data(*b), buf_len(nb));
+    mu_t nb = cbuf_create(buf_getlen(*b), dtor);
+    memcpy(buf_getdata(nb), buf_getdata(*b), buf_getlen(nb));
 
     buf_dec(*b);
     *b = nb;
@@ -85,7 +86,7 @@ void buf_setdtor(mu_t *b, void (*dtor)(mu_t)) {
 // Concatenation functions with amortized doubling
 void buf_append(mu_t *b, muint_t *i, const void *c, muint_t n) {
     buf_expand(b, *i + n);
-    memcpy((mbyte_t *)buf_data(*b) + *i, c, n);
+    memcpy((mbyte_t *)buf_getdata(*b) + *i, c, n);
     *i += n;
 }
 
@@ -97,7 +98,7 @@ void buf_concat(mu_t *b, muint_t *i, mu_t c) {
     mu_assert(mu_isstr(c) || mu_isbuf(c));
     mu_t cbuf = (mu_t)(~(MTSTR^MTBUF) & (muint_t)c);
 
-    buf_append(b, i, buf_data(cbuf), buf_len(cbuf));
+    buf_append(b, i, buf_getdata(cbuf), buf_getlen(cbuf));
     mu_dec(c);
 }
 
@@ -119,7 +120,7 @@ static void buf_append_unsigned(mu_t *b, muint_t *i, muint_t u) {
     buf_expand(b, *i + size);
     *i += size;
 
-    char *c = (char *)buf_data(*b) + *i - 1;
+    char *c = (char *)buf_getdata(*b) + *i - 1;
     while (u > 0) {
         *c = mu_toascii(u % 10);
         u /= 10;
@@ -179,7 +180,8 @@ void buf_vformat(mu_t *b, muint_t *i, const char *f, va_list args) {
                 mu_t m = va_arg(args, mu_t);
                 int n = buf_va_size(args, size);
                 if (!mu_isstr(m) && !mu_isbuf(m)) {
-                    m = fn_call(MU_REPR, 0x21, m, (n < 0) ? 0 : muint(n));
+                    m = fn_call(MU_REPR, 0x21,
+                            m, (n < 0) ? 0 : num_fromuint(n));
                 }
 
                 buf_concat(b, i, m);
@@ -188,7 +190,8 @@ void buf_vformat(mu_t *b, muint_t *i, const char *f, va_list args) {
             case 'r': {
                 mu_t m = va_arg(args, mu_t);
                 int n = buf_va_size(args, size);
-                m = fn_call(MU_REPR, 0x21, m, (n < 0) ? 0 : muint(n));
+                m = fn_call(MU_REPR, 0x21,
+                        m, (n < 0) ? 0 : num_fromuint(n));
                 buf_concat(b, i, m);
             } break;
 

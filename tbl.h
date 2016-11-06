@@ -77,15 +77,6 @@ struct tbl {
 };
 
 
-// Table creating functions
-#define mtbl(...)                                           \
-    tbl_frompairs(((mu_t[][2])__VA_ARGS__),                 \
-        sizeof((mu_t[][2])__VA_ARGS__) / sizeof(mu_t[2]))
-
-#define mlist(...)                                          \
-    tbl_fromlist(((mu_t[])__VA_ARGS__),                     \
-        sizeof((mu_t[])__VA_ARGS__) / sizeof(mu_t))
-
 // Table reference counting
 mu_inline mu_t tbl_inc(mu_t m) {
     mu_assert(mu_istbl(m));
@@ -102,19 +93,17 @@ mu_inline void tbl_dec(mu_t m) {
 }
 
 // Table access functions
-mu_inline mlen_t tbl_len(mu_t m) {
-    mu_assert(mu_istbl(m));
+mu_inline mlen_t tbl_getlen(mu_t m) {
     return ((struct tbl *)((muint_t)m - MTTBL))->len;
 }
 
-mu_inline mu_t tbl_tail(mu_t m) {
-    mu_assert(mu_istbl(m));
+mu_inline mu_t tbl_gettail(mu_t m) {
     return ((struct tbl *)((muint_t)m - MTTBL))->tail;
 }
 
 
 // Table constant macros
-#define MLIST(name, ...)                                                    \
+#define MU_GEN_LIST(name, ...)                                              \
 mu_pure mu_t name(void) {                                                   \
     static mu_t ref = 0;                                                    \
     static mu_t (*const gen[])(void) = __VA_ARGS__;                         \
@@ -128,7 +117,7 @@ mu_pure mu_t name(void) {                                                   \
     return ref;                                                             \
 }
 
-#define MTBL(name, ...)                                                     \
+#define MU_GEN_TBL(name, ...)                                               \
 mu_pure mu_t name(void) {                                                   \
     static mu_t ref = 0;                                                    \
     static mu_t (*const gen[][2])(void) = __VA_ARGS__;                      \

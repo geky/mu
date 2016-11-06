@@ -114,17 +114,19 @@ static const char *const op_names[16] = {
 };
 
 void mu_dis(mu_t c) {
-    mu_t *imms = code_imms(c);
-    const uint16_t *pc = code_bcode(c);
-    const uint16_t *end = pc + code_bcode_len(c)/2;
+    mu_t *imms = code_getimms(c);
+    const uint16_t *pc = code_getbcode(c);
+    const uint16_t *end = pc + code_getbcodelen(c)/2;
 
     mu_printf("-- dis 0x%wx --", c);
     mu_printf("regs: %qu, scope: %qu, args: %bx",
-           code_header(c)->regs, code_header(c)->scope, code_header(c)->args);
+            code_getheader(c)->regs,
+            code_getheader(c)->scope,
+            code_getheader(c)->args);
 
-    if (code_imms_len(c) > 0) {
+    if (code_getimmslen(c) > 0) {
         mu_printf("imms:");
-        for (muint_t i = 0; i < code_imms_len(c); i++) {
+        for (muint_t i = 0; i < code_getimmslen(c); i++) {
             mu_printf("%wx (%r)", imms[i], mu_inc(imms[i]));
         }
     }
@@ -285,13 +287,13 @@ mcnt_t mu_exec(mu_t c, mu_t scope, mu_t *frame) {
 
 reenter:
     {   // Setup the registers and scope
-        mu_t regs[code_header(c)->regs];
+        mu_t regs[code_getheader(c)->regs];
         regs[0] = scope;
-        mu_frame_move(code_header(c)->args, &regs[1], frame);
+        mu_frame_move(code_getheader(c)->args, &regs[1], frame);
 
         // Setup other state
-        imms = code_imms(c);
-        pc = code_bcode(c);
+        imms = code_getimms(c);
+        pc = code_getbcode(c);
 
         // Enter main execution loop
         VM_DISPATCH(pc)
@@ -300,7 +302,7 @@ reenter:
             VM_ENTRY_END
 
             VM_ENTRY_DI(OP_FN, d, i)
-                regs[d] = fn_create(code_inc(imms[i]), mu_inc(regs[0]));
+                regs[d] = fn_fromcode(code_inc(imms[i]), mu_inc(regs[0]));
             VM_ENTRY_END
 
             VM_ENTRY_DI(OP_TBL, d, i)
@@ -402,11 +404,11 @@ reenter:
                     mu_errorf("unable to call %r", scratch);
                 }
 
-                c = fn_code(scratch);
+                c = fn_getcode(scratch);
                 if (c) {
-                    mu_frame_convert(a, code_header(c)->args, frame);
-                    scope = tbl_extend(code_header(c)->scope,
-                                fn_closure(scratch));
+                    mu_frame_convert(a, code_getheader(c)->args, frame);
+                    scope = tbl_extend(code_getheader(c)->scope,
+                                fn_getclosure(scratch));
                     fn_dec(scratch);
                     goto reenter;
                 } else {
