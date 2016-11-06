@@ -6,31 +6,26 @@
 #include "parse.h"
 
 
-// Buffer access
-mu_inline struct buf *buf(mu_t b) {
-    return (struct buf *)((muint_t)b - MTBUF);
-}
-
-mu_inline struct cbuf *cbuf(mu_t b) {
-    return (struct cbuf *)((muint_t)b - MTCBUF);
-}
-
-mu_inline muint_t buf_overhead(mu_t b) {
-    return sizeof(struct buf) +
-            ((sizeof(void (*)(mu_t)) - (MTCBUF^MTBUF)) *
-             ((MTCBUF^MTBUF) & (muint_t)b));
-}
-
-
 // Functions for handling buffers
-mu_t buf_create(muint_t n) {
+static mu_t cbuf_create(muint_t n, void (*dtor)(mu_t)) {
     if (n > (mlen_t)-1) {
         mu_errorf("exceeded max length in buffer");
     }
 
-    struct buf *b = ref_alloc(sizeof(struct buf) + n);
-    b->len = n;
-    return (mu_t)((muint_t)b + MTBUF);
+    if (!dtor) {
+        struct buf *b = ref_alloc(sizeof(struct buf) + n);
+        b->len = n;
+        return (mu_t)((muint_t)b + MTBUF);
+    } else {
+        struct buf *b = ref_alloc(sizeof(struct buf) + n + sizeof(dtor));
+        b->len = n;
+        *(void (**)(mu_t))((mbyte_t *)(b + 1) + b->len) = dtor;
+        return (mu_t)((muint_t)b + MTCBUF);
+    }
+}
+
+mu_t buf_create(muint_t n) {
+    return cbuf_create(n, 0);
 }
 
 void buf_destroy(mu_t b) {
@@ -39,7 +34,7 @@ void buf_destroy(mu_t b) {
 
 void cbuf_destroy(mu_t b) {
     buf_dtor(b)(b);
-    ref_dealloc(b, sizeof(struct cbuf) + buf_len(b));
+    ref_dealloc(b, sizeof(struct buf) + buf_len(b) + sizeof(void (*)(mu_t)));
 }
 
 void buf_resize(mu_t *b, muint_t n) {
@@ -47,14 +42,11 @@ void buf_resize(mu_t *b, muint_t n) {
         mu_errorf("exceeded max length in buffer");
     }
 
-    struct buf *nbuf = ref_alloc(buf_overhead(*b) + n);
-    nbuf->len = n;
-    memcpy(nbuf + 1, buf_data(*b),
-            ((n < buf_len(*b)) ? n : buf_len(*b)) +
-            buf_overhead(*b) - sizeof(struct buf));
+    mu_t nb = cbuf_create(n, buf_dtor(*b));
+    memcpy(buf_data(nb), buf_data(*b), (n < buf_len(*b)) ? n : buf_len(*b));
 
     buf_dec(*b);
-    *b = (mu_t)((muint_t)nbuf + mu_type(*b));
+    *b = nb;
 }
 
 void buf_expand(mu_t *b, muint_t n) {
@@ -62,9 +54,12 @@ void buf_expand(mu_t *b, muint_t n) {
         return;
     }
 
-    muint_t overhead = buf_overhead(*b);
-    muint_t size = overhead + buf_len(*b);
+    muint_t overhead = sizeof(struct buf);
+    if (buf_dtor(*b)) {
+        overhead += sizeof(void (*)(mu_t));
+    }
 
+    muint_t size = overhead + buf_len(*b);
     if (size < MU_MINALLOC) {
         size = MU_MINALLOC;
     }
@@ -77,22 +72,11 @@ void buf_expand(mu_t *b, muint_t n) {
 }
 
 void buf_setdtor(mu_t *b, void (*dtor)(mu_t)) {
-    if (dtor) {
-        if (!buf_dtor(*b)) {
-            struct cbuf *o = ref_alloc(sizeof(struct cbuf) + buf_len(*b));
-            o->len = buf_len(*b);
-            memcpy(o + 1, buf_data(*b), buf_len(*b));
-            buf_dec(*b);
-            *b = (mu_t)((muint_t)o + MTCBUF);
-        }
+    mu_t nb = cbuf_create(buf_len(*b), dtor);
+    memcpy(buf_data(nb), buf_data(*b), buf_len(nb));
 
-        cbuf(*b)->dtor = dtor;
-    } else if (buf_dtor(*b)) {
-        mu_t nb = buf_create(buf_len(*b));
-        memcpy(buf_data(nb), buf_data(*b), buf_len(*b));
-        buf_dec(*b);
-        *b = nb;
-    }
+    buf_dec(*b);
+    *b = nb;
 }
 
 

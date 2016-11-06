@@ -37,16 +37,7 @@ struct buf {
     mref_t ref;     // reference count
     mlen_t len;     // length of allocated data
     // data follows
-};
-
-// Same buffer structure but with a destructor as
-// an additional field. The destructor also acts as
-// an identifier for different types of dbufs.
-struct cbuf {
-    mref_t ref;         // reference count
-    mlen_t len;         // length of allocated data
-    void (*dtor)(mu_t); // destructor
-    // data follows
+    // optional destructor stored at end
 };
 
 
@@ -75,14 +66,13 @@ mu_inline mlen_t buf_len(mu_t b) {
 }
 
 mu_inline void *buf_data(mu_t b) {
-    return (void *)((muint_t)b - MTBUF + sizeof(struct buf) +
-        ((sizeof(struct cbuf)-MTCBUF)-(sizeof(struct buf)-MTBUF))
-            * (((MTCBUF^MTBUF) & (muint_t)b) / (MTCBUF^MTBUF)));
+    return (struct buf *)(~7 & (muint_t)b) + 1;
 }
 
 mu_inline void (*buf_dtor(mu_t b))(mu_t) {
     if ((MTCBUF^MTBUF) & (muint_t)b) {
-        return ((struct cbuf *)((muint_t)b - MTCBUF))->dtor;
+        struct buf *buf = (struct buf *)((muint_t)b - MTCBUF);
+        return *(void (**)(mu_t))((mbyte_t *)(buf + 1) + buf->len);
     } else {
         return 0;
     }
