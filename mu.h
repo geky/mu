@@ -75,14 +75,14 @@ void mu_frame_convert(mcnt_t sc, mcnt_t dc, mu_t *frame);
 // Reference counting
 mu_inline mu_t mu_inc(mu_t m) {
     if (mu_isref(m)) {
-        ref_inc(m);
+        mu_ref_inc(m);
     }
 
     return m;
 }
 
 mu_inline void mu_dec(mu_t m) {
-    if (mu_isref(m) && ref_dec(m)) {
+    if (mu_isref(m) && mu_ref_dec(m)) {
         extern void mu_destroy(mu_t m);
         mu_destroy(m);
     }

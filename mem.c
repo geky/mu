@@ -9,8 +9,8 @@
 #ifdef MU_MALLOC
 extern void *malloc(muint_t);
 extern void free(void *);
-#define sys_alloc(size) malloc(size)
-#define sys_dealloc(m, size) free(m)
+#define mu_sys_alloc(size) malloc(size)
+#define mu_sys_dealloc(m, size) free(m)
 #endif
 
 
@@ -26,7 +26,7 @@ void *mu_alloc(muint_t size) {
     size += sizeof(muint_t);
 #endif
 
-    void *m = sys_alloc(size);
+    void *m = mu_sys_alloc(size);
 
     if (m == 0) {
         const char *message = "out of memory";
@@ -49,6 +49,6 @@ void mu_dealloc(void *m, muint_t size) {
     mu_assert(!m || *(muint_t*)&((char*)m)[size] == size);
 #endif
 
-    sys_dealloc(m, size);
+    mu_sys_dealloc(m, size);
 }
 
