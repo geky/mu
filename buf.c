@@ -13,13 +13,14 @@ static mu_t cbuf_create(muint_t n, void (*dtor)(mu_t)) {
     }
 
     if (!dtor) {
-        struct buf *b = ref_alloc(sizeof(struct buf) + n);
+        struct buf *b = ref_alloc(mu_offsetof(struct buf, data) + n);
         b->len = n;
         return (mu_t)((muint_t)b + MTBUF);
     } else {
-        struct buf *b = ref_alloc(sizeof(struct buf) + n + sizeof(dtor));
+        struct buf *b = ref_alloc(mu_offsetof(struct buf, data) +
+                n + sizeof(dtor));
         b->len = n;
-        *(void (**)(mu_t))((mbyte_t *)(b + 1) + b->len) = dtor;
+        *(void (**)(mu_t))(b->data + b->len) = dtor;
         return (mu_t)((muint_t)b + MTCBUF);
     }
 }
@@ -29,12 +30,13 @@ mu_t buf_create(muint_t n) {
 }
 
 void buf_destroy(mu_t b) {
-    ref_dealloc(b, sizeof(struct buf) + buf_len(b));
+    ref_dealloc(b, mu_offsetof(struct buf, data) + buf_len(b));
 }
 
 void cbuf_destroy(mu_t b) {
     buf_dtor(b)(b);
-    ref_dealloc(b, sizeof(struct buf) + buf_len(b) + sizeof(void (*)(mu_t)));
+    ref_dealloc(b, mu_offsetof(struct buf, data) +
+            buf_len(b) + sizeof(void (*)(mu_t)));
 }
 
 void buf_resize(mu_t *b, muint_t n) {
@@ -54,7 +56,7 @@ void buf_expand(mu_t *b, muint_t n) {
         return;
     }
 
-    muint_t overhead = sizeof(struct buf);
+    muint_t overhead = mu_offsetof(struct buf, data);
     if (buf_dtor(*b)) {
         overhead += sizeof(void (*)(mu_t));
     }

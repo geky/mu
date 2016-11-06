@@ -47,7 +47,7 @@ mu_t str_hex(mu_t s);
 struct str {
     mref_t ref;     // reference count
     mlen_t len;     // length of string
-    // data follows
+    mbyte_t data[]; // data follows
 };
 
 
@@ -77,7 +77,7 @@ mu_inline mlen_t str_len(mu_t m) {
 }
 
 mu_inline const mbyte_t *str_data(mu_t m) {
-    return (mbyte_t *)((struct str *)((muint_t)m - MTSTR) + 1);
+    return ((struct str *)((muint_t)m - MTSTR))->data;
 }
 
 
@@ -86,13 +86,14 @@ mu_inline const mbyte_t *str_data(mu_t m) {
 mu_pure mu_t name(void) {                                                   \
     static mu_t ref = 0;                                                    \
     static const struct {                                                   \
-        struct str str;                                                     \
+        mref_t ref;                                                         \
+        mlen_t len;                                                         \
         mbyte_t data[sizeof s > 1 ? (sizeof s)-1 : 1];                      \
-    } inst = {{0, (sizeof s)-1}, s};                                        \
+    } inst = {0, (sizeof s)-1, s};                                          \
                                                                             \
     extern mu_t str_init(const struct str *);                               \
     if (!ref) {                                                             \
-        ref = str_init(&inst.str);                                          \
+        ref = str_init((const struct str *)&inst);                          \
     }                                                                       \
                                                                             \
     return ref;                                                             \

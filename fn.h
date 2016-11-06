@@ -52,10 +52,9 @@ struct code {
     mlen_t icount;  // number of immediate values
     mlen_t bcount;  // number of bytecode instructions
 
-    // data that follows code header
-    // immediate values
-    // nested code objects
-    // bytecode
+    mu_t data[];    // data that follows code header
+                    // immediate values
+                    // bytecode
 };
 
 // Code reference counting
@@ -88,11 +87,11 @@ mu_inline mlen_t code_bcode_len(mu_t c) {
 }
 
 mu_inline mu_t *code_imms(mu_t c) {
-    return (mu_t *)((struct code *)buf_data(c) + 1);
+    return ((struct code *)buf_data(c))->data;
 }
 
 mu_inline void *code_bcode(mu_t c) {
-    return (mu_t *)((struct code *)buf_data(c) + 1) + code_imms_len(c);
+    return code_imms(c) + code_imms_len(c);
 }
 
 

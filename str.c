@@ -139,7 +139,7 @@ void str_destroy(mu_t s) {
     mu_assert(i >= 0);
     str_table_remove(i);
 
-    ref_dealloc(s, sizeof(struct str) + str_len(s));
+    ref_dealloc(s, mu_offsetof(struct str, data) + str_len(s));
 }
 
 

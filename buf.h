@@ -36,7 +36,7 @@ void buf_format(mu_t *b, muint_t *i, const char *fmt, ...);
 struct buf {
     mref_t ref;     // reference count
     mlen_t len;     // length of allocated data
-    // data follows
+    mbyte_t data[]; // data follows
     // optional destructor stored at end
 };
 
@@ -44,7 +44,7 @@ struct buf {
 // Buffer creation functions
 mu_inline mu_t mbuf(const void *s, muint_t n) {
     mu_t b = buf_create(n);
-    memcpy((struct buf *)((muint_t)b - MTBUF) + 1, s, n);
+    memcpy(((struct buf *)(~7 & (muint_t)b))->data, s, n);
     return b;
 }
 
@@ -66,13 +66,13 @@ mu_inline mlen_t buf_len(mu_t b) {
 }
 
 mu_inline void *buf_data(mu_t b) {
-    return (struct buf *)(~7 & (muint_t)b) + 1;
+    return ((struct buf *)(~7 & (muint_t)b))->data;
 }
 
 mu_inline void (*buf_dtor(mu_t b))(mu_t) {
     if ((MTCBUF^MTBUF) & (muint_t)b) {
         struct buf *buf = (struct buf *)((muint_t)b - MTCBUF);
-        return *(void (**)(mu_t))((mbyte_t *)(buf + 1) + buf->len);
+        return *(void (**)(mu_t))(buf->data + buf->len);
     } else {
         return 0;
     }
@@ -83,9 +83,10 @@ mu_inline void (*buf_dtor(mu_t b))(mu_t) {
 #define MBUF(name, n)                                                       \
 mu_pure mu_t name(void) {                                                   \
     static struct {                                                         \
-        struct buf buf;                                                     \
+        mref_t ref;                                                         \
+        mlen_t len;                                                         \
         mbyte_t data[n];                                                    \
-    } inst = {{0, n}, 0}                                                    \
+    } inst = {0, n}                                                         \
                                                                             \
     return (mu_t)((muint_t)&inst + MTBUF);                                  \
 }

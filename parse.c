@@ -640,7 +640,7 @@ static void encode_store(struct parse *p, struct expr *e,
 // Completing a parse and generating the final code object
 static mu_t compile(struct parse *p) {
     mu_t b = buf_create(
-            sizeof(struct code) +
+            mu_offsetof(struct code, data) +
             sizeof(mu_t)*tbl_len(p->imms) +
             p->bcount);
 

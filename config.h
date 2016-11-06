@@ -63,6 +63,9 @@ typedef double   mfloat_t;
 // Definition of alignment for Mu types
 #define mu_aligned(x) __attribute__((__aligned__(x)))
 
+// Builtin for offset of structure members
+#define mu_offsetof(t, m) __builtin_offsetof(t, m)
+
 // Builtin for an unreachable point in code
 #define mu_unreachable __builtin_unreachable()
 
