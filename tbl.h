@@ -126,8 +126,8 @@ mu_pure mu_t name(void) {                                                   \
                                                                             \
     extern mu_t mu_tbl_initpairs(                                           \
             struct mtbl *, mu_t (*const (*)[2])(void), muint_t);            \
-    ref = mu_tbl_initpairs(&inst, gen, sizeof gen / sizeof(gen[0]));        \
     if (!ref) {                                                             \
+        ref = mu_tbl_initpairs(&inst, gen, sizeof gen / sizeof(gen[0]));    \
     }                                                                       \
                                                                             \
     return ref;                                                             \

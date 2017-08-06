@@ -119,7 +119,7 @@ void mu_dis(mu_t c) {
     const uint16_t *end = pc + mu_code_getbcodelen(c)/2;
 
     mu_printf("-- dis 0x%wx --", c);
-    mu_printf("regs: %qu, scope: %qu, args: %bx",
+    mu_printf("regs: %qu, scope: %qu, args: 0x%bx",
             mu_code_getheader(c)->regs,
             mu_code_getheader(c)->scope,
             mu_code_getheader(c)->args);
@@ -151,37 +151,37 @@ void mu_dis(mu_t c) {
                     0xf & (pc[0] >> 8), 0xf & (pc[0] >> 4), 0xf & pc[0]);
             pc += 1;
         } else if (op == MOP_IMM && (0xff & pc[0]) == 0xff) {
-            mu_printf("%bx%bx%bx%bx  %s r%d, %wu (%r)",
+            mu_printf("%bx%bx%bx%bx  %s r%d, %u (%r)",
                     pc[0] >> 8, 0xff & pc[0],
                     pc[1] >> 8, 0xff & pc[1], op_names[op],
                     0xf & (pc[0] >> 8), pc[1],
                     mu_inc(imms[pc[1]]));
             pc += 2;
         } else if (op == MOP_IMM) {
-            mu_printf("%bx%bx      %s r%d, %wu (%r)",
+            mu_printf("%bx%bx      %s r%d, %u (%r)",
                     pc[0] >> 8, 0xff & pc[0], op_names[op],
                     0xf & (pc[0] >> 8), 0x7f & pc[0],
                     mu_inc(imms[0x7f & pc[0]]));
             pc += 1;
         } else if (op >= MOP_IMM && op <= MOP_TBL && (0xff & pc[0]) == 0xff) {
-            mu_printf("%bx%bx%bx%bx  %s r%d, %wu",
+            mu_printf("%bx%bx%bx%bx  %s r%d, %u",
                     pc[0] >> 8, 0xff & pc[0],
                     pc[1] >> 8, 0xff & pc[1], op_names[op],
                     0xf & (pc[0] >> 8), pc[1]);
             pc += 2;
         } else if (op >= MOP_IMM && op <= MOP_TBL) {
-            mu_printf("%bx%bx      %s r%d, %wu",
+            mu_printf("%bx%bx      %s r%d, %u",
                     pc[0] >> 8, 0xff & pc[0], op_names[op],
                     0xf & (pc[0] >> 8), 0x7f & pc[0]);
             pc += 1;
         } else if (op >= MOP_JFALSE && op <= MOP_JUMP && (0xff & pc[0]) == 0xff) {
-            mu_printf("%bx%bx%bx%bx  %s r%d, %wu",
+            mu_printf("%bx%bx%bx%bx  %s r%d, %d",
                     pc[0] >> 8, 0xff & pc[0],
                     pc[1] >> 8, 0xff & pc[1], op_names[op],
                     0xf & (pc[0] >> 8), (int16_t)pc[1]);
             pc += 2;
         } else if (op >= MOP_JFALSE && op <= MOP_JUMP) {
-            mu_printf("%bx%bx      %s r%d, %wu",
+            mu_printf("%bx%bx      %s r%d, %d",
                     pc[0] >> 8, 0xff & pc[0], op_names[op],
                     0xf & (pc[0] >> 8), (int16_t)(pc[0] << 8) >> 8);
             pc += 1;

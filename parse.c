@@ -1140,7 +1140,8 @@ static void p_entry(struct mparse *p, struct mframe *f) {
         } else if (f->unpack) {
             encode_load(p, &e, 0);
             encode(p, f->count == f->target-1 ? MOP_LOOKDN : MOP_LOOKUP,
-                   p->sp, p->sp-1, p->sp, 0);
+                    p->sp, p->sp-1, p->sp,
+                    f->count == f->target-1 ? -1 : 0);
         } else {
             encode_load(p, &e, 0);
         }

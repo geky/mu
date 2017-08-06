@@ -807,13 +807,13 @@ static mcnt_t mu_bfn_tbl(mu_t *frame) {
             frame[0] = m;
             mu_fn_fcall(MU_ITER, 0x11, frame);
             frame[0] = mu_tbl_fromiter(frame[0]);
-            return 1;
+            break;
 
         case MTTBL:
             frame[0] = m;
             mu_fn_fcall(MU_PAIRS, 0x11, frame);
             frame[0] = mu_tbl_fromiter(frame[0]);
-            return 1;
+            break;
 
         case MTFN:
             frame[0] = mu_tbl_fromiter(m);

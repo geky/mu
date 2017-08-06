@@ -49,7 +49,11 @@ typedef double   mfloat_t;
 
 
 // Definition of macro-like inlined functions
+#ifndef MU_DEBUG
 #define mu_inline static inline __attribute__((always_inline))
+#else
+#define mu_inline static inline
+#endif
 
 // Definition of non-returning functions
 #define mu_noreturn __attribute__((noreturn)) void
