@@ -66,14 +66,14 @@ enum mu_tbl_flags {
 // stored as a range/offset based on the specified
 // offset and length.
 struct mtbl {
-    mref_t ref;     // reference count
-    muintq_t npw2;  // log2 of capacity
-    uint8_t flags;  // table flags
-    mlen_t len;     // count of non-nil entries
-    mlen_t nils;    // count of nil entries
+    mref_t ref;
+    mlen_t len;
+    mlen_t nils;
+    muintq_t npw2;
+    muintq_t isize;
 
-    mu_t tail;      // tail chain of tables
-    mu_t *array;    // pointer to stored data
+    mu_t tail;
+    mu_t *array;
 };
 
 
@@ -107,7 +107,7 @@ mu_inline mu_t mu_tbl_gettail(mu_t m) {
 mu_pure mu_t name(void) {                                                   \
     static mu_t ref = 0;                                                    \
     static mu_t (*const gen[])(void) = __VA_ARGS__;                         \
-    static struct mtbl inst;                                                \
+    static struct mtbl inst = {0};                                          \
                                                                             \
     extern mu_t mu_tbl_initlist(                                            \
             struct mtbl *, mu_t (*const *)(void), muint_t);                 \
@@ -122,7 +122,7 @@ mu_pure mu_t name(void) {                                                   \
 mu_pure mu_t name(void) {                                                   \
     static mu_t ref = 0;                                                    \
     static mu_t (*const gen[][2])(void) = __VA_ARGS__;                      \
-    static struct mtbl inst;                                                \
+    static struct mtbl inst = {0};                                          \
                                                                             \
     extern mu_t mu_tbl_initpairs(                                           \
             struct mtbl *, mu_t (*const (*)[2])(void), muint_t);            \
