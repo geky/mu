@@ -96,7 +96,8 @@ static mu_t *mu_tbl_getpair(mu_t t, muint_t i) {
     return off ? &mtbl(t)->array[2*off] : 0;
 }
 
-static void mu_tbl_setpair(mu_t t, muint_t i, muint_t j) {
+static void mu_tbl_setpair(mu_t t, muint_t i, mu_t *p) {
+    muint_t j = (p - mtbl(t)->array)/2;
     if (mtbl(t)->isize == 1) {
         ((uint8_t*)mtbl(t)->array)[i] = j;
     } else if (mtbl(t)->isize == 2) {
@@ -310,7 +311,7 @@ void mu_tbl_insert(mu_t t, mu_t k, mu_t v) {
                 mtbl(t)->array[2*j+0] = k;
                 mtbl(t)->array[2*j+1] = v;
                 mtbl(t)->len += 1;
-                mu_tbl_setpair(t, i & mask, j);
+                mu_tbl_setpair(t, i & mask, &mtbl(t)->array[2*j]);
                 return;
             }
         }
@@ -498,78 +499,95 @@ mu_t mu_tbl_fromiter(mu_t i) {
 void mu_tbl_push(mu_t t, mu_t p, mint_t i) {
     mu_assert(mu_istbl(t));
     i = (i >= 0) ? i : i + mtbl(t)->len;
-    mint_t size = mu_tbl_size(t);
+    i = (i > mtbl(t)->len) ? mtbl(t)->len : (i < 0) ? 0 : i;
 
-    if (mu_tbl_islist(t) && i >= 0 && i < 2*size) {
+    if (mu_tbl_count(t) + 1 >= mu_tbl_size(t)) {
         if ((muint_t)mtbl(t)->len + 1 > (mlen_t)-1) {
             mu_errorf("exceeded max length in table");
         }
 
-        if (i >= size) {
-            mu_tbl_listexpand(t, mtbl(t)->len + 1);
+        if (mu_tbl_islist(t)) {
+            mu_tbl_listexpand(t, i+1);
+        } else {
+            mu_tbl_pairsexpand(t, i+1);
         }
+    }
 
+    if (mu_tbl_islist(t)) {
         memmove(&mtbl(t)->array[i+1], &mtbl(t)->array[i],
-                    (size-i-1)*sizeof(mu_t));
+                (mu_tbl_size(t)-(i+1))*sizeof(mu_t));
         mtbl(t)->array[i] = p;
         mtbl(t)->len += (p ? 1 : 0);
     } else {
-        mu_t d = mu_tbl_create(mtbl(t)->len+1);
-        mu_t k, v;
+        muint_t off = mu_tbl_off(t);
+        muint_t count = mu_tbl_count(t);
+        mtbl(t)->len = 0;
+        mtbl(t)->nils = 0;
+        memset(mtbl(t)->array, 0, mu_tbl_size(t));
 
-        for (muint_t j = 0; mu_tbl_next(t, &j, &k, &v);) {
-            if (mu_isnum(k) && mu_num_cmp(k, mu_num_fromint(i)) >= 0) {
-                mu_tbl_insert(d, mu_num_add(k, mu_num_fromuint(1)), v);
-                mu_tbl_insert(t, k, 0);
+        for (muint_t j = 0; j < i; j++) {
+            if (!mtbl(t)->array[2*(j+off)+1]) {
+                i++;
             } else {
-                mu_dec(k);
-                mu_dec(v);
+                mu_tbl_insert(t, mtbl(t)->array[2*(j+off)+0],
+                        mtbl(t)->array[2*(j+off)+1]);
             }
         }
 
-        for (muint_t j = 0; mu_tbl_next(d, &j, &k, &v);) {
-            mu_tbl_insert(t, k, v);
-        }
+        memmove(&mtbl(t)->array[2*(i+1+off)], &mtbl(t)->array[2*(i+off)],
+                2*(mu_tbl_size(t)-(i+1+off))*sizeof(mu_t));
+        mu_tbl_insert(t, mu_num_fromuint(i), p);
 
-        mu_tbl_dec(d);
-        mu_tbl_insert(t, mu_num_fromint(i), p);
+        for (muint_t j = i; j < count; j++) {
+            mu_t k = mtbl(t)->array[2*(j+1+off)+0];
+            if (mu_isnum(k)) {
+                k = mu_num_add(k, mu_num_fromuint(1));
+            }
+
+            mu_tbl_insert(t, k, mtbl(t)->array[2*(j+1+off)+1]);
+        }
     }
 }
 
 mu_t mu_tbl_pop(mu_t t, mint_t i) {
     mu_assert(mu_istbl(t));
     i = (i >= 0) ? i : i + mtbl(t)->len;
-    mint_t size = mu_tbl_size(t);
+    i = (i > mtbl(t)->len) ? mtbl(t)->len : (i < 0) ? 0 : i;
 
-    if (mu_tbl_islist(t) && i >= 0 && i < 2*size) {
+    if (mu_tbl_islist(t)) {
         mu_t p = mtbl(t)->array[i];
         memmove(&mtbl(t)->array[i], &mtbl(t)->array[i+1],
-                (size-(i+1))*sizeof(mu_t));
-        mtbl(t)->array[size-1] = 0;
+                (mu_tbl_size(t)-(i+1))*sizeof(mu_t));
         mtbl(t)->len -= (p ? 1 : 0);
         return p;
     } else {
-        mu_t p = mu_tbl_lookup(t, mu_num_fromint(i));
-        mu_tbl_insert(t, mu_num_fromint(i), 0);
+        muint_t off = mu_tbl_off(t);
+        muint_t count = mu_tbl_count(t);
+        mtbl(t)->len = 0;
+        mtbl(t)->nils = 0;
+        memset(mtbl(t)->array, 0, mu_tbl_size(t));
 
-        mu_t d = mu_tbl_create(mtbl(t)->len);
-        mu_t k, v;
-
-        for (muint_t j = 0; mu_tbl_next(t, &j, &k, &v);) {
-            if (mu_isnum(k) && mu_num_cmp(k, mu_num_fromint(i)) > 0) {
-                mu_tbl_insert(d, mu_num_sub(k, mu_num_fromuint(1)), v);
-                mu_tbl_insert(t, k, 0);
+        for (muint_t j = 0; j < i; j++) {
+            if (!mtbl(t)->array[2*(j+off)+1]) {
+                i++;
             } else {
-                mu_dec(k);
-                mu_dec(v);
+                mu_tbl_insert(t, mtbl(t)->array[2*(j+off)+0],
+                        mtbl(t)->array[2*(j+off)+1]);
             }
         }
 
-        for (muint_t j = 0; mu_tbl_next(d, &j, &k, &v);) {
-            mu_tbl_insert(t, k, v);
+        mu_dec(mtbl(t)->array[2*(i+off)+0]);
+        mu_t p = mtbl(t)->array[2*(i+off)+1];
+
+        for (muint_t j = i+1; j < count; j++) {
+            mu_t k = mtbl(t)->array[2*(j+off)+0];
+            if (mu_isnum(k)) {
+                k = mu_num_sub(k, mu_num_fromuint(1));
+            }
+
+            mu_tbl_insert(t, k, mtbl(t)->array[2*(j+off)+1]);
         }
 
-        mu_tbl_dec(d);
         return p;
     }
 }
@@ -613,24 +631,30 @@ mu_t mu_tbl_subset(mu_t t, mint_t lower, mint_t upper) {
         lower = 0;
     }
 
-    if (lower > upper) {
+    if (upper > mtbl(t)->len) {
+        upper = mtbl(t)->len;
+    }
+
+    if (lower >= upper) {
         mu_dec(t);
         return mu_tbl_create(0);
     }
 
-    muint_t len = (upper-lower < mu_tbl_getlen(t)) ?
-            upper-lower : mu_tbl_getlen(t);
-    mu_t d = mu_tbl_create(len);
-    mu_t k, v;
+    mu_t d = mu_tbl_create(upper - lower);
 
-    for (muint_t i = 0; mu_tbl_next(t, &i, &k, &v);) {
-        if (mu_isnum(k) && mu_num_cmp(k, mu_num_fromint(lower)) >= 0
-                        && mu_num_cmp(k, mu_num_fromint(upper)) < 0) {
-            mu_tbl_insert(d, mu_num_sub(k, mu_num_fromint(lower)), v);
-        } else {
-            mu_dec(k);
-            mu_dec(v);
+    muint_t i = 0;
+    for (muint_t j = 0; j < lower; j++) {
+        mu_tbl_next(t, &i, 0, 0);
+    }
+
+    for (muint_t j = lower; j < upper; j++) {
+        mu_t k, v;
+        mu_tbl_next(t, &i, &k, &v);
+        if (mu_isnum(k)) {
+            k = mu_num_sub(k, mu_num_fromuint(lower));
         }
+
+        mu_tbl_insert(d, k, v);
     }
 
     mu_dec(t);
