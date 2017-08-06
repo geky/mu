@@ -80,6 +80,9 @@ typedef double   mfloat_t;
 #define mu_npw2(x) (64 - __builtin_clzl((x)-1))
 #endif
 
+// Builtin for finding next alignment for pointers
+#define mu_align(x) (((x) + sizeof(uintptr_t)-1) & ~(sizeof(uintptr_t)-1))
+
 // Definition of Mu specific assert function
 #ifdef MU_DEBUG
 #include <assert.h>

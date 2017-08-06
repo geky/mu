@@ -72,7 +72,7 @@ mu_inline void *mu_buf_getdata(mu_t b) {
 mu_inline void (*mu_buf_getdtor(mu_t b))(mu_t) {
     if ((MTCBUF^MTBUF) & (muint_t)b) {
         struct mbuf *buf = (struct mbuf *)((muint_t)b - MTCBUF);
-        return *(void (**)(mu_t))(buf->data + buf->len);
+        return *(void (**)(mu_t))(buf->data + mu_align(buf->len));
     } else {
         return 0;
     }

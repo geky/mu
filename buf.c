@@ -18,9 +18,9 @@ static mu_t mu_cbuf_create(muint_t n, void (*dtor)(mu_t)) {
         return (mu_t)((muint_t)b + MTBUF);
     } else {
         struct mbuf *b = mu_ref_alloc(mu_offsetof(struct mbuf, data) +
-                n + sizeof(dtor));
+                mu_align(n) + sizeof(dtor));
         b->len = n;
-        *(void (**)(mu_t))(b->data + b->len) = dtor;
+        *(void (**)(mu_t))(b->data + mu_align(b->len)) = dtor;
         return (mu_t)((muint_t)b + MTCBUF);
     }
 }
@@ -36,7 +36,7 @@ void mu_buf_destroy(mu_t b) {
 void mu_cbuf_destroy(mu_t b) {
     mu_buf_getdtor(b)(b);
     mu_ref_dealloc(b, mu_offsetof(struct mbuf, data) +
-            mu_buf_getlen(b) + sizeof(void (*)(mu_t)));
+            mu_align(mu_buf_getlen(b)) + sizeof(void (*)(mu_t)));
 }
 
 void mu_buf_resize(mu_t *b, muint_t n) {
