@@ -64,7 +64,7 @@ typedef muinth_t mlen_t;
 typedef uint8_t mcnt_t;
 
 // Frame operations
-mu_inline mlen_t mu_frame_len(mcnt_t fc) {
+mu_inline mlen_t mu_frame_count(mcnt_t fc) {
     return (fc > MU_FRAME) ? 1 : fc;
 }
 

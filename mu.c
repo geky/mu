@@ -76,7 +76,7 @@ static mu_t (*const mu_attr_repr[8])(mu_t) = {
 
 // Frame operations
 void mu_frame_move(mcnt_t fc, mu_t *dframe, mu_t *sframe) {
-    memcpy(dframe, sframe, sizeof(mu_t)*mu_frame_len(fc));
+    memcpy(dframe, sframe, sizeof(mu_t)*mu_frame_count(fc));
 }
 
 void mu_frame_convert(mcnt_t sc, mcnt_t dc, mu_t *frame) {
@@ -117,7 +117,7 @@ mu_noreturn mu_error(const char *s, muint_t n) {
 mu_noreturn mu_verrorf(const char *f, va_list args) {
     mu_t b = mu_buf_create(0);
     muint_t n = 0;
-    mu_buf_vformat(&b, &n, f, args);
+    mu_buf_vpushf(&b, &n, f, args);
     mu_error(mu_buf_getdata(b), n);
 }
 
@@ -133,7 +133,7 @@ static mcnt_t mu_bfn_error(mu_t *frame) {
     mu_t v;
 
     for (muint_t i = 0; mu_tbl_next(frame[0], &i, 0, &v);) {
-        mu_buf_format(&b, &n, "%m", v);
+        mu_buf_pushf(&b, &n, "%m", v);
     }
 
     mu_error(mu_buf_getdata(b), n);
@@ -149,7 +149,7 @@ void mu_print(const char *s, muint_t n) {
 void mu_vprintf(const char *f, va_list args) {
     mu_t b = mu_buf_create(0);
     muint_t n = 0;
-    mu_buf_vformat(&b, &n, f, args);
+    mu_buf_vpushf(&b, &n, f, args);
     mu_print(mu_buf_getdata(b), n);
     mu_buf_dec(b);
 }
@@ -167,7 +167,7 @@ static mcnt_t mu_bfn_print(mu_t *frame) {
     mu_t v;
 
     for (muint_t i = 0; mu_tbl_next(frame[0], &i, 0, &v);) {
-        mu_buf_format(&b, &n, "%m", v);
+        mu_buf_pushf(&b, &n, "%m", v);
     }
 
     mu_print(mu_buf_getdata(b), n);
@@ -219,7 +219,7 @@ mu_t mu_veval(const char *s, muint_t n, mu_t scope, mcnt_t fc, va_list args) {
 
     mu_feval(s, n, scope, fc, frame);
 
-    for (muint_t i = 1; i < mu_frame_len(fc); i++) {
+    for (muint_t i = 1; i < mu_frame_count(fc); i++) {
         *va_arg(args, mu_t *) = frame[i];
     }
 
@@ -240,15 +240,15 @@ mu_noreturn mu_error_arg(mu_t name, mcnt_t fc, mu_t *frame) {
     mu_t message = mu_buf_create(0);
     muint_t n = 0;
 
-    mu_buf_format(&message, &n, "invalid argument in %m(", name);
+    mu_buf_pushf(&message, &n, "invalid argument in %m(", name);
 
     if (fc == 0xf) {
-        mu_buf_format(&message, &n, "..");
+        mu_buf_pushf(&message, &n, "..");
         fc = 1;
     }
 
     for (muint_t i = 0; i < fc; i++) {
-        mu_buf_format(&message, &n, "%nr%c ",
+        mu_buf_pushf(&message, &n, "%nr%c ",
                 frame[i], 0, (i != fc-1) ? ',' : ')');
     }
 
@@ -390,7 +390,7 @@ static mcnt_t mu_bfn_parse(mu_t *frame) {
         mu_error_arg(MU_KEY_PARSE, 0x1, frame);
     }
 
-    frame[0] = mu_parse((const char *)mu_str_getdata(s), mu_str_getlen(s));
+    frame[0] = mu_parse(mu_str_getdata(s), mu_str_getlen(s));
     mu_dec(s);
     return 1;
 }
@@ -429,7 +429,7 @@ static mcnt_t mu_bfn_ord(mu_t *frame) {
         mu_error_arg(MU_KEY_ORD, 0x1, frame);
     }
 
-    frame[0] = mu_num_fromuint(mu_str_getdata(m)[0]);
+    frame[0] = mu_num_fromuint(*(const mbyte_t *)mu_str_getdata(m));
     mu_str_dec(m);
     return 1;
 }

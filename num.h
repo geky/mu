@@ -9,6 +9,14 @@
 
 // Conversion operations
 mu_t mu_num_fromfloat(mfloat_t);
+mu_inline mu_t mu_num_fromuint(muint_t n);
+mu_inline mu_t mu_num_fromint(mint_t n);
+mu_t mu_num_frommu(mu_t m);
+
+// Number accessing functions
+mu_inline mfloat_t mu_num_getfloat(mu_t m);
+mu_inline muint_t mu_num_getuint(mu_t m);
+mu_inline mint_t mu_num_getint(mu_t m);
 
 // Comparison operation
 mint_t mu_num_cmp(mu_t, mu_t);
@@ -28,6 +36,7 @@ mu_t mu_num_abs(mu_t);
 mu_t mu_num_floor(mu_t);
 mu_t mu_num_ceil(mu_t);
 
+// Trig operations
 mu_t mu_num_cos(mu_t);
 mu_t mu_num_acos(mu_t);
 mu_t mu_num_sin(mu_t);

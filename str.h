@@ -8,12 +8,33 @@
 #include "buf.h"
 
 
+// Definition of Mu's string types
+// Storage follows identical layout of buf type.
+// Strings must be interned before use in tables, and once interned,
+// strings cannot be mutated without breaking things.
+struct mstr {
+    mref_t ref;     // reference count
+    mlen_t len;     // length of string
+    mbyte_t data[]; // data follows
+};
+
+
 // String creation functions
 mu_t mu_str_intern(mu_t buf, muint_t n);
 
 // Conversion operations
-mu_t mu_str_fromdata(const mbyte_t *s, muint_t n);
-mu_t mu_str_fromiter(mu_t iter);
+mu_t mu_str_fromdata(const void *s, muint_t n);
+mu_inline mu_t mu_str_fromcstr(const char *s);
+mu_inline mu_t mu_str_fromchr(char s);
+mu_t mu_str_frommu(mu_t m);
+
+// Reference counting
+mu_inline mu_t mu_str_inc(mu_t m);
+mu_inline void mu_str_dec(mu_t m);
+
+// String access functions
+mu_inline mlen_t mu_str_getlen(mu_t m);
+mu_inline const void *mu_str_getdata(mu_t m);
 
 // Formatting
 mu_t mu_str_vformat(const char *f, va_list args);
@@ -35,17 +56,6 @@ mu_t mu_str_parse(const mbyte_t **pos, const mbyte_t *end);
 mu_t mu_str_repr(mu_t s);
 
 
-// Definition of Mu's string types
-// Storage follows identical layout of buf type.
-// Strings must be interned before use in tables, and once interned,
-// strings cannot be mutated without breaking things.
-struct mstr {
-    mref_t ref;     // reference count
-    mlen_t len;     // length of string
-    mbyte_t data[]; // data follows
-};
-
-
 // Reference counting
 mu_inline mu_t mu_str_inc(mu_t m) {
     mu_assert(mu_isstr(m));
@@ -61,13 +71,22 @@ mu_inline void mu_str_dec(mu_t m) {
     }
 }
 
+// String creation stuff
+mu_inline mu_t mu_str_fromcstr(const char *s) {
+    return mu_str_fromdata(s, strlen(s));
+}
+
+mu_inline mu_t mu_str_fromchr(char s) {
+    return mu_str_fromdata(&s, 1);
+}
+
 // String access functions
 // we don't define a string struct 
 mu_inline mlen_t mu_str_getlen(mu_t m) {
     return ((struct mstr *)((muint_t)m - MTSTR))->len;
 }
 
-mu_inline const mbyte_t *mu_str_getdata(mu_t m) {
+mu_inline const void *mu_str_getdata(mu_t m) {
     return ((struct mstr *)((muint_t)m - MTSTR))->data;
 }
 

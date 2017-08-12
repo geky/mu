@@ -15,14 +15,14 @@ mu_inline struct mfn *mfn(mu_t f) {
 
 // Creation functions
 mu_t mu_fn_fromcode(mu_t c, mu_t closure) {
-    if (mu_code_getheader(c)->flags & MFN_WEAK) {
+    if (mu_code_getflags(c) & MFN_WEAK) {
         mu_assert(mu_getref(closure) > 1);
         mu_dec(closure);
     }
 
     struct mfn *f = mu_ref_alloc(sizeof(struct mfn));
-    f->args = mu_code_getheader(c)->args;
-    f->flags = mu_code_getheader(c)->flags;
+    f->args = mu_code_getargs(c);
+    f->flags = mu_code_getflags(c);
     f->closure = closure;
     f->fn.code = c;
     return (mu_t)((muint_t)f + MTFN);
@@ -44,6 +44,25 @@ mu_t mu_fn_fromsbfn(mcnt_t args, msbfn_t *sbfn, mu_t closure) {
     f->closure = closure;
     f->fn.sbfn = sbfn;
     return (mu_t)((muint_t)f + MTFN);
+}
+
+static mcnt_t mu_bfn_id(mu_t *frame) {
+    return 0xf;
+}
+MU_GEN_BFN(mu_gen_id, 0xf, mu_bfn_id)
+
+mu_t mu_fn_frommu(mu_t m) {
+    switch (mu_gettype(m)) {
+        case MTNIL:
+            return mu_gen_id();
+
+        case MTFN:
+            return m;
+
+        default:
+            mu_dec(m);
+            return 0;
+    }
 }
 
 
@@ -86,8 +105,8 @@ mcnt_t mu_fn_tcall(mu_t f, mcnt_t fc, mu_t *frame) {
 
         case MFN_SCOPED: {
             mu_t c = mu_code_inc(mfn(f)->fn.code);
-            mu_t scope = mu_tbl_extend(
-                    mu_code_getheader(c)->scope, mu_fn_getclosure(f));
+            mu_t scope = mu_tbl_create(mu_code_getscope(c));
+            mu_tbl_settail(scope, mu_fn_getclosure(f));
             mu_fn_dec(f);
             return mu_exec(c, scope, frame);
         }
@@ -104,13 +123,13 @@ void mu_fn_fcall(mu_t f, mcnt_t fc, mu_t *frame) {
 mu_t mu_fn_vcall(mu_t f, mcnt_t fc, va_list args) {
     mu_t frame[MU_FRAME];
 
-    for (muint_t i = 0; i < mu_frame_len(fc >> 4); i++) {
+    for (muint_t i = 0; i < mu_frame_count(fc >> 4); i++) {
         frame[i] = va_arg(args, mu_t);
     }
 
     mu_fn_fcall(f, fc, frame);
 
-    for (muint_t i = 1; i < mu_frame_len(0xf & fc); i++) {
+    for (muint_t i = 1; i < mu_frame_count(0xf & fc); i++) {
         *va_arg(args, mu_t *) = frame[i];
     }
 
@@ -155,29 +174,16 @@ bool mu_fn_next(mu_t f, mcnt_t fc, mu_t *frame) {
 
 
 // Function related Mu functions
-static mcnt_t mu_bfn_id(mu_t *frame) {
-    return 0xf;
-}
-MU_GEN_BFN(mu_gen_id, 0xf, mu_bfn_id)
 
 static mcnt_t mu_bfn_fn(mu_t *frame) {
     mu_t m = frame[0];
-
-    switch (mu_gettype(m)) {
-        case MTNIL:
-            mu_dec(m);
-            frame[0] = mu_gen_id();
-            return 1;
-
-        case MTFN:
-            frame[0] = m;
-            return 1;
-
-        default:
-            break;
+    frame[0] = mu_fn_frommu(mu_inc(m));
+    if (!frame[0]) {
+        mu_error_cast(MU_KEY_FN2, m);
     }
+    mu_dec(m);
 
-    mu_error_cast(MU_KEY_FN2, m);
+    return 1;
 }
 
 MU_GEN_STR(mu_gen_key_fn2, "fn_")

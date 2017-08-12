@@ -82,23 +82,48 @@ void mu_buf_setdtor(mu_t *b, void (*dtor)(mu_t)) {
     *b = nb;
 }
 
+// From functions
+mu_t mu_buf_frommu(mu_t c) {
+    mu_assert(mu_isstr(c) || mu_isbuf(c));
+    mu_t cbuf = (mu_t)(~(MTSTR^MTBUF) & (muint_t)c);
+
+    mu_t b = mu_buf_fromdata(mu_buf_getdata(cbuf), mu_buf_getlen(cbuf));
+    mu_dec(c);
+    return b;
+}
+
+mu_t mu_buf_vformat(const char *f, va_list args) {
+    mu_t b = mu_buf_create(0);
+    muint_t n = 0;
+    mu_buf_vpushf(&b, &n, f, args);
+
+    if (mu_buf_getlen(b) != n) {
+        mu_buf_resize(&b, n);
+    }
+
+    return b;
+}
+
+mu_t mu_buf_format(const char *f, ...) {
+    va_list args;
+    va_start(args, f);
+    mu_t m = mu_str_vformat(f, args);
+    va_end(args);
+    return m;
+}
 
 // Concatenation functions with amortized doubling
-void mu_buf_append(mu_t *b, muint_t *i, const void *c, muint_t n) {
+void mu_buf_pushdata(mu_t *b, muint_t *i, const void *c, muint_t n) {
     mu_buf_expand(b, *i + n);
     memcpy((mbyte_t *)mu_buf_getdata(*b) + *i, c, n);
     *i += n;
 }
 
-void mu_buf_push(mu_t *b, muint_t *i, mbyte_t byte) {
-    mu_buf_append(b, i, &byte, 1);
-}
-
-void mu_buf_concat(mu_t *b, muint_t *i, mu_t c) {
+void mu_buf_pushmu(mu_t *b, muint_t *i, mu_t c) {
     mu_assert(mu_isstr(c) || mu_isbuf(c));
     mu_t cbuf = (mu_t)(~(MTSTR^MTBUF) & (muint_t)c);
 
-    mu_buf_append(b, i, mu_buf_getdata(cbuf), mu_buf_getlen(cbuf));
+    mu_buf_pushdata(b, i, mu_buf_getdata(cbuf), mu_buf_getlen(cbuf));
     mu_dec(c);
 }
 
@@ -106,7 +131,7 @@ void mu_buf_concat(mu_t *b, muint_t *i, mu_t c) {
 // Buffer formatting
 static void mu_buf_append_unsigned(mu_t *b, muint_t *i, muint_t u) {
     if (u == 0) {
-        mu_buf_push(b, i, '0');
+        mu_buf_pushchr(b, i, '0');
         return;
     }
 
@@ -130,7 +155,7 @@ static void mu_buf_append_unsigned(mu_t *b, muint_t *i, muint_t u) {
 
 static void mu_buf_append_signed(mu_t *b, muint_t *i, mint_t d) {
     if (d < 0) {
-        mu_buf_push(b, i, '-');
+        mu_buf_pushchr(b, i, '-');
         d = -d;
     }
 
@@ -139,7 +164,7 @@ static void mu_buf_append_signed(mu_t *b, muint_t *i, mint_t d) {
 
 static void mu_buf_append_hex(mu_t *b, muint_t *i, muint_t x, int n) {
     for (muint_t j = 0; j < 2*n; j++) {
-        mu_buf_push(b, i, mu_toascii((x >> 4*(2*n-j-1)) & 0xf));
+        mu_buf_pushchr(b, i, mu_toascii((x >> 4*(2*n-j-1)) & 0xf));
     }
 }
 
@@ -152,10 +177,10 @@ static void mu_buf_append_hex(mu_t *b, muint_t *i, muint_t x, int n) {
 #define mu_buf_va_int(va, n)   \
     ((n < sizeof(signed)) ? va_arg(va, signed) : va_arg(va, mint_t))
 
-void mu_buf_vformat(mu_t *b, muint_t *i, const char *f, va_list args) {
+void mu_buf_vpushf(mu_t *b, muint_t *i, const char *f, va_list args) {
     while (*f) {
         if (*f != '%') {
-            mu_buf_push(b, i, *f++);
+            mu_buf_pushchr(b, i, *f++);
             continue;
         }
         f++;
@@ -172,7 +197,7 @@ void mu_buf_vformat(mu_t *b, muint_t *i, const char *f, va_list args) {
         switch (*f++) {
             case '%': {
                 mu_buf_va_size(args, size);
-                mu_buf_push(b, i, '%');
+                mu_buf_pushchr(b, i, '%');
                 break;
             } break;
 
@@ -184,7 +209,7 @@ void mu_buf_vformat(mu_t *b, muint_t *i, const char *f, va_list args) {
                             m, (n < 0) ? 0 : mu_num_fromuint(n));
                 }
 
-                mu_buf_concat(b, i, m);
+                mu_buf_pushmu(b, i, m);
             } break;
 
             case 'r': {
@@ -192,13 +217,13 @@ void mu_buf_vformat(mu_t *b, muint_t *i, const char *f, va_list args) {
                 int n = mu_buf_va_size(args, size);
                 m = mu_fn_call(MU_REPR, 0x21,
                         m, (n < 0) ? 0 : mu_num_fromuint(n));
-                mu_buf_concat(b, i, m);
+                mu_buf_pushmu(b, i, m);
             } break;
 
             case 's': {
                 const char *s = va_arg(args, const char *);
                 int n = mu_buf_va_size(args, size);
-                mu_buf_append(b, i, s, (n < 0) ? strlen(s) : n);
+                mu_buf_pushdata(b, i, s, (n < 0) ? strlen(s) : n);
             } break;
 
             case 'u': {
@@ -222,7 +247,7 @@ void mu_buf_vformat(mu_t *b, muint_t *i, const char *f, va_list args) {
             case 'c': {
                 muint_t u = mu_buf_va_uint(args, size);
                 mu_buf_va_size(args, size);
-                mu_buf_push(b, i, u);
+                mu_buf_pushchr(b, i, u);
             } break;
 
             default: {
@@ -232,10 +257,10 @@ void mu_buf_vformat(mu_t *b, muint_t *i, const char *f, va_list args) {
     }
 }
 
-void mu_buf_format(mu_t *b, muint_t *i, const char *fmt, ...) {
+void mu_buf_pushf(mu_t *b, muint_t *i, const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    mu_buf_vformat(b, i, fmt, args);
+    mu_buf_vpushf(b, i, fmt, args);
     va_end(args);
 }
 

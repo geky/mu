@@ -120,9 +120,9 @@ void mu_dis(mu_t c) {
 
     mu_printf("-- dis 0x%wx --", c);
     mu_printf("regs: %qu, scope: %qu, args: 0x%bx",
-            mu_code_getheader(c)->regs,
-            mu_code_getheader(c)->scope,
-            mu_code_getheader(c)->args);
+            mu_code_getregs(c),
+            mu_code_getscope(c),
+            mu_code_getargs(c));
 
     if (mu_code_getimmslen(c) > 0) {
         mu_printf("imms:");
@@ -287,9 +287,9 @@ mcnt_t mu_exec(mu_t c, mu_t scope, mu_t *frame) {
 
 reenter:
     {   // Setup the registers and scope
-        mu_t regs[mu_code_getheader(c)->regs];
+        mu_t regs[mu_code_getregs(c)];
         regs[0] = scope;
-        mu_frame_move(mu_code_getheader(c)->args, &regs[1], frame);
+        mu_frame_move(mu_code_getargs(c), &regs[1], frame);
 
         // Setup other state
         imms = mu_code_getimms(c);
@@ -406,9 +406,9 @@ reenter:
 
                 c = mu_fn_getcode(scratch);
                 if (c) {
-                    mu_frame_convert(a, mu_code_getheader(c)->args, frame);
-                    scope = mu_tbl_extend(mu_code_getheader(c)->scope,
-                                mu_fn_getclosure(scratch));
+                    mu_frame_convert(a, mu_code_getargs(c), frame);
+                    scope = mu_tbl_create(mu_code_getscope(c));
+                    mu_tbl_settail(scope, mu_fn_getclosure(scratch));
                     mu_fn_dec(scratch);
                     goto reenter;
                 } else {

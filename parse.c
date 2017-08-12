@@ -335,28 +335,28 @@ static mu_noreturn mu_error_character(struct mlex *l) {
 static mu_noreturn mu_error_token(struct mlex *l) {
     mu_t b = mu_buf_create(0);
     muint_t n = 0;
-    mu_buf_format(&b, &n, "unexpected ");
+    mu_buf_pushf(&b, &n, "unexpected ");
 
     if (l->tok & T_ANY_VAL) {
-        mu_buf_format(&b, &n, "%r", mu_inc(l->val));
+        mu_buf_pushf(&b, &n, "%r", mu_inc(l->val));
     } else if (l->tok & T_TERM) {
-        mu_buf_format(&b, &n, "terminator");
+        mu_buf_pushf(&b, &n, "terminator");
     } else if (l->tok & T_SEP) {
-        mu_buf_format(&b, &n, "','");
+        mu_buf_pushf(&b, &n, "','");
     } else if (l->tok & T_LPAREN) {
-        mu_buf_format(&b, &n, "'('");
+        mu_buf_pushf(&b, &n, "'('");
     } else if (l->tok & T_RPAREN) {
-        mu_buf_format(&b, &n, "')'");
+        mu_buf_pushf(&b, &n, "')'");
     } else if (l->tok & T_LTABLE) {
-        mu_buf_format(&b, &n, "'['");
+        mu_buf_pushf(&b, &n, "'['");
     } else if (l->tok & T_RTABLE) {
-        mu_buf_format(&b, &n, "']'");
+        mu_buf_pushf(&b, &n, "']'");
     } else if (l->tok & T_LBLOCK) {
-        mu_buf_format(&b, &n, "'{'");
+        mu_buf_pushf(&b, &n, "'{'");
     } else if (l->tok & T_RBLOCK) {
-        mu_buf_format(&b, &n, "'}'");
+        mu_buf_pushf(&b, &n, "'}'");
     } else {
-        mu_buf_format(&b, &n, "end");
+        mu_buf_pushf(&b, &n, "end");
     }
 
     mu_error_parse(l, mu_str_intern(b, n));
@@ -557,7 +557,7 @@ static bool lookahead(struct mparse *p, mtok_t a, mtok_t b) {
 // Actual encoding is defered to virtual machine
 static void emit(struct mparse *p, mbyte_t byte) {
     muint_t bcount = p->bcount;
-    mu_buf_push(&p->bcode, &bcount, byte);
+    mu_buf_pushchr(&p->bcode, &bcount, byte);
     p->bcount = bcount;
 }
 
@@ -657,7 +657,7 @@ static void encode_store(struct mparse *p, struct mexpr *e,
 }
 
 // Completing a parse and generating the final code object
-static mu_t compile(struct mparse *p) {
+static mu_t compile(struct mparse *p, bool weak) {
     mu_t b = mu_buf_create(
             mu_offsetof(struct mcode, data) +
             sizeof(mu_t)*mu_tbl_getlen(p->imms) +
@@ -668,7 +668,7 @@ static mu_t compile(struct mparse *p) {
 
     struct mcode *code = mu_buf_getdata(b);
     code->args = p->args;
-    code->flags = MFN_SCOPED;
+    code->flags = MFN_SCOPED | (weak ? MFN_WEAK : 0);
     code->regs = p->regs;
     code->scope = p->scope;
     code->icount = mu_tbl_getlen(p->imms);
@@ -827,8 +827,7 @@ static void p_fn(struct mparse *p, bool weak) {
 
     p->l = q.l;
 
-    mu_t c = compile(&q);
-    mu_code_getheader(c)->flags |= weak ? MFN_WEAK : 0;
+    mu_t c = compile(&q, weak);
     encode(p, MOP_FN, p->sp+1, imm(p, c), 0, +1);
 }
 
@@ -1487,7 +1486,7 @@ mu_t mu_nparse(const mbyte_t **ppos, const mbyte_t *end) {
     }
 
     if (sym && *pos != ':') {
-        mu_error_expression(mu_str_getdata(val)[0]);
+        mu_error_expression(*(const mbyte_t *)mu_str_getdata(val));
     }
 
     *ppos = pos;
@@ -1513,7 +1512,7 @@ mu_t mu_compile(const char *s, muint_t n) {
 
     encode(&p, MOP_RET, 0, 0, 0, 0);
     lex_dec(p.l);
-    return compile(&p);
+    return compile(&p, false);
 }
 
 mu_t mu_ncompile(const mbyte_t **pos, const mbyte_t *end) {
@@ -1533,5 +1532,5 @@ mu_t mu_ncompile(const mbyte_t **pos, const mbyte_t *end) {
 
     encode(&p, MOP_RET, 0, 0, 0, 0);
     lex_dec(p.l);
-    return compile(&p);
+    return compile(&p, false);
 }

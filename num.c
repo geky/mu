@@ -48,6 +48,34 @@ mu_t mu_num_fromfloat(mfloat_t n) {
     return mnum(n);
 }
 
+mu_t mu_num_frommu(mu_t m) {
+    switch (mu_gettype(m)) {
+        case MTNIL:
+            return mu_num_fromuint(0);
+
+        case MTNUM:
+            return m;
+
+        case MTSTR: {
+            const mbyte_t *start = mu_str_getdata(m);
+            const mbyte_t *end = start + mu_str_getlen(m);
+            mu_t n = mu_num_parse(&start, end);
+            mu_dec(m);
+
+            if (start != end) {
+                mu_dec(n);
+                n = 0;
+            } 
+
+            return n;
+        }
+
+        default:
+            mu_dec(m);
+            return 0;
+    }
+}
+
 // Comparison operation
 mint_t mu_num_cmp(mu_t a, mu_t b) {
     mu_assert(mu_isnum(a) && mu_isnum(b));
@@ -279,7 +307,7 @@ static void mu_num_base_ipart(mu_t *s, muint_t *i, mu_t n, mu_t base) {
 
     while (mu_num_cmp(n, mu_num_fromuint(0)) > 0) {
         mu_t d = mu_num_mod(n, base);
-        mu_buf_push(s, i, mu_toascii(mu_num_getuint(d)));
+        mu_buf_pushchr(s, i, mu_toascii(mu_num_getuint(d)));
         n = mu_num_idiv(n, base);
     }
 
@@ -306,12 +334,12 @@ static void mu_num_base_fpart(mu_t *s, muint_t *i, mu_t n,
         }
 
         if (digit == mu_num_fromint(-1)) {
-            mu_buf_push(s, i, '.');
+            mu_buf_pushchr(s, i, '.');
         }
 
         mu_t p = mu_num_pow(base, digit);
         mu_t d = mu_num_idiv(n, p);
-        mu_buf_push(s, i, mu_toascii(mu_num_getuint(d)));
+        mu_buf_pushchr(s, i, mu_toascii(mu_num_getuint(d)));
 
         n = mu_num_mod(n, p);
         digit = mu_num_sub(digit, mu_num_fromuint(1));
@@ -332,11 +360,11 @@ static mu_t mu_num_base(mu_t n, char c, mu_t base, char expc, mu_t expbase) {
 
         if (mu_num_cmp(n, mu_num_fromuint(0)) < 0) {
             n = mu_num_neg(n);
-            mu_buf_push(&s, &i, '-');
+            mu_buf_pushchr(&s, &i, '-');
         }
 
         if (c) {
-            mu_buf_append(&s, &i, (mbyte_t[2]){'0', c}, 2);
+            mu_buf_pushdata(&s, &i, (mbyte_t[2]){'0', c}, 2);
         }
 
         mu_t exp = mu_num_floor(mu_num_log(n, expbase));
@@ -356,11 +384,11 @@ static mu_t mu_num_base(mu_t n, char c, mu_t base, char expc, mu_t expbase) {
         mu_num_base_fpart(&s, &i, n, base, mu_num_getuint(digits) - (i-j));
 
         if (scientific) {
-            mu_buf_push(&s, &i, expc);
+            mu_buf_pushchr(&s, &i, expc);
 
             if (mu_num_cmp(exp, mu_num_fromuint(0)) < 0) {
                 exp = mu_num_neg(exp);
-                mu_buf_push(&s, &i, '-');
+                mu_buf_pushchr(&s, &i, '-');
             }
 
             mu_num_base_ipart(&s, &i, exp, mu_num_fromuint(10));
@@ -394,31 +422,13 @@ mu_t mu_num_hex(mu_t n) {
 // Number related Mu functions
 static mcnt_t mu_bfn_num(mu_t *frame) {
     mu_t m = frame[0];
-
-    switch (mu_gettype(m)) {
-        case MTNIL:
-            frame[0] = mu_num_fromuint(0);
-            return 1;
-
-        case MTNUM:
-            frame[0] = m;
-            return 1;
-
-        case MTSTR: {
-            const mbyte_t *start = mu_str_getdata(m);
-            const mbyte_t *end = start + mu_str_getlen(m);
-            frame[0] = mu_num_parse(&start, end);
-            if (start == end) {
-                mu_dec(m);
-                return 1;
-            }
-        }
-
-        default:
-            break;
+    frame[0] = mu_num_frommu(mu_inc(m));
+    if (!frame[0]) {
+        mu_error_cast(MU_KEY_NUM, m);
     }
+    mu_dec(m);
 
-    mu_error_cast(MU_KEY_NUM, m);
+    return 1;
 }
 
 MU_GEN_STR(mu_gen_key_num, "num")

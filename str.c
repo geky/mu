@@ -115,7 +115,7 @@ mu_t mu_str_intern(mu_t b, muint_t n) {
     return mu_str_inc(s);
 }
 
-mu_t mu_str_fromdata(const mbyte_t *s, muint_t n) {
+mu_t mu_str_fromdata(const void *s, muint_t n) {
     if (n > (mlen_t)-1) {
         mu_errorf("exceeded max length in string");
     }
@@ -154,14 +154,23 @@ mu_t mu_str_init(const struct mstr *s) {
     return m;
 }
 
-mu_t mu_str_fromiter(mu_t iter) {
-    return mu_fn_call(MU_JOIN, 0x21, iter, MU_EMPTY_STR);
+mu_t mu_str_frommu(mu_t m) {
+    switch (mu_gettype(m)) {
+        case MTNIL:
+            return MU_EMPTY_STR;
+
+        case MTSTR:
+            return m;
+
+        default:
+            return mu_str_format("%nr", m, 0);
+    }
 }
 
 mu_t mu_str_vformat(const char *f, va_list args) {
     mu_t b = mu_buf_create(0);
     muint_t n = 0;
-    mu_buf_vformat(&b, &n, f, args);
+    mu_buf_vpushf(&b, &n, f, args);
     return mu_str_intern(b, n);
 }
 
@@ -200,7 +209,7 @@ bool mu_str_next(mu_t s, muint_t *ip, mu_t *cp) {
         return false;
     }
 
-    if (cp) *cp = mu_str_fromdata(&mu_str_getdata(s)[i], 1);
+    if (cp) *cp = mu_str_fromdata((const mbyte_t*)mu_str_getdata(s) + i, 1);
     *ip = i + 1;
     return true;
 }
@@ -254,7 +263,8 @@ mu_t mu_str_subset(mu_t s, mint_t lower, mint_t upper) {
         return MU_EMPTY_STR;
     }
 
-    mu_t d = mu_str_fromdata(mu_str_getdata(s) + lower, upper - lower);
+    mu_t d = mu_str_fromdata(
+            (const mbyte_t *)mu_str_getdata(s) + lower, upper - lower);
     mu_str_dec(s);
     return d;
 }
@@ -278,7 +288,7 @@ mu_t mu_str_parse(const mbyte_t **ppos, const mbyte_t *end) {
                  mu_fromascii(pos[7]) < 2 &&
                  mu_fromascii(pos[8]) < 2 &&
                  mu_fromascii(pos[9]) < 2)) {
-                mu_buf_push(&b, &n,
+                mu_buf_pushchr(&b, &n,
                         mu_fromascii(pos[2])*2*2*2*2*2*2*2 +
                         mu_fromascii(pos[3])*2*2*2*2*2*2 +
                         mu_fromascii(pos[4])*2*2*2*2*2 +
@@ -292,7 +302,7 @@ mu_t mu_str_parse(const mbyte_t **ppos, const mbyte_t *end) {
                 (mu_fromascii(pos[2]) < 8 &&
                  mu_fromascii(pos[3]) < 8 &&
                  mu_fromascii(pos[4]) < 8)) {
-                mu_buf_push(&b, &n,
+                mu_buf_pushchr(&b, &n,
                         mu_fromascii(pos[2])*8*8 +
                         mu_fromascii(pos[3])*8 +
                         mu_fromascii(pos[4]));
@@ -301,7 +311,7 @@ mu_t mu_str_parse(const mbyte_t **ppos, const mbyte_t *end) {
                        (mu_fromascii(pos[2]) < 10 &&
                         mu_fromascii(pos[3]) < 10 &&
                         mu_fromascii(pos[4]) < 10)) {
-                mu_buf_push(&b, &n,
+                mu_buf_pushchr(&b, &n,
                         mu_fromascii(pos[2])*10*10 +
                         mu_fromascii(pos[3])*10 +
                         mu_fromascii(pos[4]));
@@ -309,33 +319,33 @@ mu_t mu_str_parse(const mbyte_t **ppos, const mbyte_t *end) {
             } else if (pos[1] == 'x' && pos < end-3 &&
                        (mu_fromascii(pos[2]) < 16 &&
                         mu_fromascii(pos[3]) < 16)) {
-                mu_buf_push(&b, &n,
+                mu_buf_pushchr(&b, &n,
                         mu_fromascii(pos[2])*16 +
                         mu_fromascii(pos[3]));
                 pos += 4;
             } else if (pos[1] == '\\') {
-                mu_buf_push(&b, &n, '\\'); pos += 2;
+                mu_buf_pushchr(&b, &n, '\\'); pos += 2;
             } else if (pos[1] == '\'') {
-                mu_buf_push(&b, &n, '\''); pos += 2;
+                mu_buf_pushchr(&b, &n, '\''); pos += 2;
             } else if (pos[1] == '\"') {
-                mu_buf_push(&b, &n, '\"'); pos += 2;
+                mu_buf_pushchr(&b, &n, '\"'); pos += 2;
             } else if (pos[1] == 'f') {
-                mu_buf_push(&b, &n, '\f'); pos += 2;
+                mu_buf_pushchr(&b, &n, '\f'); pos += 2;
             } else if (pos[1] == 'n') {
-                mu_buf_push(&b, &n, '\n'); pos += 2;
+                mu_buf_pushchr(&b, &n, '\n'); pos += 2;
             } else if (pos[1] == 'r') {
-                mu_buf_push(&b, &n, '\r'); pos += 2;
+                mu_buf_pushchr(&b, &n, '\r'); pos += 2;
             } else if (pos[1] == 't') {
-                mu_buf_push(&b, &n, '\t'); pos += 2;
+                mu_buf_pushchr(&b, &n, '\t'); pos += 2;
             } else if (pos[1] == 'v') {
-                mu_buf_push(&b, &n, '\v'); pos += 2;
+                mu_buf_pushchr(&b, &n, '\v'); pos += 2;
             } else if (pos[1] == '0') {
-                mu_buf_push(&b, &n, '\0'); pos += 2;
+                mu_buf_pushchr(&b, &n, '\0'); pos += 2;
             } else {
-                mu_buf_push(&b, &n, '\\'); pos += 1;
+                mu_buf_pushchr(&b, &n, '\\'); pos += 1;
             }
         } else {
-            mu_buf_push(&b, &n, *pos++);
+            mu_buf_pushchr(&b, &n, *pos++);
         }
     }
 
@@ -355,27 +365,27 @@ mu_t mu_str_repr(mu_t m) {
     mu_t b = mu_buf_create(2 + mu_str_getlen(m));
     muint_t n = 0;
 
-    mu_buf_push(&b, &n, '\'');
+    mu_buf_pushchr(&b, &n, '\'');
 
     for (; pos < end; pos++) {
         if (*pos < ' ' || *pos > '~' ||
             *pos == '\\' || *pos == '\'') {
-            if (*pos == '\\')      mu_buf_format(&b, &n, "\\\\");
-            else if (*pos == '\'') mu_buf_format(&b, &n, "\\'");
-            else if (*pos == '\f') mu_buf_format(&b, &n, "\\f");
-            else if (*pos == '\n') mu_buf_format(&b, &n, "\\n");
-            else if (*pos == '\r') mu_buf_format(&b, &n, "\\r");
-            else if (*pos == '\t') mu_buf_format(&b, &n, "\\t");
-            else if (*pos == '\v') mu_buf_format(&b, &n, "\\v");
-            else if (*pos == '\0') mu_buf_format(&b, &n, "\\0");
-            else                   mu_buf_format(&b, &n, "\\x%bx", *pos);
+            if (*pos == '\\')      mu_buf_pushf(&b, &n, "\\\\");
+            else if (*pos == '\'') mu_buf_pushf(&b, &n, "\\'");
+            else if (*pos == '\f') mu_buf_pushf(&b, &n, "\\f");
+            else if (*pos == '\n') mu_buf_pushf(&b, &n, "\\n");
+            else if (*pos == '\r') mu_buf_pushf(&b, &n, "\\r");
+            else if (*pos == '\t') mu_buf_pushf(&b, &n, "\\t");
+            else if (*pos == '\v') mu_buf_pushf(&b, &n, "\\v");
+            else if (*pos == '\0') mu_buf_pushf(&b, &n, "\\0");
+            else                   mu_buf_pushf(&b, &n, "\\x%bx", *pos);
         } else {
-            mu_buf_push(&b, &n, *pos);
+            mu_buf_pushchr(&b, &n, *pos);
         }
     }
 
     mu_str_dec(m);
-    mu_buf_push(&b, &n, '\'');
+    mu_buf_pushchr(&b, &n, '\'');
     return mu_str_intern(b, n);
 }
 
@@ -383,20 +393,13 @@ mu_t mu_str_repr(mu_t m) {
 // String related functions in Mu
 static mcnt_t mu_bfn_str(mu_t *frame) {
     mu_t m = frame[0];
-
-    switch (mu_gettype(m)) {
-        case MTNIL:
-            frame[0] = MU_EMPTY_STR;
-            return 1;
-
-        case MTSTR:
-            frame[0] = frame[0];
-            return 1;
-
-        default:
-            frame[0] = mu_str_format("%nr", m, 0);
-            return 1;
+    frame[0] = mu_str_frommu(mu_inc(m));
+    if (!frame[0]) {
+        mu_error_cast(MU_KEY_STR, m);
     }
+    mu_dec(m);
+
+    return 1;
 }
 
 MU_GEN_STR(mu_gen_key_str, "str")
@@ -453,17 +456,17 @@ static mcnt_t mu_bfn_replace(mu_t *frame) {
         bool match = memcmp(&sb[i], mb, mlen) == 0;
 
         if (match) {
-            mu_buf_concat(&d, &n, mu_str_inc(r));
+            mu_buf_pushmu(&d, &n, mu_str_inc(r));
             i += mlen;
         }
 
         if (!match || mlen == 0) {
-            mu_buf_push(&d, &n, sb[i]);
+            mu_buf_pushchr(&d, &n, sb[i]);
             i += 1;
         }
     }
 
-    mu_buf_append(&d, &n, &sb[i], slen-i);
+    mu_buf_pushdata(&d, &n, &sb[i], slen-i);
 
     mu_str_dec(s);
     mu_str_dec(m);
@@ -546,10 +549,10 @@ static mcnt_t mu_bfn_join(mu_t *frame) {
         if (first) {
             first = false;
         } else {
-            mu_buf_concat(&b, &n, mu_str_inc(delim));
+            mu_buf_pushmu(&b, &n, mu_str_inc(delim));
         }
 
-        mu_buf_concat(&b, &n, frame[0]);
+        mu_buf_pushmu(&b, &n, frame[0]);
     }
 
     mu_fn_dec(iter);
@@ -592,15 +595,15 @@ static mcnt_t mu_bfn_pad(mu_t *frame) {
     muint_t count = (len - mu_str_getlen(s)) / mu_str_getlen(pad);
 
     if (left) {
-        mu_buf_concat(&d, &n, s);
+        mu_buf_pushmu(&d, &n, s);
     }
 
     for (muint_t i = 0; i < count; i++) {
-        mu_buf_concat(&d, &n, mu_str_inc(pad));
+        mu_buf_pushmu(&d, &n, mu_str_inc(pad));
     }
 
     if (!left) {
-        mu_buf_concat(&d, &n, s);
+        mu_buf_pushmu(&d, &n, s);
     }
 
     mu_dec(pad);

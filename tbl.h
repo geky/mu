@@ -7,14 +7,40 @@
 #include "mu.h"
 
 
+// Definition of Mu's table type
+//
+// Each table is composed of an array of values
+// with a stride for keys/values. If keys/values
+// is not stored in the array it is implicitely
+// stored as a range/offset based on the specified
+// offset and length.
+struct mtbl {
+    mref_t ref;
+    mlen_t len;
+    mlen_t nils;
+    muintq_t npw2;
+    muintq_t isize;
+
+    mu_t tail;
+    mu_t *array;
+};
+
+
 // Table creation functions
 mu_t mu_tbl_create(muint_t size);
-mu_t mu_tbl_extend(muint_t size, mu_t tail);
 
 // Conversion operations
 mu_t mu_tbl_fromlist(mu_t *list, muint_t n);
 mu_t mu_tbl_frompairs(mu_t (*pairs)[2], muint_t n);
-mu_t mu_tbl_fromiter(mu_t iter);
+mu_t mu_tbl_frommu(mu_t m);
+
+// Table reference counting
+mu_inline mu_t mu_tbl_inc(mu_t m);
+mu_inline void mu_tbl_dec(mu_t m);
+
+// Table access functions
+mu_inline mlen_t mu_tbl_getlen(mu_t m);
+mu_inline mu_t mu_tbl_gettail(mu_t m);
 
 // Changing the tail of the table
 void mu_tbl_settail(mu_t t, mu_t tail);
@@ -40,41 +66,18 @@ mu_t mu_tbl_pairs(mu_t t);
 mu_t mu_tbl_parse(const mbyte_t **pos, const mbyte_t *end);
 mu_t mu_tbl_dump(mu_t t, mu_t depth);
 
-// Array-like manipulations
-mu_t mu_tbl_concat(mu_t a, mu_t b, mu_t offset);
-mu_t mu_tbl_subset(mu_t t, mint_t lower, mint_t upper);
-
+// Array-like manipulation
 void mu_tbl_push(mu_t t, mu_t v, mint_t i);
 mu_t mu_tbl_pop(mu_t t, mint_t i);
+
+mu_t mu_tbl_concat(mu_t a, mu_t b, mu_t offset);
+mu_t mu_tbl_subset(mu_t t, mint_t lower, mint_t upper);
 
 // Set operations
 mu_t mu_tbl_and(mu_t a, mu_t b);
 mu_t mu_tbl_or(mu_t a, mu_t b);
 mu_t mu_tbl_xor(mu_t a, mu_t b);
 mu_t mu_tbl_diff(mu_t a, mu_t b);
-
-// Table flags
-enum mu_tbl_flags {
-    MTBL_LINEAR = 1 << 0, // stored as linear array
-};
-
-// Definition of Mu's table type
-//
-// Each table is composed of an array of values
-// with a stride for keys/values. If keys/values
-// is not stored in the array it is implicitely
-// stored as a range/offset based on the specified
-// offset and length.
-struct mtbl {
-    mref_t ref;
-    mlen_t len;
-    mlen_t nils;
-    muintq_t npw2;
-    muintq_t isize;
-
-    mu_t tail;
-    mu_t *array;
-};
 
 
 // Table reference counting

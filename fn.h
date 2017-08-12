@@ -12,86 +12,12 @@
 typedef mcnt_t mbfn_t(mu_t *frame);
 typedef mcnt_t msbfn_t(mu_t closure, mu_t *frame);
 
-
-// Conversion operations
-mu_t mu_fn_frombfn(mcnt_t args, mbfn_t *bfn);
-mu_t mu_fn_fromsbfn(mcnt_t args, msbfn_t *sbfn, mu_t closure);
-mu_t mu_fn_fromcode(mu_t code, mu_t closure);
-
-// Function calls
-mcnt_t mu_fn_tcall(mu_t f, mcnt_t fc, mu_t *frame);
-void mu_fn_fcall(mu_t f, mcnt_t fc, mu_t *frame);
-mu_t mu_fn_vcall(mu_t f, mcnt_t fc, va_list args);
-mu_t mu_fn_call(mu_t f, mcnt_t fc, ...);
-
-// Iteration
-bool mu_fn_next(mu_t f, mcnt_t fc, mu_t *frame);
-
-// Bind and composition
-mu_t mu_fn_bind(mu_t f, mu_t args);
-mu_t mu_fn_comp(mu_t f, mu_t g);
-
-
 // Function tags
 enum mu_fn_flags {
     MFN_BUILTIN = 1 << 0, // C builtin function
     MFN_SCOPED  = 1 << 1, // Closure attached to function
     MFN_WEAK    = 1 << 2, // Closure is weakly referenced
 };
-
-// Definition of code structure used to represent the
-// executable component of Mu functions.
-struct mcode {
-    mcnt_t args;    // argument count
-    uint8_t flags;  // function flags
-    muintq_t regs;  // number of registers
-    muintq_t scope; // size of scope
-
-    mlen_t icount;  // number of immediate values
-    mlen_t bcount;  // number of bytecode instructions
-
-    mu_t data[];    // data that follows code header
-                    // immediate values
-                    // bytecode
-};
-
-// Code reference counting
-mu_inline bool mu_iscode(mu_t m) {
-    extern void mu_code_destroy(mu_t);
-    return mu_isbuf(m) && mu_buf_getdtor(m) == mu_code_destroy;
-}
-
-mu_inline mu_t mu_code_inc(mu_t c) {
-    mu_assert(mu_iscode(c));
-    return mu_buf_inc(c);
-}
-
-mu_inline void mu_code_dec(mu_t c) {
-    mu_assert(mu_iscode(c));
-    mu_buf_dec(c);
-}
-
-// Code access functions
-mu_inline struct mcode *mu_code_getheader(mu_t c) {
-    return ((struct mcode *)mu_buf_getdata(c));
-}
-
-mu_inline mlen_t mu_code_getimmslen(mu_t c) {
-    return ((struct mcode *)mu_buf_getdata(c))->icount;
-}
-
-mu_inline mlen_t mu_code_getbcodelen(mu_t c) {
-    return ((struct mcode *)mu_buf_getdata(c))->bcount;
-}
-
-mu_inline mu_t *mu_code_getimms(mu_t c) {
-    return ((struct mcode *)mu_buf_getdata(c))->data;
-}
-
-mu_inline void *mu_code_getbcode(mu_t c) {
-    return mu_code_getimms(c) + mu_code_getimmslen(c);
-}
-
 
 // Definition of the function type
 //
@@ -111,6 +37,113 @@ struct mfn {
         mu_t code;      // compiled mu code
     } fn;
 };
+
+
+// Conversion operations
+mu_t mu_fn_frombfn(mcnt_t args, mbfn_t *bfn);
+mu_t mu_fn_fromsbfn(mcnt_t args, msbfn_t *sbfn, mu_t closure);
+mu_t mu_fn_fromcode(mu_t code, mu_t closure);
+mu_t mu_fn_frommu(mu_t m);
+
+// Function reference counting
+mu_inline mu_t mu_fn_inc(mu_t f);
+mu_inline void mu_fn_dec(mu_t f);
+
+// Function access
+mu_inline mu_t mu_fn_getcode(mu_t m);
+mu_inline mu_t mu_fn_getclosure(mu_t m);
+
+// Function calls
+mcnt_t mu_fn_tcall(mu_t f, mcnt_t fc, mu_t *frame);
+void mu_fn_fcall(mu_t f, mcnt_t fc, mu_t *frame);
+mu_t mu_fn_vcall(mu_t f, mcnt_t fc, va_list args);
+mu_t mu_fn_call(mu_t f, mcnt_t fc, ...);
+
+// Iteration
+bool mu_fn_next(mu_t f, mcnt_t fc, mu_t *frame);
+
+// Bind and composition
+mu_t mu_fn_bind(mu_t f, mu_t args);
+mu_t mu_fn_comp(mu_t f, mu_t g);
+
+
+// Definition of code structure used to represent the
+// executable component of Mu functions.
+struct mcode {
+    mcnt_t args;    // argument count
+    uint8_t flags;  // function flags
+    muintq_t regs;  // number of registers
+    muintq_t scope; // size of scope
+
+    mlen_t icount;  // number of immediate values
+    mlen_t bcount;  // number of bytecode instructions
+
+    mu_t data[];    // data that follows code header
+                    // immediate values
+                    // bytecode
+};
+
+
+// Code reference counting
+mu_inline bool mu_iscode(mu_t m);
+mu_inline mu_t mu_code_inc(mu_t c);
+mu_inline void mu_code_dec(mu_t c);
+
+// Code access functions
+mu_inline mlen_t mu_code_getimmslen(mu_t c);
+mu_inline mlen_t mu_code_getbcodelen(mu_t c);
+mu_inline mu_t *mu_code_getimms(mu_t c);
+mu_inline void *mu_code_getbcode(mu_t c);
+
+
+// Code reference counting
+mu_inline bool mu_iscode(mu_t m) {
+    extern void mu_code_destroy(mu_t);
+    return mu_isbuf(m) && mu_buf_getdtor(m) == mu_code_destroy;
+}
+
+mu_inline mu_t mu_code_inc(mu_t c) {
+    mu_assert(mu_iscode(c));
+    return mu_buf_inc(c);
+}
+
+mu_inline void mu_code_dec(mu_t c) {
+    mu_assert(mu_iscode(c));
+    mu_buf_dec(c);
+}
+
+// Code access functions
+mu_inline mcnt_t mu_code_getargs(mu_t c) {
+    return ((struct mcode *)mu_buf_getdata(c))->args;
+}
+
+mu_inline uint8_t mu_code_getflags(mu_t c) {
+    return ((struct mcode *)mu_buf_getdata(c))->flags;
+}
+
+mu_inline muintq_t mu_code_getregs(mu_t c) {
+    return ((struct mcode *)mu_buf_getdata(c))->regs;
+}
+
+mu_inline muintq_t mu_code_getscope(mu_t c) {
+    return ((struct mcode *)mu_buf_getdata(c))->scope;
+}
+
+mu_inline mlen_t mu_code_getimmslen(mu_t c) {
+    return ((struct mcode *)mu_buf_getdata(c))->icount;
+}
+
+mu_inline mlen_t mu_code_getbcodelen(mu_t c) {
+    return ((struct mcode *)mu_buf_getdata(c))->bcount;
+}
+
+mu_inline mu_t *mu_code_getimms(mu_t c) {
+    return ((struct mcode *)mu_buf_getdata(c))->data;
+}
+
+mu_inline void *mu_code_getbcode(mu_t c) {
+    return mu_code_getimms(c) + mu_code_getimmslen(c);
+}
 
 // Function reference counting
 mu_inline mu_t mu_fn_inc(mu_t f) {
