@@ -776,17 +776,30 @@ mu_t mu_tbl_diff(mu_t a, mu_t b) {
 
 
 // String representation
-mu_t mu_tbl_parse(const mbyte_t **ppos, const mbyte_t *end) {
+mu_t mu_tbl_parsen(const mbyte_t **ppos, const mbyte_t *end) {
     const mbyte_t *pos = *ppos;
     mu_t t = mu_tbl_create(0);
     mu_t i = mu_num_fromuint(0);
 
+    if (*pos++ != '[') {
+        return 0;
+    }
+
     while (pos < end && *pos != ']') {
-        mu_t k = mu_nparse(&pos, end);
+        mu_t k = mu_parsen(&pos, end);
+        if (!k) {
+            mu_tbl_dec(t);
+            return 0;
+        }
 
         if (pos < end && *pos == ':') {
             pos++;
-            mu_t v = mu_nparse(&pos, end);
+            mu_t v = mu_parsen(&pos, end);
+            if (!v) {
+                mu_dec(k);
+                mu_tbl_dec(t);
+                return 0;
+            }
             mu_tbl_insert(t, k, v);
         } else {
             mu_tbl_insert(t, i, k);
@@ -801,14 +814,30 @@ mu_t mu_tbl_parse(const mbyte_t **ppos, const mbyte_t *end) {
     }
 
     if (pos == end || *pos++ != ']') {
-        mu_errorf("unterminated table literal");
+        // unterminated table
+        mu_tbl_dec(t);
+        return 0;
     }
 
     *ppos = pos;
     return t;
 }
 
-static void mu_tbl_dump_nested(mu_t t, mu_t *s, muint_t *n, mu_t depth) {
+mu_t mu_tbl_parse(const char *s, muint_t n) {
+    const mbyte_t *pos = (const mbyte_t *)s;
+    const mbyte_t *end = (const mbyte_t *)pos + n;
+
+    mu_t t = mu_tbl_parsen(&pos, end);
+
+    if (pos != end) {
+        mu_dec(t);
+        return 0;
+    }
+
+    return t;
+}
+
+static void mu_tbl_repr_nested(mu_t t, mu_t *s, muint_t *n, mu_t depth) {
     if (mu_num_cmp(depth, mu_num_fromuint(0)) <= 0) {
         mu_buf_pushf(s, n, "%nr", t, 0);
         return;
@@ -832,7 +861,7 @@ static void mu_tbl_dump_nested(mu_t t, mu_t *s, muint_t *n, mu_t depth) {
         }
 
         if (mu_istbl(v)) {
-            mu_tbl_dump_nested(v, s, n, mu_num_sub(depth, mu_num_fromuint(1)));
+            mu_tbl_repr_nested(v, s, n, mu_num_sub(depth, mu_num_fromuint(1)));
             mu_buf_pushf(s, n, ", ");
         } else {
             mu_buf_pushf(s, n, "%r, ", v);
@@ -847,17 +876,18 @@ static void mu_tbl_dump_nested(mu_t t, mu_t *s, muint_t *n, mu_t depth) {
     mu_tbl_dec(t);
 }
 
-mu_t mu_tbl_dump(mu_t t, mu_t depth) {
+mu_t mu_tbl_repr(mu_t t, mu_t depth) {
     mu_assert(mu_istbl(t) && (!depth || mu_isnum(depth)));
-
     if (!depth) {
         depth = mu_num_fromuint(1);
+    } else if (depth == mu_num_fromuint(0)) {
+        return mu_str_format("<tbl 0x%wx>", (muint_t)t & ~7);
     }
 
     mu_t s = mu_buf_create(0);
     muint_t n = 0;
 
-    mu_tbl_dump_nested(t, &s, &n, depth);
+    mu_tbl_repr_nested(t, &s, &n, depth);
 
     return mu_str_intern(s, n);
 }

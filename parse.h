@@ -7,35 +7,16 @@
 #include "mu.h"
 
 
+// Print parsable representation of literals
+mu_t mu_repr(mu_t m, mu_t depth);
+
 // Parse literals without side-effects
+mu_t mu_parsen(const mbyte_t **s, const mbyte_t *end);
 mu_t mu_parse(const char *s, muint_t n);
-mu_t mu_nparse(const mbyte_t **pos, const mbyte_t *end);
 
 // Compile Mu source code into code objects
+mu_t mu_compilen(const mbyte_t **s, const mbyte_t *end);
 mu_t mu_compile(const char *s, muint_t n);
-mu_t mu_ncompile(const mbyte_t **pos, const mbyte_t *end);
-
-
-// Conversion to/from ascii
-mu_inline muint_t mu_fromascii(mbyte_t c) {
-    if (c >= '0' && c <= '9') {
-        return c - '0';
-    } else if (c >= 'a' && c <= 'f') {
-        return c - 'a' + 10;
-    } else if (c >= 'A' && c <= 'F') {
-        return c - 'A' + 10;
-    } else {
-        return -1;
-    }
-}
-
-mu_inline mbyte_t mu_toascii(muint_t c) {
-    if (c < 10) {
-        return '0' + c;
-    } else {
-        return 'a' + (c-10);
-    }
-}
 
 
 // Language keywords

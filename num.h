@@ -54,7 +54,8 @@ mu_t mu_num_shl(mu_t, mu_t);
 mu_t mu_num_shr(mu_t, mu_t);
 
 // Number representation
-mu_t mu_num_parse(const mbyte_t **pos, const mbyte_t *end);
+mu_t mu_num_parsen(const mbyte_t **pos, const mbyte_t *end);
+mu_t mu_num_parse(const char *s, muint_t n);
 mu_t mu_num_repr(mu_t);
 
 mu_t mu_num_bin(mu_t);

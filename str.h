@@ -52,7 +52,8 @@ bool mu_str_next(mu_t s, muint_t *i, mu_t *c);
 mu_t mu_str_iter(mu_t s);
 
 // String representation
-mu_t mu_str_parse(const mbyte_t **pos, const mbyte_t *end);
+mu_t mu_str_parsen(const mbyte_t **pos, const mbyte_t *end);
+mu_t mu_str_parse(const char *s, muint_t n);
 mu_t mu_str_repr(mu_t s);
 
 

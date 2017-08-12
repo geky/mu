@@ -129,6 +129,10 @@ void mu_buf_pushmu(mu_t *b, muint_t *i, mu_t c) {
 
 
 // Buffer formatting
+static mbyte_t mu_buf_toascii(muint_t c) {
+    return (c < 10) ? '0' + c : 'a' + (c-10);
+}
+
 static void mu_buf_append_unsigned(mu_t *b, muint_t *i, muint_t u) {
     if (u == 0) {
         mu_buf_pushchr(b, i, '0');
@@ -147,7 +151,7 @@ static void mu_buf_append_unsigned(mu_t *b, muint_t *i, muint_t u) {
 
     char *c = (char *)mu_buf_getdata(*b) + *i - 1;
     while (u > 0) {
-        *c = mu_toascii(u % 10);
+        *c = mu_buf_toascii(u % 10);
         u /= 10;
         c--;
     }
@@ -164,7 +168,7 @@ static void mu_buf_append_signed(mu_t *b, muint_t *i, mint_t d) {
 
 static void mu_buf_append_hex(mu_t *b, muint_t *i, muint_t x, int n) {
     for (muint_t j = 0; j < 2*n; j++) {
-        mu_buf_pushchr(b, i, mu_toascii((x >> 4*(2*n-j-1)) & 0xf));
+        mu_buf_pushchr(b, i, mu_buf_toascii((x >> 4*(2*n-j-1)) & 0xf));
     }
 }
 

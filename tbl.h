@@ -63,8 +63,9 @@ mu_t mu_tbl_iter(mu_t t);
 mu_t mu_tbl_pairs(mu_t t);
 
 // Table representation
-mu_t mu_tbl_parse(const mbyte_t **pos, const mbyte_t *end);
-mu_t mu_tbl_dump(mu_t t, mu_t depth);
+mu_t mu_tbl_parsen(const mbyte_t **pos, const mbyte_t *end);
+mu_t mu_tbl_parse(const char *s, muint_t n);
+mu_t mu_tbl_repr(mu_t t, mu_t depth);
 
 // Array-like manipulation
 void mu_tbl_push(mu_t t, mu_t v, mint_t i);

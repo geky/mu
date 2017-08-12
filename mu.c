@@ -35,45 +35,6 @@ void mu_destroy(mu_t m) {
     mu_attr_destroy[mu_gettype(m)](m);
 }
 
-// Mu type comparisons
-static mint_t (*const mu_attr_cmp[8])(mu_t, mu_t) = {
-    [MTNUM] = mu_num_cmp,
-    [MTSTR] = mu_str_cmp,
-};
-
-// Mu type iterators
-static mu_t mu_fn_iter(mu_t m) { return m;}
-
-static mu_t (*const mu_attr_iter[8])(mu_t) = {
-    [MTSTR] = mu_str_iter,
-    [MTTBL] = mu_tbl_iter,
-    [MTFN]  = mu_fn_iter,
-};
-
-// Mu type representations
-MU_GEN_STR(mu_gen_key_cdata, "cdata")
-
-static mu_t (*const mu_attr_name[8])(void) = {
-    [MTNIL]  = mu_gen_key_nil,
-    [MTNUM]  = mu_gen_key_num,
-    [MTSTR]  = mu_gen_key_str,
-    [MTTBL]  = mu_gen_key_tbl,
-    [MTFN]   = mu_gen_key_fn,
-    [MTBUF]  = mu_gen_key_cdata,
-    [MTCBUF] = mu_gen_key_cdata,
-};
-
-static mu_t nil_repr(mu_t m) {
-    return MU_KW_NIL;
-}
-
-static mu_t (*const mu_attr_repr[8])(mu_t) = {
-    [MTNIL] = nil_repr,
-    [MTNUM] = mu_num_repr,
-    [MTSTR] = mu_str_repr,
-};
-
-
 // Frame operations
 void mu_frame_move(mcnt_t fc, mu_t *dframe, mu_t *sframe) {
     memcpy(dframe, sframe, sizeof(mu_t)*mu_frame_count(fc));
@@ -246,7 +207,7 @@ mu_noreturn mu_errorargs(mu_t name, mcnt_t fc, mu_t *frame) {
         muint_t n = 0;
         mu_buf_pushf(&message, &n, "invalid argument in %m(", name);
 
-        if (fc != 0xf) {
+        if (fc == 0xf) {
             mu_buf_pushf(&message, &n, "..");
             fc = 1;
         }
@@ -262,6 +223,11 @@ mu_noreturn mu_errorargs(mu_t name, mcnt_t fc, mu_t *frame) {
 
 
 // wrappers for comparison operations
+static mint_t (*const mu_attr_cmp[8])(mu_t, mu_t) = {
+    [MTNUM] = mu_num_cmp,
+    [MTSTR] = mu_str_cmp,
+};
+
 static mcnt_t mu_bfn_not(mu_t *frame) {
     mu_dec(frame[0]);
     frame[0] = !frame[0] ? MU_TRUE : MU_FALSE;
@@ -395,22 +361,11 @@ MU_GEN_BFN(mu_gen_parse, 0x1, mu_bfn_parse)
 
 static mcnt_t mu_bfn_repr(mu_t *frame) {
     mu_t m     = frame[0];
-    mu_t depth = frame[1] ? frame[1] : mu_num_fromuint(1);
-    mu_checkargs(mu_isnum(depth), MU_KEY_REPR, 0x2, frame);
+    mu_t depth = frame[1];
+    mu_checkargs(!depth || mu_isnum(depth), MU_KEY_REPR, 0x2, frame);
 
-    if (mu_attr_repr[mu_gettype(m)]) {
-        frame[0] = mu_attr_repr[mu_gettype(m)](m);
-        return 1;
-    } else if (mu_istbl(m) && mu_num_cmp(depth, mu_num_fromuint(0)) > 0) {
-        frame[0] = mu_tbl_dump(m, depth);
-        return 1;
-    } else {
-        mu_dec(m);
-        frame[0] = mu_str_format("<%m 0x%wx>",
-                mu_attr_name[mu_gettype(m)](),
-                (muint_t)m & ~7);
-        return 1;
-    }
+    frame[0] = mu_repr(m, depth);
+    return 1;
 }
 
 MU_GEN_STR(mu_gen_key_repr, "repr")
@@ -698,6 +653,13 @@ MU_GEN_BFN(mu_gen_diff, 0x2, mu_bfn_diff)
 
 
 // Iterators and generators
+static mu_t mu_fn_iter(mu_t m) { return m; }
+static mu_t (*const mu_attr_iter[8])(mu_t) = {
+    [MTSTR] = mu_str_iter,
+    [MTTBL] = mu_tbl_iter,
+    [MTFN]  = mu_fn_iter,
+};
+
 static mcnt_t mu_bfn_iter(mu_t *frame) {
     mu_t m = frame[0];
     mu_checkargs(mu_attr_iter[mu_gettype(m)],

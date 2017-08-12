@@ -367,12 +367,6 @@ static void mu_errorassign(struct mlex *l) {
     mu_errorparse(l, "invalid assignment");
 }
 
-#define mu_checkexpr(pred, ...) \
-        ((pred) ? (void)0 : mu_errorexpr(__VA_ARGS__))
-static void mu_errorexpr(mbyte_t c) {
-    mu_errorf("unexpected %r in expression", mu_str_fromdata(&c, 1));
-}
-
 
 //// Lexical analysis ////
 
@@ -431,12 +425,14 @@ static void l_kw(struct mlex *l) {
 }
 
 static void l_num(struct mlex *l) {
-    l->val = mu_num_parse(&l->pos, l->end);
+    l->val = mu_num_parsen(&l->pos, l->end);
+    mu_checkparse(l->val, l, "invalid number literal");
     l->tok = T_IMM;
 }
 
 static void l_str(struct mlex *l) {
-    l->val = mu_str_parse(&l->pos, l->end);
+    l->val = mu_str_parsen(&l->pos, l->end);
+    mu_checkparse(l->val, l, "unterminated string literal");
     l->tok = T_IMM;
 }
 
@@ -1423,17 +1419,30 @@ static void p_block(struct mparse *p, bool root) {
 
 
 //// Parsing functions ////
-mu_t mu_parse(const char *s, muint_t n) {
-    const mbyte_t *pos = (const mbyte_t *)s;
-    const mbyte_t *end = (const mbyte_t *)pos + n;
+MU_GEN_STR(mu_gen_key_cdata, "cdata")
+static mu_t (*const mu_attr_name[8])(void) = {
+    [MTNIL]  = mu_gen_key_nil,
+    [MTNUM]  = mu_gen_key_num,
+    [MTSTR]  = mu_gen_key_str,
+    [MTTBL]  = mu_gen_key_tbl,
+    [MTFN]   = mu_gen_key_fn,
+    [MTBUF]  = mu_gen_key_cdata,
+    [MTCBUF] = mu_gen_key_cdata,
+};
 
-    mu_t v = mu_nparse(&pos, end);
-
-    mu_checkexpr(pos == end, *pos);
-    return v;
+mu_t mu_repr(mu_t m, mu_t depth) {
+    switch (mu_gettype(m)) {
+        case MTNIL: return MU_KW_NIL;
+        case MTNUM: return mu_num_repr(m);
+        case MTSTR: return mu_str_repr(m);
+        case MTTBL: return mu_tbl_repr(m, depth);
+        default:    return mu_str_format("<%m 0x%wx>",
+                mu_attr_name[mu_gettype(m)](),
+                (muint_t)m & ~7);
+    }
 }
 
-mu_t mu_nparse(const mbyte_t **ppos, const mbyte_t *end) {
+mu_t mu_parsen(const mbyte_t **ppos, const mbyte_t *end) {
     const mbyte_t *pos = *ppos;
     mu_t val;
     bool sym = false;
@@ -1452,9 +1461,9 @@ mu_t mu_nparse(const mbyte_t **ppos, const mbyte_t *end) {
 
     switch (class[*pos]) {
         case L_OP:
-        case L_NUM:     val = mu_num_parse(&pos, end); break;
-        case L_STR:     val = mu_str_parse(&pos, end); break;
-        case L_LTABLE:  val = mu_tbl_parse(&pos, end); break;
+        case L_NUM:     val = mu_num_parsen(&pos, end); break;
+        case L_STR:     val = mu_str_parsen(&pos, end); break;
+        case L_LTABLE:  val = mu_tbl_parsen(&pos, end); break;
 
         case L_KW: {
             const mbyte_t *start = pos++;
@@ -1466,7 +1475,7 @@ mu_t mu_nparse(const mbyte_t **ppos, const mbyte_t *end) {
             sym = true;
         } break;
 
-        default:        mu_checkexpr(false, *pos); mu_unreachable;
+        default:        return 0;
     }
 
     while (pos < end) {
@@ -1481,11 +1490,47 @@ mu_t mu_nparse(const mbyte_t **ppos, const mbyte_t *end) {
         }
     }
 
-    mu_checkexpr(!sym || *pos == ':',
-            *(const mbyte_t *)mu_str_getdata(val));
+    if (!(!sym || *pos == ':')) {
+        mu_dec(val);
+        return 0;
+    }
 
     *ppos = pos;
     return val;
+}
+
+mu_t mu_parse(const char *s, muint_t n) {
+    const mbyte_t *pos = (const mbyte_t *)s;
+    const mbyte_t *end = (const mbyte_t *)pos + n;
+
+    mu_t v = mu_parsen(&pos, end);
+
+    if (pos != end) {
+        mu_dec(v);
+        return 0;
+    }
+
+    return v;
+}
+
+mu_t mu_compilen(const mbyte_t **pos, const mbyte_t *end) {
+    struct mparse p = {
+        .bcode = mu_buf_create(0),
+        .imms = mu_tbl_create(0),
+        .bchain = -1,
+        .cchain = -1,
+
+        .regs = 1,
+        .scope = MU_MINALLOC / sizeof(muint_t),
+    };
+
+    lex_init(&p.l, *pos, end);
+    p_block(&p, true);
+    *pos = p.l.pos;
+
+    encode(&p, MOP_RET, 0, 0, 0, 0);
+    lex_dec(p.l);
+    return compile(&p, false);
 }
 
 mu_t mu_compile(const char *s, muint_t n) {
@@ -1510,22 +1555,3 @@ mu_t mu_compile(const char *s, muint_t n) {
     return compile(&p, false);
 }
 
-mu_t mu_ncompile(const mbyte_t **pos, const mbyte_t *end) {
-    struct mparse p = {
-        .bcode = mu_buf_create(0),
-        .imms = mu_tbl_create(0),
-        .bchain = -1,
-        .cchain = -1,
-
-        .regs = 1,
-        .scope = MU_MINALLOC / sizeof(muint_t),
-    };
-
-    lex_init(&p.l, *pos, end);
-    p_block(&p, true);
-    *pos = p.l.pos;
-
-    encode(&p, MOP_RET, 0, 0, 0, 0);
-    lex_dec(p.l);
-    return compile(&p, false);
-}

@@ -271,57 +271,69 @@ mu_t mu_str_subset(mu_t s, mint_t lower, mint_t upper) {
 
 
 // String representation
-mu_t mu_str_parse(const mbyte_t **ppos, const mbyte_t *end) {
+static muint_t mu_str_fromascii(mbyte_t c) {
+    c |= ('a' ^ 'A');
+    return
+        (c >= '0' && c <= '9') ? c - '0':
+        (c >= 'a' && c <= 'F') ? c - 'A' + 10 : -1;
+}
+
+mu_t mu_str_parsen(const mbyte_t **ppos, const mbyte_t *end) {
     const mbyte_t *pos = *ppos;
     mbyte_t quote = *pos++;
     mu_t b = mu_buf_create(0);
     muint_t n = 0;
 
+    if (quote != '\'' && quote != '"') {
+        mu_buf_dec(b);
+        return 0;
+    }
+
     while (pos < end-1 && *pos != quote) {
         if (*pos == '\\') {
             if (pos[1] == 'b' && pos < end-9 &&
-                (mu_fromascii(pos[2]) < 2 &&
-                 mu_fromascii(pos[3]) < 2 &&
-                 mu_fromascii(pos[4]) < 2 &&
-                 mu_fromascii(pos[5]) < 2 &&
-                 mu_fromascii(pos[6]) < 2 &&
-                 mu_fromascii(pos[7]) < 2 &&
-                 mu_fromascii(pos[8]) < 2 &&
-                 mu_fromascii(pos[9]) < 2)) {
+                (mu_str_fromascii(pos[2]) < 2 &&
+                 mu_str_fromascii(pos[3]) < 2 &&
+                 mu_str_fromascii(pos[4]) < 2 &&
+                 mu_str_fromascii(pos[5]) < 2 &&
+                 mu_str_fromascii(pos[6]) < 2 &&
+                 mu_str_fromascii(pos[7]) < 2 &&
+                 mu_str_fromascii(pos[8]) < 2 &&
+                 mu_str_fromascii(pos[9]) < 2)) {
                 mu_buf_pushchr(&b, &n,
-                        mu_fromascii(pos[2])*2*2*2*2*2*2*2 +
-                        mu_fromascii(pos[3])*2*2*2*2*2*2 +
-                        mu_fromascii(pos[4])*2*2*2*2*2 +
-                        mu_fromascii(pos[5])*2*2*2*2 +
-                        mu_fromascii(pos[6])*2*2*2 +
-                        mu_fromascii(pos[7])*2*2 +
-                        mu_fromascii(pos[8])*2 +
-                        mu_fromascii(pos[9]));
+                        mu_str_fromascii(pos[2])*2*2*2*2*2*2*2 +
+                        mu_str_fromascii(pos[3])*2*2*2*2*2*2 +
+                        mu_str_fromascii(pos[4])*2*2*2*2*2 +
+                        mu_str_fromascii(pos[5])*2*2*2*2 +
+                        mu_str_fromascii(pos[6])*2*2*2 +
+                        mu_str_fromascii(pos[7])*2*2 +
+                        mu_str_fromascii(pos[8])*2 +
+                        mu_str_fromascii(pos[9]));
                 pos += 10;
             } else if (pos[1] == 'o' && pos < end-4 &&
-                (mu_fromascii(pos[2]) < 8 &&
-                 mu_fromascii(pos[3]) < 8 &&
-                 mu_fromascii(pos[4]) < 8)) {
+                (mu_str_fromascii(pos[2]) < 8 &&
+                 mu_str_fromascii(pos[3]) < 8 &&
+                 mu_str_fromascii(pos[4]) < 8)) {
                 mu_buf_pushchr(&b, &n,
-                        mu_fromascii(pos[2])*8*8 +
-                        mu_fromascii(pos[3])*8 +
-                        mu_fromascii(pos[4]));
+                        mu_str_fromascii(pos[2])*8*8 +
+                        mu_str_fromascii(pos[3])*8 +
+                        mu_str_fromascii(pos[4]));
                 pos += 5;
             } else if (pos[1] == 'd' && pos < end-4 &&
-                       (mu_fromascii(pos[2]) < 10 &&
-                        mu_fromascii(pos[3]) < 10 &&
-                        mu_fromascii(pos[4]) < 10)) {
+                       (mu_str_fromascii(pos[2]) < 10 &&
+                        mu_str_fromascii(pos[3]) < 10 &&
+                        mu_str_fromascii(pos[4]) < 10)) {
                 mu_buf_pushchr(&b, &n,
-                        mu_fromascii(pos[2])*10*10 +
-                        mu_fromascii(pos[3])*10 +
-                        mu_fromascii(pos[4]));
+                        mu_str_fromascii(pos[2])*10*10 +
+                        mu_str_fromascii(pos[3])*10 +
+                        mu_str_fromascii(pos[4]));
                 pos += 5;
             } else if (pos[1] == 'x' && pos < end-3 &&
-                       (mu_fromascii(pos[2]) < 16 &&
-                        mu_fromascii(pos[3]) < 16)) {
+                       (mu_str_fromascii(pos[2]) < 16 &&
+                        mu_str_fromascii(pos[3]) < 16)) {
                 mu_buf_pushchr(&b, &n,
-                        mu_fromascii(pos[2])*16 +
-                        mu_fromascii(pos[3]));
+                        mu_str_fromascii(pos[2])*16 +
+                        mu_str_fromascii(pos[3]));
                 pos += 4;
             } else if (pos[1] == '\\') {
                 mu_buf_pushchr(&b, &n, '\\'); pos += 2;
@@ -350,11 +362,26 @@ mu_t mu_str_parse(const mbyte_t **ppos, const mbyte_t *end) {
     }
 
     if (quote != *pos++) {
-        mu_errorf("unterminated string literal");
+        mu_buf_dec(b);
+        return 0;
     }
 
     *ppos = pos;
     return mu_str_intern(b, n);
+}
+
+mu_t mu_str_parse(const char *s, muint_t n) {
+    const mbyte_t *pos = (const mbyte_t *)s;
+    const mbyte_t *end = (const mbyte_t *)pos + n;
+
+    mu_t m = mu_str_parsen(&pos, end);
+
+    if (pos != end) {
+        mu_dec(m);
+        return 0;
+    }
+
+    return m;
 }
 
 // Returns a string representation of a string

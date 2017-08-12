@@ -57,16 +57,10 @@ mu_t mu_num_frommu(mu_t m) {
             return m;
 
         case MTSTR: {
-            const mbyte_t *start = mu_str_getdata(m);
-            const mbyte_t *end = start + mu_str_getlen(m);
-            mu_t n = mu_num_parse(&start, end);
+            mu_t n = mu_num_parse(
+                    mu_str_getdata(m),
+                    mu_str_getlen(m));
             mu_dec(m);
-
-            if (start != end) {
-                mu_dec(n);
-                n = 0;
-            } 
-
             return n;
         }
 
@@ -231,11 +225,26 @@ mu_t mu_num_shr(mu_t a, mu_t b) {
 
 
 // Convert string representation to variable
-mu_t mu_num_parse(const mbyte_t **ppos, const mbyte_t *end) {
+static muint_t mu_num_fromascii(mbyte_t c) {
+    c |= ('a' ^ 'A');
+    return
+        (c >= '0' && c <= '9') ? c - '0':
+        (c >= 'a' && c <= 'F') ? c - 'A' + 10 : -1;
+}
+
+static mbyte_t mu_num_toascii(muint_t c) {
+    return (c < 10) ? '0' + c : 'a' + (c-10);
+}
+
+mu_t mu_num_parsen(const mbyte_t **ppos, const mbyte_t *end) {
     const mbyte_t *pos = *ppos;
     mu_t n = mu_num_fromuint(0);
     mu_t sign = mu_num_fromint(+1);
     muint_t base = 10;
+
+    if (pos == end) {
+        return 0;
+    }
 
     if (pos < end && *pos == '+') {
         sign = mu_num_fromint(+1); pos++;
@@ -260,19 +269,19 @@ mu_t mu_num_parse(const mbyte_t **ppos, const mbyte_t *end) {
         }
     }
 
-    while (pos < end && mu_fromascii(*pos) < base) {
+    while (pos < end && mu_num_fromascii(*pos) < base) {
         n = mu_num_mul(n, mu_num_fromuint(base));
-        n = mu_num_add(n, mu_num_fromuint(mu_fromascii(*pos++)));
+        n = mu_num_add(n, mu_num_fromuint(mu_num_fromascii(*pos++)));
     }
 
     if (pos < end && *pos == '.') {
         mu_t scale = mu_num_fromuint(1);
         pos++;
 
-        while (pos < end && mu_fromascii(*pos) < base) {
+        while (pos < end && mu_num_fromascii(*pos) < base) {
             scale = mu_num_mul(scale, mu_num_fromuint(base));
             n = mu_num_add(n, mu_num_div(
-                    mu_num_fromuint(mu_fromascii(*pos++)), scale));
+                    mu_num_fromuint(mu_num_fromascii(*pos++)), scale));
         }
     }
 
@@ -289,9 +298,9 @@ mu_t mu_num_parse(const mbyte_t **ppos, const mbyte_t *end) {
             sign = mu_num_fromint(-1); pos++;
         }
 
-        while (pos < end && mu_fromascii(*pos) < 10) {
+        while (pos < end && mu_num_fromascii(*pos) < 10) {
             exp = mu_num_mul(exp, mu_num_fromuint(10));
-            exp = mu_num_add(exp, mu_num_fromuint(mu_fromascii(*pos++)));
+            exp = mu_num_add(exp, mu_num_fromuint(mu_num_fromascii(*pos++)));
         }
 
         n = mu_num_mul(n, mu_num_pow(expbase, mu_num_mul(sign, exp)));
@@ -301,13 +310,26 @@ mu_t mu_num_parse(const mbyte_t **ppos, const mbyte_t *end) {
     return mu_num_mul(sign, n);
 }
 
+mu_t mu_num_parse(const char *s, muint_t n) {
+    const mbyte_t *pos = (const mbyte_t *)s;
+    const mbyte_t *end = (const mbyte_t *)pos + n;
+
+    mu_t m = mu_num_parsen(&pos, end);
+
+    if (pos != end) {
+        return 0;
+    }
+
+    return m;
+}
+
 // Obtains a string representation of a number
 static void mu_num_base_ipart(mu_t *s, muint_t *i, mu_t n, mu_t base) {
     muint_t j = *i;
 
     while (mu_num_cmp(n, mu_num_fromuint(0)) > 0) {
         mu_t d = mu_num_mod(n, base);
-        mu_buf_pushchr(s, i, mu_toascii(mu_num_getuint(d)));
+        mu_buf_pushchr(s, i, mu_num_toascii(mu_num_getuint(d)));
         n = mu_num_idiv(n, base);
     }
 
@@ -339,7 +361,7 @@ static void mu_num_base_fpart(mu_t *s, muint_t *i, mu_t n,
 
         mu_t p = mu_num_pow(base, digit);
         mu_t d = mu_num_idiv(n, p);
-        mu_buf_pushchr(s, i, mu_toascii(mu_num_getuint(d)));
+        mu_buf_pushchr(s, i, mu_num_toascii(mu_num_getuint(d)));
 
         n = mu_num_mod(n, p);
         digit = mu_num_sub(digit, mu_num_fromuint(1));
@@ -370,10 +392,10 @@ static mu_t mu_num_base(mu_t n, char c, mu_t base, char expc, mu_t expbase) {
         mu_t exp = mu_num_floor(mu_num_log(n, expbase));
         mu_t sig = mu_num_floor(mu_num_log(n, base));
         mu_t digits = mu_num_ceil(mu_num_div(mu_num_fromuint(MU_DIGITS),
-                               mu_num_log(base, mu_num_fromuint(2))));
+                mu_num_log(base, mu_num_fromuint(2))));
 
         bool scientific = mu_num_cmp(sig, digits) >= 0 ||
-                          mu_num_cmp(sig, mu_num_fromint(-1)) < 0;
+                mu_num_cmp(sig, mu_num_fromint(-1)) < 0;
 
         if (scientific) {
             n = mu_num_div(n, mu_num_pow(expbase, exp));
@@ -421,7 +443,7 @@ mu_t mu_num_hex(mu_t n) {
 
 // Number related Mu functions
 static mcnt_t mu_bfn_num(mu_t *frame) {
-    mu_t m = mu_tbl_frommu(mu_inc(frame[0]));
+    mu_t m = mu_num_frommu(mu_inc(frame[0]));
     mu_checkargs(m, MU_KEY_NUM, 0x1, frame);
     mu_dec(frame[0]);
     frame[0] = m;
