@@ -105,10 +105,11 @@ void mu_feval(const char *s, muint_t n, mu_t scope, mcnt_t fc, mu_t *frame);
 mu_t mu_veval(const char *s, muint_t n, mu_t scope, mcnt_t fc, va_list args);
 mu_t mu_eval(const char *s, muint_t n, mu_t scope, mcnt_t fc, ...);
 
-// Common errors
-mu_noreturn mu_error_arg(mu_t name, mcnt_t count, mu_t *frame);
-mu_noreturn mu_error_op(mu_t name, mcnt_t count, mu_t *args);
-mu_noreturn mu_error_cast(mu_t name, mu_t m);
+// Check arguments to function
+// using a macro here helps pathing and avoids cost of pushing args
+#define mu_checkargs(pred, ...) \
+    ((pred) ? (void)0 : mu_errorargs(__VA_ARGS__))
+mu_noreturn mu_errorargs(mu_t name, mcnt_t fc, mu_t *frame);
 
 
 // Standard functions in readonly builtins table

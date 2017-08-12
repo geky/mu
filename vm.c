@@ -9,7 +9,9 @@
 
 
 // Bytecode errors
-static mu_noreturn mu_error_bytecode(void) {
+#define mu_checkbcode(pred) \
+    ((pred) ? (void)0 : mu_errorbcode())
+static mu_noreturn mu_errorbcode(void) {
     mu_errorf("exceeded bytecode limits");
 }
 
@@ -24,34 +26,24 @@ void mu_encode(void (*emit)(void *, mbyte_t), void *p,
         uint8_t u8[2];
     } ins;
 
-    if (op > 0xf || d > 0xf) {
-        mu_error_bytecode();
-    }
-
+    mu_checkbcode(op <= 0xf && d <= 0xf);
     ins.u16 =  0xf000 & (op << 12);
     ins.u16 |= 0x0f00 & (d << 8);
 
     if (op >= MOP_RET && op <= MOP_DROP) {
-        if (a > 0xff) {
-            mu_error_bytecode();
-        }
-
+        mu_checkbcode(a <= 0xff);
         ins.u16 |= 0x00ff & a;
         emit(p, ins.u8[0]);
         emit(p, ins.u8[1]);
     } else if (op >= MOP_LOOKDN && op <= MOP_ASSIGN) {
-        if (a > 0xf || b > 0xf) {
-            mu_error_bytecode();
-        }
-
+        mu_checkbcode(a <= 0xf && b <= 0xf);
         ins.u16 |= 0x00f0 & (a << 4);
         ins.u16 |= 0x000f & b;
         emit(p, ins.u8[0]);
         emit(p, ins.u8[1]);
     } else if (op >= MOP_IMM && op <= MOP_TBL) {
-        if (a > 0xffff) {
-            mu_error_bytecode();
-        } else if (a > 0xfe) {
+        mu_checkbcode(a <= 0xffff);
+        if (a > 0xfe) {
             ins.u16 |= 0x00ff;
             emit(p, ins.u8[0]);
             emit(p, ins.u8[1]);
@@ -66,10 +58,7 @@ void mu_encode(void (*emit)(void *, mbyte_t), void *p,
         }
     } else if (op >= MOP_JFALSE && op <= MOP_JUMP) {
         a = (a / 2) - 2;
-
-        if (a > 0x7fff || a < -0x8000) {
-            mu_error_bytecode();
-        }
+        mu_checkbcode(a <= 0x7fff && a >= -0x8000);
 
         ins.u16 |= 0x00ff;
         emit(p, ins.u8[0]);

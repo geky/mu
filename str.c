@@ -392,13 +392,10 @@ mu_t mu_str_repr(mu_t m) {
 
 // String related functions in Mu
 static mcnt_t mu_bfn_str(mu_t *frame) {
-    mu_t m = frame[0];
-    frame[0] = mu_str_frommu(mu_inc(m));
-    if (!frame[0]) {
-        mu_error_cast(MU_KEY_STR, m);
-    }
-    mu_dec(m);
-
+    mu_t m = mu_str_frommu(mu_inc(frame[0]));
+    mu_checkargs(m, MU_KEY_STR, 0x1, frame);
+    mu_dec(frame[0]);
+    frame[0] = m;
     return 1;
 }
 
@@ -408,9 +405,8 @@ MU_GEN_BFN(mu_gen_str, 0x1, mu_bfn_str)
 static mcnt_t mu_bfn_find(mu_t *frame) {
     mu_t s = frame[0];
     mu_t m = frame[1];
-    if (!mu_isstr(s) || !mu_isstr(m)) {
-        mu_error_arg(MU_KEY_FIND, 0x2, frame);
-    }
+    mu_checkargs(mu_isstr(s) && mu_isstr(m),
+            MU_KEY_FIND, 0x2, frame);
 
     const mbyte_t *sb = mu_str_getdata(s);
     mlen_t slen = mu_str_getlen(s);
@@ -439,9 +435,8 @@ static mcnt_t mu_bfn_replace(mu_t *frame) {
     mu_t s = frame[0];
     mu_t m = frame[1];
     mu_t r = frame[2];
-    if (!mu_isstr(s) || !mu_isstr(m) || !mu_isstr(r)) {
-        mu_error_arg(MU_KEY_REPLACE, 0x3, frame);
-    }
+    mu_checkargs(mu_isstr(s) && mu_isstr(m) && mu_isstr(r),
+            MU_REPLACE, 0x3, frame);
 
     const mbyte_t *sb = mu_str_getdata(s);
     mlen_t slen = mu_str_getlen(s);
@@ -511,9 +506,7 @@ static mcnt_t mu_str_split_step(mu_t scope, mu_t *frame) {
 static mcnt_t mu_bfn_split(mu_t *frame) {
     mu_t s     = frame[0];
     mu_t delim = frame[1] ? frame[1] : MU_EMPTY_STR;
-    if (!mu_isstr(s) || !mu_isstr(delim)) {
-        mu_error_arg(MU_KEY_SPLIT, 0x2, frame);
-    }
+    mu_checkargs(mu_isstr(s) && mu_isstr(delim), MU_KEY_SPLIT, 0x2, frame);
 
     if (mu_str_getlen(delim) == 0) {
         frame[0] = mu_str_iter(s);
@@ -531,9 +524,7 @@ MU_GEN_BFN(mu_gen_split, 0x2, mu_bfn_split)
 static mcnt_t mu_bfn_join(mu_t *frame) {
     mu_t iter  = frame[0];
     mu_t delim = frame[1] ? frame[1] : MU_EMPTY_STR;
-    if (!mu_isstr(delim)) {
-        mu_error_arg(MU_KEY_JOIN, 0x2, frame);
-    }
+    mu_checkargs(mu_isstr(delim), MU_KEY_JOIN, 0x2, frame);
 
     mu_t b = mu_buf_create(0);
     muint_t n = 0;
@@ -568,11 +559,10 @@ static mcnt_t mu_bfn_pad(mu_t *frame) {
     mu_t s    = frame[0];
     mu_t mlen = frame[1];
     mu_t pad  = frame[2] ? frame[2] : MU_SPACE_STR;
-    if (!mu_isstr(s) ||
-        !mu_isnum(mlen) ||
-        (!mu_isstr(pad) || mu_str_getlen(pad) == 0)) {
-        mu_error_arg(MU_KEY_PAD, 0x3, frame);
-    }
+    mu_checkargs(
+            mu_isstr(s) && mu_isnum(mlen) &&
+            mu_isstr(pad) && mu_str_getlen(pad) > 0,
+            MU_KEY_PAD, 0x3, frame);
 
     bool left;
     muint_t len;
@@ -624,11 +614,10 @@ static mcnt_t mu_bfn_strip(mu_t *frame) {
     mu_t s   = frame[0];
     mu_t dir = frame[1];
     mu_t pad = frame[2] ? frame[2] : MU_SPACE_STR;
-    if (!mu_isstr(s) ||
-        (dir && !mu_isnum(dir)) ||
-        (!mu_isstr(pad) || mu_str_getlen(pad) == 0)) {
-        mu_error_arg(MU_KEY_STR, 0x3, frame);
-    }
+    mu_checkargs(
+            mu_isstr(s) && (!dir || mu_isnum(dir)) &&
+            mu_isstr(pad) && mu_str_getlen(pad) > 0,
+            MU_KEY_STR, 0x3, frame);
 
     const mbyte_t *pos = mu_str_getdata(s);
     const mbyte_t *end = pos + mu_str_getlen(s);

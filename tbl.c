@@ -865,17 +865,13 @@ mu_t mu_tbl_dump(mu_t t, mu_t depth) {
 
 // Table related Mu functions
 static mcnt_t mu_bfn_tbl(mu_t *frame) {
-    mu_t m    = frame[0];
     mu_t tail = frame[1];
-    if (tail && !mu_istbl(tail)) {
-        mu_error_arg(MU_KEY_TBL, 0x2, frame);
-    }
+    mu_checkargs(!tail || mu_istbl(tail), MU_KEY_TBL, 0x2, frame);
 
-    frame[0] = mu_tbl_frommu(mu_inc(m));
-    if (!frame[0]) {
-        mu_error_cast(MU_KEY_NUM, m);
-    }
-    mu_dec(m);
+    mu_t m = mu_tbl_frommu(mu_inc(frame[0]));
+    mu_checkargs(m, MU_KEY_TBL, 0x2, frame);
+    mu_dec(frame[0]);
+    frame[0] = m;
 
     mu_tbl_settail(frame[0], tail);
     return 1;
@@ -885,10 +881,7 @@ MU_GEN_STR(mu_gen_key_tbl, "tbl")
 MU_GEN_BFN(mu_gen_tbl, 0x2, mu_bfn_tbl)
 
 static mcnt_t mu_bfn_tail(mu_t *frame) {
-    if (!mu_istbl(frame[0])) {
-        mu_error_arg(MU_KEY_TAIL, 0x1, frame);
-    }
-
+    mu_checkargs(mu_istbl(frame[0]), MU_KEY_TAIL, 0x1, frame);
     frame[0] = mu_tbl_inc(mu_tbl_gettail(frame[0]));
     return 1;
 }

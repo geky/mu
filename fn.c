@@ -176,13 +176,10 @@ bool mu_fn_next(mu_t f, mcnt_t fc, mu_t *frame) {
 // Function related Mu functions
 
 static mcnt_t mu_bfn_fn(mu_t *frame) {
-    mu_t m = frame[0];
-    frame[0] = mu_fn_frommu(mu_inc(m));
-    if (!frame[0]) {
-        mu_error_cast(MU_KEY_FN2, m);
-    }
-    mu_dec(m);
-
+    mu_t m = mu_fn_frommu(mu_inc(frame[0]));
+    mu_checkargs(m, MU_KEY_FN2, 0x1, frame);
+    mu_dec(frame[0]);
+    frame[0] = m;
     return 1;
 }
 
@@ -206,9 +203,7 @@ mu_t mu_fn_bind(mu_t f, mu_t g) {
 
 static mcnt_t mu_bfn_bind(mu_t *frame) {
     mu_t f = mu_tbl_pop(frame[0], 0);
-    if (!mu_isfn(f)) {
-        mu_error_arg(MU_KEY_BIND, 0x2, (mu_t[]){f, frame[0]});
-    }
+    mu_checkargs(mu_isfn(f), MU_KEY_BIND, 0x2, (mu_t[]){f, frame[0]});
 
     frame[0] = mu_fn_bind(f, frame[0]);
     mu_dec(f);
@@ -237,9 +232,7 @@ mu_t mu_fn_comp(mu_t f, mu_t g) {
 static mcnt_t mu_bfn_comp(mu_t *frame) {
     mu_t f = frame[0];
     mu_t g = frame[1];
-    if (!(mu_isfn(f) && mu_isfn(g))) {
-        mu_error_arg(MU_KEY_COMP, 0xf, frame);
-    }
+    mu_checkargs(mu_isfn(f) && mu_isfn(g), MU_KEY_COMP, 0xf, frame);
 
     frame[0] = mu_fn_comp(f, g);
     return 1;

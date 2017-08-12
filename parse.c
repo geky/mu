@@ -300,7 +300,16 @@ struct mexpr {
 //// Error handling ////
 
 // Common errors
-static mu_noreturn mu_error_parse(struct mlex *l, mu_t message) {
+#define mu_checkparse(pred, ...) \
+        ((pred) ? (void)0 : mu_errorparse(__VA_ARGS__))
+static mu_noreturn mu_errorparse(struct mlex *l, const char *f, ...) {
+    va_list args;
+    va_start(args, f);
+
+    mu_t b = mu_buf_create(0);
+    muint_t n = 0;
+    mu_buf_vpushf(&b, &n, f, args);
+
     const mbyte_t *p = l->begin;
     muint_t lines = 1;
     muint_t nlines = 1;
@@ -321,52 +330,46 @@ static mu_noreturn mu_error_parse(struct mlex *l, mu_t message) {
         }
     }
 
-    if (lines == 1) {
-        mu_errorf("%m", message);
-    } else {
-        mu_errorf("%m on line %wu", message, lines);
+    if (lines != 1) {
+        mu_buf_pushf(&b, &n, "on line %wu", lines);
     }
+
+    mu_error(mu_buf_getdata(b), n);
 }
 
-static mu_noreturn mu_error_character(struct mlex *l) {
-    mu_error_parse(l, mu_str_format("unexpected %c", l->pos));
+#define mu_checkchr(pred, ...) \
+        ((pred) ? (void)0 : mu_errorchr(__VA_ARGS__))
+static mu_noreturn mu_errorchr(struct mlex *l) {
+    mu_errorparse(l, "unexpected %c", l->pos);
 }
 
-static mu_noreturn mu_error_token(struct mlex *l) {
-    mu_t b = mu_buf_create(0);
-    muint_t n = 0;
-    mu_buf_pushf(&b, &n, "unexpected ");
-
+#define mu_checktoken(pred, ...) \
+        ((pred) ? (void)0 : mu_errortoken(__VA_ARGS__))
+static mu_noreturn mu_errortoken(struct mlex *l) {
     if (l->tok & T_ANY_VAL) {
-        mu_buf_pushf(&b, &n, "%r", mu_inc(l->val));
-    } else if (l->tok & T_TERM) {
-        mu_buf_pushf(&b, &n, "terminator");
-    } else if (l->tok & T_SEP) {
-        mu_buf_pushf(&b, &n, "','");
-    } else if (l->tok & T_LPAREN) {
-        mu_buf_pushf(&b, &n, "'('");
-    } else if (l->tok & T_RPAREN) {
-        mu_buf_pushf(&b, &n, "')'");
-    } else if (l->tok & T_LTABLE) {
-        mu_buf_pushf(&b, &n, "'['");
-    } else if (l->tok & T_RTABLE) {
-        mu_buf_pushf(&b, &n, "']'");
-    } else if (l->tok & T_LBLOCK) {
-        mu_buf_pushf(&b, &n, "'{'");
-    } else if (l->tok & T_RBLOCK) {
-        mu_buf_pushf(&b, &n, "'}'");
+        mu_checkparse(false, l, "unexpected %r", mu_inc(l->val));
     } else {
-        mu_buf_pushf(&b, &n, "end");
+        mu_checkparse(false, l, "unexpected %s",
+                l->tok & T_TERM   ? "terminator" :
+                l->tok & T_SEP    ? "','" :
+                l->tok & T_LPAREN ? "'('" :
+                l->tok & T_RPAREN ? "')'" :
+                l->tok & T_LTABLE ? "'['" :
+                l->tok & T_RTABLE ? "']'" :
+                l->tok & T_LBLOCK ? "'{'" :
+                l->tok & T_RBLOCK ? "'}'" : "end");
     }
-
-    mu_error_parse(l, mu_str_intern(b, n));
 }
 
-static mu_noreturn mu_error_assignment(struct mlex *l) {
-    mu_error_parse(l, mu_str_format("invalid assignment"));
+#define mu_checkassign(pred, ...) \
+        ((pred) ? (void)0 : mu_errorassign(__VA_ARGS__))
+static void mu_errorassign(struct mlex *l) {
+    mu_errorparse(l, "invalid assignment");
 }
 
-static mu_noreturn mu_error_expression(mbyte_t c) {
+#define mu_checkexpr(pred, ...) \
+        ((pred) ? (void)0 : mu_errorexpr(__VA_ARGS__))
+static void mu_errorexpr(mbyte_t c) {
     mu_errorf("unexpected %r in expression", mu_str_fromdata(&c, 1));
 }
 
@@ -453,7 +456,7 @@ static void lex_next(struct mlex *l) {
 
     mclass_t lclass = class[*l->pos];
     switch (lclass) {
-        case L_NONE:    mu_error_character(l);
+        case L_NONE:    mu_checkchr(false, l);
 
         case L_WS:                   l_indent(l); break;
         case L_OP:      l->prec = 0; l_op(l);     break;
@@ -510,7 +513,8 @@ mu_inline void lex_dec(struct mlex l) {
 
 //// Lexing shortcuts ////
 static mu_noreturn unexpected(struct mparse *p) {
-    mu_error_token(&p->l);
+    mu_checktoken(false, &p->l);
+    mu_unreachable;
 }
 
 static bool next(struct mparse *p, mtok_t tok) {
@@ -652,7 +656,7 @@ static void encode_store(struct mparse *p, struct mexpr *e,
                p->sp-offset-2, p->sp-1, p->sp, 0);
         encode(p, MOP_DROP, p->sp-1, 0, 0, -2);
     } else {
-        mu_error_assignment(&p->l);
+        mu_checkassign(false, &p->l);
     }
 }
 
@@ -898,9 +902,7 @@ static void p_for(struct mparse *p) {
     s_frame(p, &f, true);
 
     expect(p, T_ASSIGN);
-    if (f.count == 0 && !f.tabled) {
-        mu_error_assignment(&p->l);
-    }
+    mu_checkassign(f.count != 0 || f.tabled, &p->l);
 
     encode(p, MOP_IMM, p->sp+1, imm(p, MU_KEY_ITER), 0, +1);
     encode(p, MOP_LOOKUP, p->sp, 0, p->sp, 0);
@@ -1296,15 +1298,14 @@ static void p_assign(struct mparse *p, bool insert) {
         struct mframe fr = {.unpack = false, .insert = insert};
         s_frame(p, &fr, false);
 
-        if ((fr.count == 0 && !fr.tabled) ||
-            (fl.count == 0 && !fl.tabled)) {
-            mu_error_assignment(&p->l);
-        } else {
-            fr.tabled = fr.tabled || fl.tabled;
-            fr.target = fl.count;
-            fr.flatten = !fl.tabled;
-            p_frame(p, &fr);
-        }
+        mu_checkassign(
+                (fr.count != 0 || fr.tabled) &&
+                (fl.count != 0 || fl.tabled), &p->l);
+
+        fr.tabled = fr.tabled || fl.tabled;
+        fr.target = fl.count;
+        fr.flatten = !fl.tabled;
+        p_frame(p, &fr);
 
         struct mlex lr = p->l;
         p->l = ll;
@@ -1374,18 +1375,16 @@ static void p_stmt(struct mparse *p) {
         p_for(p);
 
     } else if (match(p, T_BREAK)) {
-        if (p->bchain == (mlen_t)-1) {
-            mu_error_parse(&p->l, mu_str_format("break outside of loop"));
-        }
+        mu_checkparse(p->bchain != (mlen_t)-1,
+                &p->l, "break outside of loop");
 
         mlen_t offset = p->bcount;
         encode(p, MOP_JUMP, 0, p->bchain ? p->bchain-p->bcount : 0, 0, 0);
         p->bchain = offset;
 
     } else if (match(p, T_CONTINUE)) {
-        if (p->cchain == (mlen_t)-1) {
-            mu_error_parse(&p->l, mu_str_format("continue outside of loop"));
-        }
+        mu_checkparse(p->bchain != (mlen_t)-1,
+                &p->l, "continue outside of loop");
 
         mlen_t offset = p->bcount;
         encode(p, MOP_JUMP, 0, p->cchain ? p->cchain-p->bcount : 0, 0, 0);
@@ -1430,10 +1429,7 @@ mu_t mu_parse(const char *s, muint_t n) {
 
     mu_t v = mu_nparse(&pos, end);
 
-    if (pos < end) {
-        mu_error_expression(*pos);
-    }
-
+    mu_checkexpr(pos == end, *pos);
     return v;
 }
 
@@ -1470,7 +1466,7 @@ mu_t mu_nparse(const mbyte_t **ppos, const mbyte_t *end) {
             sym = true;
         } break;
 
-        default:        mu_error_expression(*pos);
+        default:        mu_checkexpr(false, *pos); mu_unreachable;
     }
 
     while (pos < end) {
@@ -1485,9 +1481,8 @@ mu_t mu_nparse(const mbyte_t **ppos, const mbyte_t *end) {
         }
     }
 
-    if (sym && *pos != ':') {
-        mu_error_expression(*(const mbyte_t *)mu_str_getdata(val));
-    }
+    mu_checkexpr(!sym || *pos == ':',
+            *(const mbyte_t *)mu_str_getdata(val));
 
     *ppos = pos;
     return val;
