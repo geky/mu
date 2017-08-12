@@ -423,18 +423,41 @@ static mcnt_t mu_bfn_repr(mu_t *frame) {
 MU_GEN_STR(mu_gen_key_repr, "repr")
 MU_GEN_BFN(mu_gen_repr, 0x2, mu_bfn_repr)
 
+static mcnt_t mu_bfn_ord(mu_t *frame) {
+    mu_t m = frame[0];
+    if (!(mu_isstr(m) && mu_str_getlen(m) == 1)) {
+        mu_error_arg(MU_KEY_ORD, 0x1, frame);
+    }
+
+    frame[0] = mu_num_fromuint(mu_str_getdata(m)[0]);
+    mu_str_dec(m);
+    return 1;
+}
+
+MU_GEN_STR(mu_gen_key_ord, "ord")
+MU_GEN_BFN(mu_gen_ord, 0x1, mu_bfn_ord)
+
+static mcnt_t mu_bfn_chr(mu_t *frame) {
+    mu_t m = frame[0];
+    if (!(m == mu_num_fromuint((mbyte_t)mu_num_getuint(m)))) {
+        mu_error_arg(MU_KEY_CHR, 0x1, frame);
+    }
+
+    frame[0] = mu_str_fromdata((mbyte_t[]){mu_num_getuint(m)}, 1);
+    return 1;
+}
+
+MU_GEN_STR(mu_gen_key_chr, "chr")
+MU_GEN_BFN(mu_gen_chr, 0x1, mu_bfn_chr)
+
 static mcnt_t mu_bfn_bin(mu_t *frame) {
     mu_t m = frame[0];
-
-    if (mu_isnum(m)) {
-        frame[0] = mu_num_bin(m);
-        return 1;
-    } else if (mu_isstr(m)) {
-        frame[0] = mu_str_bin(m);
-        return 1;
-    } else {
+    if (!mu_isnum(m)) {
         mu_error_arg(MU_KEY_BIN, 0x1, frame);
     }
+
+    frame[0] = mu_num_bin(m);
+    return 1;
 }
 
 MU_GEN_STR(mu_gen_key_bin, "bin")
@@ -442,16 +465,12 @@ MU_GEN_BFN(mu_gen_bin, 0x1, mu_bfn_bin)
 
 static mcnt_t mu_bfn_oct(mu_t *frame) {
     mu_t m = frame[0];
-
-    if (mu_isnum(m)) {
-        frame[0] = mu_num_oct(m);
-        return 1;
-    } else if (mu_isstr(m)) {
-        frame[0] = mu_str_oct(m);
-        return 1;
-    } else {
+    if (!mu_isnum(m)) {
         mu_error_arg(MU_KEY_OCT, 0x1, frame);
     }
+
+    frame[0] = mu_num_oct(m);
+    return 1;
 }
 
 MU_GEN_STR(mu_gen_key_oct, "oct")
@@ -459,16 +478,12 @@ MU_GEN_BFN(mu_gen_oct, 0x1, mu_bfn_oct)
 
 static mcnt_t mu_bfn_hex(mu_t *frame) {
     mu_t m = frame[0];
-
-    if (mu_isnum(m)) {
-        frame[0] = mu_num_hex(m);
-        return 1;
-    } else if (mu_isstr(m)) {
-        frame[0] = mu_str_hex(m);
-        return 1;
-    } else {
+    if (!mu_isnum(m)) {
         mu_error_arg(MU_KEY_HEX, 0x1, frame);
     }
+
+    frame[0] = mu_num_hex(m);
+    return 1;
 }
 
 MU_GEN_STR(mu_gen_key_hex, "hex")
@@ -1435,7 +1450,6 @@ MU_GEN_TBL(mu_gen_builtins, {
     { mu_gen_key_inf,       mu_gen_inf },
     { mu_gen_key_e,         mu_gen_e },
     { mu_gen_key_pi,        mu_gen_pi },
-    { mu_gen_key_id,        mu_gen_id },
 
     // Type casts
     { mu_gen_key_num,       mu_gen_num },
@@ -1487,7 +1501,8 @@ MU_GEN_TBL(mu_gen_builtins, {
     // String representation
     { mu_gen_key_parse,     mu_gen_parse },
     { mu_gen_key_repr,      mu_gen_repr },
-
+    { mu_gen_key_ord,       mu_gen_ord },
+    { mu_gen_key_chr,       mu_gen_chr },
     { mu_gen_key_bin,       mu_gen_bin },
     { mu_gen_key_oct,       mu_gen_oct },
     { mu_gen_key_hex,       mu_gen_hex },
@@ -1527,7 +1542,7 @@ MU_GEN_TBL(mu_gen_builtins, {
 
     { mu_gen_key_range,     mu_gen_range },
     { mu_gen_key_repeat,    mu_gen_repeat },
-    { mu_gen_key_seed,      mu_gen_seed },
+    { mu_gen_key_random,    mu_gen_random },
 
     // Iterator manipulation
     { mu_gen_key_zip,       mu_gen_zip },

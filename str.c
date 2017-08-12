@@ -379,46 +379,6 @@ mu_t mu_str_repr(mu_t m) {
     return mu_str_intern(b, n);
 }
 
-static mu_t mu_str_base(mu_t m, char b,
-        muint_t size, muint_t mask, muint_t shift) {
-    const mbyte_t *s = mu_str_getdata(m);
-    mlen_t len = mu_str_getlen(m);
-
-    mu_t buf = mu_buf_create(2 + (2+size)*len);
-    mbyte_t *d = mu_buf_getdata(buf);
-    d[0] = '\'';
-
-    for (muint_t i = 0; i < len; i++) {
-        mbyte_t c = s[i];
-        d[1 + (2+size)*i+0] = '\\';
-        d[1 + (2+size)*i+1] = b;
-
-        for (muint_t j = 0; j < size; j++) {
-            d[1 + (2+size)*i+2 + (size-1-j)] = mu_toascii(c & mask);
-            c >>= shift;
-        }
-    }
-
-    d[1 + (2+size)*len] = '\'';
-    mu_str_dec(m);
-    return mu_str_intern(buf, 2 + (2+size)*len);
-}
-
-mu_t mu_str_bin(mu_t s) {
-    mu_assert(mu_isstr(s));
-    return mu_str_base(s, 'b', 8,   1, 1);
-}
-
-mu_t mu_str_oct(mu_t s) {
-    mu_assert(mu_isstr(s));
-    return mu_str_base(s, 'o', 3,   7, 3);
-}
-
-mu_t mu_str_hex(mu_t s) {
-    mu_assert(mu_isstr(s));
-    return mu_str_base(s, 'x', 2, 0xf, 4);
-}
-
 
 // String related functions in Mu
 static mcnt_t mu_bfn_str(mu_t *frame) {
@@ -429,29 +389,14 @@ static mcnt_t mu_bfn_str(mu_t *frame) {
             frame[0] = MU_EMPTY_STR;
             return 1;
 
-        case MTNUM:
-            if (m == mu_num_fromuint((mbyte_t)mu_num_getuint(m))) {
-                frame[0] = mu_str_fromdata((mbyte_t[]){mu_num_getuint(m)}, 1);
-                return 1;
-            }
-            break;
-
         case MTSTR:
             frame[0] = frame[0];
             return 1;
 
-        case MTTBL:
-        case MTFN:
-            frame[0] = m;
-            mu_fn_fcall(MU_ITER, 0x11, frame);
-            frame[0] = mu_str_fromiter(frame[0]);
-            return 1;
-
         default:
-            break;
+            frame[0] = mu_str_format("%nr", m, 0);
+            return 1;
     }
-
-    mu_error_cast(MU_KEY_STR, m);
 }
 
 MU_GEN_STR(mu_gen_key_str, "str")
@@ -562,7 +507,7 @@ static mcnt_t mu_str_split_step(mu_t scope, mu_t *frame) {
 
 static mcnt_t mu_bfn_split(mu_t *frame) {
     mu_t s     = frame[0];
-    mu_t delim = frame[1] ? frame[1] : MU_SPACE_STR;
+    mu_t delim = frame[1] ? frame[1] : MU_EMPTY_STR;
     if (!mu_isstr(s) || !mu_isstr(delim)) {
         mu_error_arg(MU_KEY_SPLIT, 0x2, frame);
     }
@@ -582,7 +527,7 @@ MU_GEN_BFN(mu_gen_split, 0x2, mu_bfn_split)
 
 static mcnt_t mu_bfn_join(mu_t *frame) {
     mu_t iter  = frame[0];
-    mu_t delim = frame[1] ? frame[1] : MU_SPACE_STR;
+    mu_t delim = frame[1] ? frame[1] : MU_EMPTY_STR;
     if (!mu_isstr(delim)) {
         mu_error_arg(MU_KEY_JOIN, 0x2, frame);
     }

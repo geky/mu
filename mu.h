@@ -124,7 +124,6 @@ mu_noreturn mu_error_cast(mu_t name, mu_t m);
 #define MU_NINF         mu_gen_ninf()
 #define MU_E            mu_gen_e()
 #define MU_PI           mu_gen_pi()
-#define MU_ID           mu_gen_id()
 
 // Builtin functions
 #define MU_NUM          mu_gen_num()
@@ -145,13 +144,13 @@ mu_noreturn mu_error_cast(mu_t name, mu_t m);
 #define MU_SUB          mu_gen_sub()
 #define MU_MUL          mu_gen_mul()
 #define MU_DIV          mu_gen_div()
-#define MU_ABS          mu_gen_abs()
-#define MU_FLOOR        mu_gen_floor()
-#define MU_CEIL         mu_gen_ceil()
 #define MU_IDIV         mu_gen_idiv()
 #define MU_MOD          mu_gen_mod()
 #define MU_POW          mu_gen_pow()
 #define MU_LOG          mu_gen_log()
+#define MU_ABS          mu_gen_abs()
+#define MU_FLOOR        mu_gen_floor()
+#define MU_CEIL         mu_gen_ceil()
 
 #define MU_COS          mu_gen_cos()
 #define MU_ACOS         mu_gen_acos()
@@ -169,6 +168,8 @@ mu_noreturn mu_error_cast(mu_t name, mu_t m);
 
 #define MU_PARSE        mu_gen_parse()
 #define MU_REPR         mu_gen_repr()
+#define MU_ORD          mu_gen_ord()
+#define MU_CHR          mu_gen_chr()
 #define MU_BIN          mu_gen_bin()
 #define MU_OCT          mu_gen_oct()
 #define MU_HEX          mu_gen_hex()
@@ -199,7 +200,7 @@ mu_noreturn mu_error_cast(mu_t name, mu_t m);
 #define MU_PAIRS        mu_gen_pairs()
 #define MU_RANGE        mu_gen_range()
 #define MU_REPEAT       mu_gen_repeat()
-#define MU_SEED         mu_gen_seed()
+#define MU_RANDOM       mu_gen_random()
 
 #define MU_ZIP          mu_gen_zip()
 #define MU_CHAIN        mu_gen_chain()
@@ -221,7 +222,6 @@ mu_noreturn mu_error_cast(mu_t name, mu_t m);
 #define MU_KEY_INF      mu_gen_key_inf()
 #define MU_KEY_E        mu_gen_key_e()
 #define MU_KEY_PI       mu_gen_key_pi()
-#define MU_KEY_ID       mu_gen_key_id()
 
 #define MU_KEY_NUM      mu_gen_key_num()
 #define MU_KEY_STR      mu_gen_key_str()
@@ -265,6 +265,8 @@ mu_noreturn mu_error_cast(mu_t name, mu_t m);
 
 #define MU_KEY_PARSE    mu_gen_key_parse()
 #define MU_KEY_REPR     mu_gen_key_repr()
+#define MU_KEY_ORD      mu_gen_key_ord()
+#define MU_KEY_CHR      mu_gen_key_chr()
 #define MU_KEY_BIN      mu_gen_key_bin()
 #define MU_KEY_OCT      mu_gen_key_oct()
 #define MU_KEY_HEX      mu_gen_key_hex()
@@ -295,7 +297,7 @@ mu_noreturn mu_error_cast(mu_t name, mu_t m);
 #define MU_KEY_PAIRS    mu_gen_key_pairs()
 #define MU_KEY_RANGE    mu_gen_key_range()
 #define MU_KEY_REPEAT   mu_gen_key_repeat()
-#define MU_KEY_SEED     mu_gen_key_seed()
+#define MU_KEY_RANDOM   mu_gen_key_random()
 
 #define MU_KEY_ZIP      mu_gen_key_zip()
 #define MU_KEY_CHAIN    mu_gen_key_chain()
@@ -320,7 +322,6 @@ mu_t mu_gen_inf(void);
 mu_t mu_gen_ninf(void);
 mu_t mu_gen_e(void);
 mu_t mu_gen_pi(void);
-mu_t mu_gen_id(void);
 
 mu_t mu_gen_num(void);
 mu_t mu_gen_str(void);
@@ -394,7 +395,7 @@ mu_t mu_gen_iter(void);
 mu_t mu_gen_pairs(void);
 mu_t mu_gen_range(void);
 mu_t mu_gen_repeat(void);
-mu_t mu_gen_seed(void);
+mu_t mu_gen_random(void);
 
 mu_t mu_gen_zip(void);
 mu_t mu_gen_chain(void);
@@ -416,7 +417,6 @@ mu_t mu_gen_key_inf(void);
 mu_t mu_gen_key_ninf(void);
 mu_t mu_gen_key_e(void);
 mu_t mu_gen_key_pi(void);
-mu_t mu_gen_key_id(void);
 
 mu_t mu_gen_key_num(void);
 mu_t mu_gen_key_str(void);
@@ -460,6 +460,8 @@ mu_t mu_gen_key_shr(void);
 
 mu_t mu_gen_key_parse(void);
 mu_t mu_gen_key_repr(void);
+mu_t mu_gen_key_ord(void);
+mu_t mu_gen_key_chr(void);
 mu_t mu_gen_key_bin(void);
 mu_t mu_gen_key_oct(void);
 mu_t mu_gen_key_hex(void);
@@ -490,7 +492,7 @@ mu_t mu_gen_key_iter(void);
 mu_t mu_gen_key_pairs(void);
 mu_t mu_gen_key_range(void);
 mu_t mu_gen_key_repeat(void);
-mu_t mu_gen_key_seed(void);
+mu_t mu_gen_key_random(void);
 
 mu_t mu_gen_key_zip(void);
 mu_t mu_gen_key_chain(void);

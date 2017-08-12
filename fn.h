@@ -27,6 +27,10 @@ mu_t mu_fn_call(mu_t f, mcnt_t fc, ...);
 // Iteration
 bool mu_fn_next(mu_t f, mcnt_t fc, mu_t *frame);
 
+// Bind and composition
+mu_t mu_fn_bind(mu_t f, mu_t args);
+mu_t mu_fn_comp(mu_t f, mu_t g);
+
 
 // Function tags
 enum mu_fn_flags {

@@ -155,13 +155,18 @@ bool mu_fn_next(mu_t f, mcnt_t fc, mu_t *frame) {
 
 
 // Function related Mu functions
+static mcnt_t mu_bfn_id(mu_t *frame) {
+    return 0xf;
+}
+MU_GEN_BFN(mu_gen_id, 0xf, mu_bfn_id)
+
 static mcnt_t mu_bfn_fn(mu_t *frame) {
     mu_t m = frame[0];
 
     switch (mu_gettype(m)) {
         case MTNIL:
             mu_dec(m);
-            frame[0] = MU_ID;
+            frame[0] = mu_gen_id();
             return 1;
 
         case MTFN:
@@ -178,14 +183,6 @@ static mcnt_t mu_bfn_fn(mu_t *frame) {
 MU_GEN_STR(mu_gen_key_fn2, "fn_")
 MU_GEN_BFN(mu_gen_fn, 0x1, mu_bfn_fn)
 
-// Default function
-static mcnt_t mu_bfn_id(mu_t *frame) {
-    return 0xf;
-}
-
-MU_GEN_STR(mu_gen_key_id, "id")
-MU_GEN_BFN(mu_gen_id, 0xf, mu_bfn_id)
-
 // Binds arguments to function
 static mcnt_t mu_fn_bound(mu_t scope, mu_t *frame) {
     mu_t f = mu_tbl_lookup(scope, mu_num_fromuint(0));
@@ -195,14 +192,20 @@ static mcnt_t mu_fn_bound(mu_t scope, mu_t *frame) {
     return mu_fn_tcall(f, 0xf, frame);
 }
 
+mu_t mu_fn_bind(mu_t f, mu_t g) {
+    mu_assert(mu_isfn(f) && mu_istbl(g));
+    return mu_fn_fromsbfn(0xf, mu_fn_bound,
+            mu_tbl_fromlist((mu_t[]){mu_inc(f), g}, 2));
+}
+
 static mcnt_t mu_bfn_bind(mu_t *frame) {
     mu_t f = mu_tbl_pop(frame[0], 0);
     if (!mu_isfn(f)) {
         mu_error_arg(MU_KEY_BIND, 0x2, (mu_t[]){f, frame[0]});
     }
 
-    frame[0] = mu_fn_fromsbfn(0xf, mu_fn_bound,
-            mu_tbl_fromlist((mu_t[]){f, frame[0]}, 2));
+    frame[0] = mu_fn_bind(f, frame[0]);
+    mu_dec(f);
     return 1;
 }
 
@@ -219,18 +222,23 @@ static mcnt_t mu_fn_composed(mu_t fs, mu_t *frame) {
     return c;
 }
 
+mu_t mu_fn_comp(mu_t f, mu_t g) {
+    mu_assert(mu_isfn(f) && mu_isfn(g));
+    return mu_fn_fromsbfn(0xf, mu_fn_composed,
+            mu_tbl_fromlist((mu_t[]){f, g}, 2));
+}
+
 static mcnt_t mu_bfn_comp(mu_t *frame) {
-    mu_t f;
-    for (muint_t i = 0; mu_tbl_next(frame[0], &i, 0, &f);) {
-        if (!mu_isfn(f)) {
-            mu_error_arg(MU_KEY_COMP, 0xf, frame);
-        }
+    mu_t f = frame[0];
+    mu_t g = frame[1];
+    if (!(mu_isfn(f) && mu_isfn(g))) {
+        mu_error_arg(MU_KEY_COMP, 0xf, frame);
     }
 
-    frame[0] = mu_fn_fromsbfn(0xf, mu_fn_composed, frame[0]);
+    frame[0] = mu_fn_comp(f, g);
     return 1;
 }
 
-MU_GEN_STR(mu_gen_key_comp, "comp")
-MU_GEN_BFN(mu_gen_comp, 0xf, mu_bfn_comp)
+MU_GEN_STR(mu_gen_key_comp, "@")
+MU_GEN_BFN(mu_gen_comp, 0x2, mu_bfn_comp)
 

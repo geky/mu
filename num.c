@@ -404,13 +404,15 @@ static mcnt_t mu_bfn_num(mu_t *frame) {
             frame[0] = m;
             return 1;
 
-        case MTSTR:
-            if (mu_str_getlen(m) == 1) {
-                frame[0] = mu_num_fromuint(mu_str_getdata(m)[0]);
-                mu_str_dec(m);
+        case MTSTR: {
+            const mbyte_t *start = mu_str_getdata(m);
+            const mbyte_t *end = start + mu_str_getlen(m);
+            frame[0] = mu_num_parse(&start, end);
+            if (start == end) {
+                mu_dec(m);
                 return 1;
             }
-            break;
+        }
 
         default:
             break;
@@ -703,7 +705,7 @@ MU_GEN_BFN(mu_gen_shr, 0x2, mu_bfn_shr)
 #define XORSHIFT3 11
 #endif
 
-static mcnt_t mu_num_random(mu_t scope, mu_t *frame) {
+static mcnt_t mu_num_randomstep(mu_t scope, mu_t *frame) {
     muint_t *a = mu_buf_getdata(scope);
     muint_t x = a[0];
     muint_t y = a[1];
@@ -719,16 +721,16 @@ static mcnt_t mu_num_random(mu_t scope, mu_t *frame) {
     return 1;
 }
 
-static mcnt_t mu_num_seed(mu_t *frame) {
+static mcnt_t mu_num_random(mu_t *frame) {
     mu_t seed = frame[0] ? frame[0] : mu_num_fromuint(0);
     if (!mu_isnum(seed)) {
-        mu_error_arg(MU_KEY_SEED, 0x1, frame);
+        mu_error_arg(MU_KEY_RANDOM, 0x1, frame);
     }
 
-    frame[0] = mu_fn_fromsbfn(0x0, mu_num_random, mu_buf_fromdata(
+    frame[0] = mu_fn_fromsbfn(0x0, mu_num_randomstep, mu_buf_fromdata(
             (mu_t[]){seed, seed}, 2*sizeof(mu_t)));
     return 1;
 }
 
-MU_GEN_STR(mu_gen_key_seed, "seed")
-MU_GEN_BFN(mu_gen_seed, 0x1, mu_num_seed)
+MU_GEN_STR(mu_gen_key_random, "random")
+MU_GEN_BFN(mu_gen_random, 0x1, mu_num_random)

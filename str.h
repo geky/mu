@@ -34,10 +34,6 @@ mu_t mu_str_iter(mu_t s);
 mu_t mu_str_parse(const mbyte_t **pos, const mbyte_t *end);
 mu_t mu_str_repr(mu_t s);
 
-mu_t mu_str_bin(mu_t s);
-mu_t mu_str_oct(mu_t s);
-mu_t mu_str_hex(mu_t s);
-
 
 // Definition of Mu's string types
 // Storage follows identical layout of buf type.
