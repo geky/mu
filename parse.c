@@ -658,13 +658,12 @@ static void encode_store(struct mparse *p, struct mexpr *e,
 
 // Completing a parse and generating the final code object
 static mu_t compile(struct mparse *p, bool weak) {
-    mu_t b = mu_buf_create(
+    extern void mu_code_destroy(mu_t);
+    mu_t b = mu_buf_createdtor(
             mu_offsetof(struct mcode, data) +
             sizeof(mu_t)*mu_tbl_getlen(p->imms) +
-            p->bcount);
-
-    extern void mu_code_destroy(mu_t);
-    mu_buf_setdtor(&b, mu_code_destroy);
+            p->bcount,
+            mu_code_destroy);
 
     struct mcode *code = mu_buf_getdata(b);
     code->args = p->args;

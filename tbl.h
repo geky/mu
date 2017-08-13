@@ -28,6 +28,7 @@ struct mtbl {
 
 // Table creation functions
 mu_t mu_tbl_create(muint_t size);
+mu_t mu_tbl_createtail(muint_t size, mu_t tail);
 
 // Conversion operations
 mu_t mu_tbl_fromlist(mu_t *list, muint_t n);

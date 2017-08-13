@@ -127,6 +127,12 @@ mu_t mu_tbl_create(muint_t len) {
     return (mu_t)((muint_t)t + MTTBL);
 }
 
+mu_t mu_tbl_createtail(muint_t len, mu_t tail) {
+    mu_t t = mu_tbl_create(len);
+    mu_tbl_settail(t, tail);
+    return t;
+}
+
 void mu_tbl_settail(mu_t t, mu_t tail) {
     mu_assert(!tail || mu_istbl(tail));
     mtbl(t)->tail = tail;

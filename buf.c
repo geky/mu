@@ -7,7 +7,11 @@
 
 
 // Functions for handling buffers
-static mu_t mu_cbuf_create(muint_t n, void (*dtor)(mu_t)) {
+mu_t mu_buf_create(muint_t n) {
+    return mu_buf_createdtor(n, 0);
+}
+
+mu_t mu_buf_createdtor(muint_t n, void (*dtor)(mu_t)) {
     if (n > (mlen_t)-1) {
         mu_errorf("exceeded max length in buffer");
     }
@@ -25,15 +29,11 @@ static mu_t mu_cbuf_create(muint_t n, void (*dtor)(mu_t)) {
     }
 }
 
-mu_t mu_buf_create(muint_t n) {
-    return mu_cbuf_create(n, 0);
-}
-
 void mu_buf_destroy(mu_t b) {
     mu_ref_dealloc(b, mu_offsetof(struct mbuf, data) + mu_buf_getlen(b));
 }
 
-void mu_cbuf_destroy(mu_t b) {
+void mu_buf_destroydtor(mu_t b) {
     mu_buf_getdtor(b)(b);
     mu_ref_dealloc(b, mu_offsetof(struct mbuf, data) +
             mu_align(mu_buf_getlen(b)) + sizeof(void (*)(mu_t)));
@@ -44,7 +44,7 @@ void mu_buf_resize(mu_t *b, muint_t n) {
         mu_errorf("exceeded max length in buffer");
     }
 
-    mu_t nb = mu_cbuf_create(n, mu_buf_getdtor(*b));
+    mu_t nb = mu_buf_createdtor(n, mu_buf_getdtor(*b));
     memcpy(mu_buf_getdata(nb), mu_buf_getdata(*b),
             (n < mu_buf_getlen(*b)) ? n : mu_buf_getlen(*b));
 
@@ -75,7 +75,7 @@ void mu_buf_expand(mu_t *b, muint_t n) {
 }
 
 void mu_buf_setdtor(mu_t *b, void (*dtor)(mu_t)) {
-    mu_t nb = mu_cbuf_create(mu_buf_getlen(*b), dtor);
+    mu_t nb = mu_buf_createdtor(mu_buf_getlen(*b), dtor);
     memcpy(mu_buf_getdata(nb), mu_buf_getdata(*b), mu_buf_getlen(nb));
 
     mu_buf_dec(*b);

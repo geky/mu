@@ -19,14 +19,14 @@ MU_GEN_UINT(mu_gen_true, 1)
 // Mu type destructors
 extern void mu_str_destroy(mu_t);
 extern void mu_buf_destroy(mu_t);
-extern void mu_cbuf_destroy(mu_t);
+extern void mu_buf_destroydtor(mu_t);
 extern void mu_tbl_destroy(mu_t);
 extern void mu_fn_destroy(mu_t);
 
 static void (*const mu_attr_destroy[8])(mu_t) = {
     [MTSTR]  = mu_str_destroy,
     [MTBUF]  = mu_buf_destroy,
-    [MTCBUF] = mu_cbuf_destroy,
+    [MTCBUF] = mu_buf_destroydtor,
     [MTTBL]  = mu_tbl_destroy,
     [MTFN]   = mu_fn_destroy,
 };
@@ -427,18 +427,6 @@ MU_GEN_BFN(mu_gen_hex, 0x1, mu_bfn_hex)
 
 
 // Data structure operations
-static mint_t mu_clamp(mu_t n, mint_t lower, mint_t upper) {
-    mu_assert(mu_isnum(n));
-
-    if (mu_num_cmp(n, mu_num_fromint(lower)) < 0) {
-        return lower;
-    } else if (mu_num_cmp(n, mu_num_fromint(upper)) > 0) {
-        return upper;
-    } else {
-        return mu_num_getint(n);
-    }
-}
-
 static mcnt_t mu_bfn_len(mu_t *frame) {
     mu_t a = frame[0];
     mu_checkargs(mu_isstr(a) || mu_istbl(a),
@@ -495,12 +483,14 @@ static mcnt_t mu_bfn_subset(mu_t *frame) {
             mu_isnum(lower) && (!upper ||mu_isnum(upper)),
             MU_KEY_SUBSET, 0x3, frame);
 
-    mint_t loweri = mu_clamp(lower, -(mint_t)(mlen_t)-1, (mlen_t)-1);
+    mint_t loweri = mu_num_clampint(lower,
+            -(mint_t)(mlen_t)-1, (mlen_t)-1);
     mint_t upperi;
     if (!upper) {
         upperi = loweri+1;
     } else {
-        upperi = mu_clamp(upper, -(mint_t)(mlen_t)-1, (mlen_t)-1);
+        upperi = mu_num_clampint(upper,
+                -(mint_t)(mlen_t)-1, (mlen_t)-1);
     }
 
     if (mu_isstr(a)) {
@@ -530,7 +520,8 @@ static mcnt_t mu_bfn_push(mu_t *frame) {
     if (!i) {
         ii = mu_tbl_getlen(t);
     } else {
-        ii = mu_clamp(i, -(mint_t)(mlen_t)-1, (mlen_t)-1);
+        ii = mu_num_clampint(i,
+                -(mint_t)(mlen_t)-1, (mlen_t)-1);
     }
 
     mu_tbl_push(t, v, ii);
@@ -551,7 +542,8 @@ static mcnt_t mu_bfn_pop(mu_t *frame) {
     if (!i) {
         ii = mu_tbl_getlen(t) - 1;
     } else {
-        ii = mu_clamp(i, -(mint_t)(mlen_t)-1, (mlen_t)-1);
+        ii = mu_num_clampint(i,
+                -(mint_t)(mlen_t)-1, (mlen_t)-1);
     }
 
     frame[0] = mu_tbl_pop(t, ii);

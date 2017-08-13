@@ -70,6 +70,26 @@ mu_t mu_num_frommu(mu_t m) {
     }
 }
 
+muint_t mu_num_clampuint(mu_t n, muint_t lower, muint_t upper) {
+    if (mu_num_cmp(n, mu_num_fromuint(lower)) < 0) {
+        return lower;
+    } else if (mu_num_cmp(n, mu_num_fromuint(upper)) > 0) {
+        return upper;
+    } else {
+        return mu_num_getuint(n);
+    }
+}
+
+mint_t mu_num_clampint(mu_t n, mint_t lower, mint_t upper) {
+    if (mu_num_cmp(n, mu_num_fromint(lower)) < 0) {
+        return lower;
+    } else if (mu_num_cmp(n, mu_num_fromint(upper)) > 0) {
+        return upper;
+    } else {
+        return mu_num_getint(n);
+    }
+}
+
 // Comparison operation
 mint_t mu_num_cmp(mu_t a, mu_t b) {
     mu_assert(mu_isnum(a) && mu_isnum(b));

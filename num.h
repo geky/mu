@@ -17,6 +17,8 @@ mu_t mu_num_frommu(mu_t m);
 mu_inline mfloat_t mu_num_getfloat(mu_t m);
 mu_inline muint_t mu_num_getuint(mu_t m);
 mu_inline mint_t mu_num_getint(mu_t m);
+muint_t mu_num_clampuint(mu_t m, muint_t lower, muint_t upper);
+mint_t mu_num_clampint(mu_t m, mint_t lower, mint_t upper);
 
 // Comparison operation
 mint_t mu_num_cmp(mu_t, mu_t);

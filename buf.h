@@ -22,6 +22,8 @@ struct mbuf {
 
 // Creates buffer with specified size
 mu_t mu_buf_create(muint_t n);
+mu_t mu_buf_createdtor(muint_t n, void (*dtor)(mu_t));
+
 mu_inline mu_t mu_buf_fromdata(const void *s, muint_t n);
 mu_inline mu_t mu_buf_fromcstr(const char *s);
 mu_inline mu_t mu_buf_fromchr(char s);
