@@ -108,31 +108,31 @@ mu_inline mu_t mu_tbl_gettail(mu_t m) {
 
 
 // Table constant macros
-#define MU_GEN_LIST(name, ...)                                              \
+#define MU_DEF_LIST(name, ...)                                              \
 mu_pure mu_t name(void) {                                                   \
     static mu_t ref = 0;                                                    \
-    static mu_t (*const gen[])(void) = __VA_ARGS__;                         \
+    static mu_t (*const def[])(void) = __VA_ARGS__;                         \
     static struct mtbl inst = {0};                                          \
                                                                             \
     extern mu_t mu_tbl_initlist(                                            \
             struct mtbl *, mu_t (*const *)(void), muint_t);                 \
     if (!ref) {                                                             \
-        ref = mu_tbl_initlist(&inst, gen, sizeof gen / sizeof(gen[0]));     \
+        ref = mu_tbl_initlist(&inst, def, sizeof def / sizeof(def[0]));     \
     }                                                                       \
                                                                             \
     return ref;                                                             \
 }
 
-#define MU_GEN_TBL(name, ...)                                               \
+#define MU_DEF_TBL(name, ...)                                               \
 mu_pure mu_t name(void) {                                                   \
     static mu_t ref = 0;                                                    \
-    static mu_t (*const gen[][2])(void) = __VA_ARGS__;                      \
+    static mu_t (*const def[][2])(void) = __VA_ARGS__;                      \
     static struct mtbl inst = {0};                                          \
                                                                             \
     extern mu_t mu_tbl_initpairs(                                           \
             struct mtbl *, mu_t (*const (*)[2])(void), muint_t);            \
     if (!ref) {                                                             \
-        ref = mu_tbl_initpairs(&inst, gen, sizeof gen / sizeof(gen[0]));    \
+        ref = mu_tbl_initpairs(&inst, def, sizeof def / sizeof(def[0]));    \
     }                                                                       \
                                                                             \
     return ref;                                                             \

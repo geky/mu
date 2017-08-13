@@ -93,7 +93,7 @@ mu_inline const void *mu_str_getdata(mu_t m) {
 
 
 // String constant macro
-#define MU_GEN_STR(name, s)                                                 \
+#define MU_DEF_STR(name, s)                                                 \
 mu_pure mu_t name(void) {                                                   \
     static mu_t ref = 0;                                                    \
     static const struct {                                                   \

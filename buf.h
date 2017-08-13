@@ -116,7 +116,7 @@ mu_inline void mu_buf_pushchr(mu_t *b, muint_t *i, char c) {
 
 
 // Buffer macro for allocating buffers in global space
-#define MU_GEN_BUF(name, n)                                                 \
+#define MU_DEF_BUF(name, n)                                                 \
 mu_pure mu_t name(void) {                                                   \
     static struct {                                                         \
         mref_t ref;                                                         \

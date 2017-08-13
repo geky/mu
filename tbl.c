@@ -18,7 +18,7 @@ mu_inline muint_t mu_tbl_hash(mu_t m) {
     // nice property of being a free hash function.
     //
     // We remove the lower 3 bits, since they store the type, which
-    // generally doesn't vary in tables. And we xor the upper and lower
+    // deferally doesn't vary in tables. And we xor the upper and lower
     // halves so all bits can affect the range of the length type.
     // This is the boundary on the table size so it's really the only
     // part that matters.
@@ -435,23 +435,23 @@ mu_t mu_tbl_pairs(mu_t t) {
 
 
 // Table creating functions
-mu_t mu_tbl_initlist(struct mtbl *t, mu_t (*const *gen)(void), muint_t n) {
+mu_t mu_tbl_initlist(struct mtbl *t, mu_t (*const *def)(void), muint_t n) {
     mu_t m = (mu_t)((muint_t)t + MTTBL);
     mu_tbl_listexpand(m, n);
 
     for (muint_t i = 0; i < n; i++) {
-        mu_tbl_insert(m, mu_num_fromuint(i), gen[i]());
+        mu_tbl_insert(m, mu_num_fromuint(i), def[i]());
     }
 
     return m;
 }
 
-mu_t mu_tbl_initpairs(struct mtbl *t, mu_t (*const (*gen)[2])(void), muint_t n) {
+mu_t mu_tbl_initpairs(struct mtbl *t, mu_t (*const (*def)[2])(void), muint_t n) {
     mu_t m = (mu_t)((muint_t)t + MTTBL);
     mu_tbl_listexpand(m, n);
 
     for (muint_t i = 0; i < n; i++) {
-        mu_tbl_insert(m, gen[i][0](), gen[i][1]());
+        mu_tbl_insert(m, def[i][0](), def[i][1]());
     }
 
     return m;
@@ -894,12 +894,12 @@ mu_t mu_tbl_repr(mu_t t, mu_t depth) {
 
 
 // Table related Mu functions
-static mcnt_t mu_bfn_tbl(mu_t *frame) {
+static mcnt_t mu_tbl_bfn(mu_t *frame) {
     mu_t tail = frame[1];
-    mu_checkargs(!tail || mu_istbl(tail), MU_KEY_TBL, 0x2, frame);
+    mu_checkargs(!tail || mu_istbl(tail), MU_TBL_KEY, 0x2, frame);
 
     mu_t m = mu_tbl_frommu(mu_inc(frame[0]));
-    mu_checkargs(m, MU_KEY_TBL, 0x2, frame);
+    mu_checkargs(m, MU_TBL_KEY, 0x2, frame);
     mu_dec(frame[0]);
     frame[0] = m;
 
@@ -907,14 +907,14 @@ static mcnt_t mu_bfn_tbl(mu_t *frame) {
     return 1;
 }
 
-MU_GEN_STR(mu_gen_key_tbl, "tbl")
-MU_GEN_BFN(mu_gen_tbl, 0x2, mu_bfn_tbl)
+MU_DEF_STR(mu_tbl_key_def, "tbl")
+MU_DEF_BFN(mu_tbl_def, 0x2, mu_tbl_bfn)
 
-static mcnt_t mu_bfn_tail(mu_t *frame) {
-    mu_checkargs(mu_istbl(frame[0]), MU_KEY_TAIL, 0x1, frame);
+static mcnt_t mu_tail_bfn(mu_t *frame) {
+    mu_checkargs(mu_istbl(frame[0]), MU_TAIL_KEY, 0x1, frame);
     frame[0] = mu_tbl_gettail(frame[0]);
     return 1;
 }
 
-MU_GEN_STR(mu_gen_key_tail, "tail")
-MU_GEN_BFN(mu_gen_tail, 0x1, mu_bfn_tail)
+MU_DEF_STR(mu_tail_key_def, "tail")
+MU_DEF_BFN(mu_tail_def, 0x1, mu_tail_bfn)

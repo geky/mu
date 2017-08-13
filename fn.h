@@ -175,7 +175,7 @@ mu_inline mu_t mu_fn_getclosure(mu_t m) {
 
 
 // Function constant macro
-#define MU_GEN_BFN(name, args, bfn)                                         \
+#define MU_DEF_BFN(name, args, bfn)                                         \
 mu_pure mu_t name(void) {                                                   \
     static const struct mfn inst = {0, args, MFN_BUILTIN, 0, {bfn}};          \
     return (mu_t)((muint_t)&inst + MTFN);                                   \

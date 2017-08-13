@@ -46,15 +46,15 @@ mu_t mu_fn_fromsbfn(mcnt_t args, msbfn_t *sbfn, mu_t closure) {
     return (mu_t)((muint_t)f + MTFN);
 }
 
-static mcnt_t mu_bfn_id(mu_t *frame) {
+static mcnt_t mu_id_bfn(mu_t *frame) {
     return 0xf;
 }
-MU_GEN_BFN(mu_gen_id, 0xf, mu_bfn_id)
+MU_DEF_BFN(mu_id_def, 0xf, mu_id_bfn)
 
 mu_t mu_fn_frommu(mu_t m) {
     switch (mu_gettype(m)) {
         case MTNIL:
-            return mu_gen_id();
+            return mu_id_def();
 
         case MTFN:
             return m;
@@ -179,7 +179,7 @@ bool mu_fn_next(mu_t f, mcnt_t fc, mu_t *frame) {
 
 // Function related Mu functions
 
-static mcnt_t mu_bfn_fn(mu_t *frame) {
+static mcnt_t mu_fn_bfn(mu_t *frame) {
     mu_t m = mu_fn_frommu(mu_inc(frame[0]));
     mu_checkargs(m, MU_KEY_FN2, 0x1, frame);
     mu_dec(frame[0]);
@@ -187,8 +187,8 @@ static mcnt_t mu_bfn_fn(mu_t *frame) {
     return 1;
 }
 
-MU_GEN_STR(mu_gen_key_fn2, "fn_")
-MU_GEN_BFN(mu_gen_fn, 0x1, mu_bfn_fn)
+MU_DEF_STR(mu_def_key_fn2, "fn_")
+MU_DEF_BFN(mu_fn_def, 0x1, mu_fn_bfn)
 
 // Binds arguments to function
 static mcnt_t mu_fn_bound(mu_t scope, mu_t *frame) {
@@ -205,17 +205,17 @@ mu_t mu_fn_bind(mu_t f, mu_t g) {
             mu_tbl_fromlist((mu_t[]){mu_inc(f), g}, 2));
 }
 
-static mcnt_t mu_bfn_bind(mu_t *frame) {
+static mcnt_t mu_bind_bfn(mu_t *frame) {
     mu_t f = mu_tbl_pop(frame[0], 0);
-    mu_checkargs(mu_isfn(f), MU_KEY_BIND, 0x2, (mu_t[]){f, frame[0]});
+    mu_checkargs(mu_isfn(f), MU_BIND_KEY, 0x2, (mu_t[]){f, frame[0]});
 
     frame[0] = mu_fn_bind(f, frame[0]);
     mu_dec(f);
     return 1;
 }
 
-MU_GEN_STR(mu_gen_key_bind, "bind")
-MU_GEN_BFN(mu_gen_bind, 0xf, mu_bfn_bind)
+MU_DEF_STR(mu_bind_key_def, "bind")
+MU_DEF_BFN(mu_bind_def, 0xf, mu_bind_bfn)
 
 static mcnt_t mu_fn_composed(mu_t fs, mu_t *frame) {
     mcnt_t c = 0xf;
@@ -233,16 +233,16 @@ mu_t mu_fn_comp(mu_t f, mu_t g) {
             mu_tbl_fromlist((mu_t[]){mu_inc(f), g}, 2));
 }
 
-static mcnt_t mu_bfn_comp(mu_t *frame) {
+static mcnt_t mu_comp_bfn(mu_t *frame) {
     mu_t f = frame[0];
     mu_t g = frame[1];
-    mu_checkargs(mu_isfn(f) && mu_isfn(g), MU_KEY_COMP, 0xf, frame);
+    mu_checkargs(mu_isfn(f) && mu_isfn(g), MU_COMP_KEY, 0xf, frame);
 
     frame[0] = mu_fn_comp(f, g);
     mu_dec(f);
     return 1;
 }
 
-MU_GEN_STR(mu_gen_key_comp, "@")
-MU_GEN_BFN(mu_gen_comp, 0x2, mu_bfn_comp)
+MU_DEF_STR(mu_comp_key_def, "@")
+MU_DEF_BFN(mu_comp_def, 0x2, mu_comp_bfn)
 

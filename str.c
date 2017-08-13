@@ -9,8 +9,8 @@
 
 #define MU_EMPTY_STR mu_empty_str()
 #define MU_SPACE_STR mu_space_str()
-MU_GEN_STR(mu_empty_str, "")
-MU_GEN_STR(mu_space_str, " ")
+MU_DEF_STR(mu_empty_str, "")
+MU_DEF_STR(mu_space_str, " ")
 
 
 // String interning
@@ -416,22 +416,22 @@ mu_t mu_str_repr(mu_t m) {
 
 
 // String related functions in Mu
-static mcnt_t mu_bfn_str(mu_t *frame) {
+static mcnt_t mu_str_bfn(mu_t *frame) {
     mu_t m = mu_str_frommu(mu_inc(frame[0]));
-    mu_checkargs(m, MU_KEY_STR, 0x1, frame);
+    mu_checkargs(m, MU_STR_KEY, 0x1, frame);
     mu_dec(frame[0]);
     frame[0] = m;
     return 1;
 }
 
-MU_GEN_STR(mu_gen_key_str, "str")
-MU_GEN_BFN(mu_gen_str, 0x1, mu_bfn_str)
+MU_DEF_STR(mu_str_key_def, "str")
+MU_DEF_BFN(mu_str_def, 0x1, mu_str_bfn)
 
-static mcnt_t mu_bfn_find(mu_t *frame) {
+static mcnt_t mu_find_bfn(mu_t *frame) {
     mu_t s = frame[0];
     mu_t m = frame[1];
     mu_checkargs(mu_isstr(s) && mu_isstr(m),
-            MU_KEY_FIND, 0x2, frame);
+            MU_FIND_KEY, 0x2, frame);
 
     const mbyte_t *sb = mu_str_getdata(s);
     mlen_t slen = mu_str_getlen(s);
@@ -453,10 +453,10 @@ static mcnt_t mu_bfn_find(mu_t *frame) {
     return 0;
 }
 
-MU_GEN_STR(mu_gen_key_find, "find")
-MU_GEN_BFN(mu_gen_find, 0x2, mu_bfn_find)
+MU_DEF_STR(mu_find_key_def, "find")
+MU_DEF_BFN(mu_find_def, 0x2, mu_find_bfn)
 
-static mcnt_t mu_bfn_replace(mu_t *frame) {
+static mcnt_t mu_replace_bfn(mu_t *frame) {
     mu_t s = frame[0];
     mu_t m = frame[1];
     mu_t r = frame[2];
@@ -495,8 +495,8 @@ static mcnt_t mu_bfn_replace(mu_t *frame) {
     return 1;
 }
 
-MU_GEN_STR(mu_gen_key_replace, "replace")
-MU_GEN_BFN(mu_gen_replace, 0x3, mu_bfn_replace)
+MU_DEF_STR(mu_replace_key_def, "replace")
+MU_DEF_BFN(mu_replace_def, 0x3, mu_replace_bfn)
 
 
 static mcnt_t mu_str_split_step(mu_t scope, mu_t *frame) {
@@ -528,10 +528,10 @@ static mcnt_t mu_str_split_step(mu_t scope, mu_t *frame) {
     return 1;
 }
 
-static mcnt_t mu_bfn_split(mu_t *frame) {
+static mcnt_t mu_split_bfn(mu_t *frame) {
     mu_t s     = frame[0];
     mu_t delim = frame[1] ? frame[1] : MU_EMPTY_STR;
-    mu_checkargs(mu_isstr(s) && mu_isstr(delim), MU_KEY_SPLIT, 0x2, frame);
+    mu_checkargs(mu_isstr(s) && mu_isstr(delim), MU_SPLIT_KEY, 0x2, frame);
 
     if (mu_str_getlen(delim) == 0) {
         frame[0] = mu_str_iter(s);
@@ -544,13 +544,13 @@ static mcnt_t mu_bfn_split(mu_t *frame) {
     return 1;
 }
 
-MU_GEN_STR(mu_gen_key_split, "split")
-MU_GEN_BFN(mu_gen_split, 0x2, mu_bfn_split)
+MU_DEF_STR(mu_split_key_def, "split")
+MU_DEF_BFN(mu_split_def, 0x2, mu_split_bfn)
 
-static mcnt_t mu_bfn_join(mu_t *frame) {
+static mcnt_t mu_join_bfn(mu_t *frame) {
     mu_t iter  = frame[0];
     mu_t delim = frame[1] ? frame[1] : MU_EMPTY_STR;
-    mu_checkargs(mu_isstr(delim), MU_KEY_JOIN, 0x2, frame);
+    mu_checkargs(mu_isstr(delim), MU_JOIN_KEY, 0x2, frame);
 
     mu_t b = mu_buf_create(0);
     muint_t n = 0;
@@ -578,17 +578,17 @@ static mcnt_t mu_bfn_join(mu_t *frame) {
     return 1;
 }
 
-MU_GEN_STR(mu_gen_key_join, "join")
-MU_GEN_BFN(mu_gen_join, 0x2, mu_bfn_join)
+MU_DEF_STR(mu_join_key_def, "join")
+MU_DEF_BFN(mu_join_def, 0x2, mu_join_bfn)
 
-static mcnt_t mu_bfn_pad(mu_t *frame) {
+static mcnt_t mu_pad_bfn(mu_t *frame) {
     mu_t s    = frame[0];
     mu_t mlen = frame[1];
     mu_t pad  = frame[2] ? frame[2] : MU_SPACE_STR;
     mu_checkargs(
             mu_isstr(s) && mu_isnum(mlen) &&
             mu_isstr(pad) && mu_str_getlen(pad) > 0,
-            MU_KEY_PAD, 0x3, frame);
+            MU_PAD_KEY, 0x3, frame);
 
     bool left;
     muint_t len;
@@ -627,10 +627,10 @@ static mcnt_t mu_bfn_pad(mu_t *frame) {
     return 1;
 }
 
-MU_GEN_STR(mu_gen_key_pad, "pad")
-MU_GEN_BFN(mu_gen_pad, 0x3, mu_bfn_pad)
+MU_DEF_STR(mu_pad_key_def, "pad")
+MU_DEF_BFN(mu_pad_def, 0x3, mu_pad_bfn)
 
-static mcnt_t mu_bfn_strip(mu_t *frame) {
+static mcnt_t mu_strip_bfn(mu_t *frame) {
     if (mu_isstr(frame[1])) {
         mu_dec(frame[2]);
         frame[2] = frame[1];
@@ -643,7 +643,7 @@ static mcnt_t mu_bfn_strip(mu_t *frame) {
     mu_checkargs(
             mu_isstr(s) && (!dir || mu_isnum(dir)) &&
             mu_isstr(pad) && mu_str_getlen(pad) > 0,
-            MU_KEY_STR, 0x3, frame);
+            MU_STR_KEY, 0x3, frame);
 
     const mbyte_t *pos = mu_str_getdata(s);
     const mbyte_t *end = pos + mu_str_getlen(s);
@@ -669,5 +669,5 @@ static mcnt_t mu_bfn_strip(mu_t *frame) {
     return 1;
 }
 
-MU_GEN_STR(mu_gen_key_strip, "strip")
-MU_GEN_BFN(mu_gen_strip, 0x3, mu_bfn_strip)
+MU_DEF_STR(mu_strip_key_def, "strip")
+MU_DEF_BFN(mu_strip_def, 0x3, mu_strip_bfn)

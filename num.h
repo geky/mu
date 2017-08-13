@@ -91,14 +91,14 @@ mu_inline mint_t  mu_num_getint(mu_t m)  {
 
 
 // Number constant macro
-#define MU_GEN_FLOAT(name, num)                                             \
+#define MU_DEF_FLOAT(name, num)                                             \
 mu_pure mu_t name(void) {                                                   \
     return (mu_t)(MTNUM + (~7 &                                             \
         ((union { mfloat_t n; muint_t u; }){(mfloat_t)num}).u));            \
 }
 
-#define MU_GEN_UINT(name, num) MU_GEN_FLOAT(name, (muint_t)num)
-#define MU_GEN_INT(name, num)  MU_GEN_FLOAT(name, (mint_t)num)
+#define MU_DEF_UINT(name, num) MU_DEF_FLOAT(name, (muint_t)num)
+#define MU_DEF_INT(name, num)  MU_DEF_FLOAT(name, (mint_t)num)
 
 
 #endif
