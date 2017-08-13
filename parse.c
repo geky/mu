@@ -76,65 +76,65 @@ enum mtok {
 #define T_ANY (-1)
 
 // Table of keywords
-MU_DEF_STR(mu_let_key_def,        "let")
-MU_DEF_STR(mu_else_key_def,       "else")
-MU_DEF_STR(mu_and_key_def,        "and")
-MU_DEF_STR(mu_or_key_def,         "or")
-MU_DEF_STR(mu_continue_key_def,   "continue")
-MU_DEF_STR(mu_break_key_def,      "break")
-MU_DEF_STR(mu_return_key_def,     "return")
-MU_DEF_STR(mu_fn_key_def,         "fn")
-MU_DEF_STR(mu_type_key_def,       "type")
-MU_DEF_STR(mu_if_key_def,         "if")
-MU_DEF_STR(mu_while_key_def,      "while")
-MU_DEF_STR(mu_for_key_def,        "for")
-MU_DEF_STR(mu_nil_key_def,        "nil")
-MU_DEF_STR(mu_def_key_nil2,       "_")
-MU_DEF_STR(mu_assign_key_def,     "=")
-MU_DEF_STR(mu_pair_key_def,       ":")
-MU_DEF_STR(mu_dot_key_def,        ".")
-MU_DEF_STR(mu_arrow_key_def,      "->")
-MU_DEF_STR(mu_expand_key_def,     "..")
+MU_DEF_STR(mu_kw_let_def,       "let")
+MU_DEF_STR(mu_kw_else_def,      "else")
+MU_DEF_STR(mu_kw_and_def,       "and")
+MU_DEF_STR(mu_kw_or_def,        "or")
+MU_DEF_STR(mu_kw_continue_def,  "continue")
+MU_DEF_STR(mu_kw_break_def,     "break")
+MU_DEF_STR(mu_kw_return_def,    "return")
+MU_DEF_STR(mu_kw_fn_def,        "fn")
+MU_DEF_STR(mu_kw_type_def,      "type")
+MU_DEF_STR(mu_kw_if_def,        "if")
+MU_DEF_STR(mu_kw_while_def,     "while")
+MU_DEF_STR(mu_kw_for_def,       "for")
+MU_DEF_STR(mu_kw_nil_def,       "nil")
+MU_DEF_STR(mu_kw_nil2_def,      "_")
+MU_DEF_STR(mu_kw_assign_def,    "=")
+MU_DEF_STR(mu_kw_pair_def,      ":")
+MU_DEF_STR(mu_kw_dot_def,       ".")
+MU_DEF_STR(mu_kw_arrow_def,     "->")
+MU_DEF_STR(mu_kw_expand_def,    "..")
 
-MU_DEF_UINT(mu_tok_let_def,       T_LET)
-MU_DEF_UINT(mu_tok_else_def,      T_ELSE)
-MU_DEF_UINT(mu_tok_and_def,       T_AND)
-MU_DEF_UINT(mu_tok_or_def,        T_OR)
-MU_DEF_UINT(mu_tok_cont_def,      T_CONTINUE)
-MU_DEF_UINT(mu_tok_break_def,     T_BREAK)
-MU_DEF_UINT(mu_tok_return_def,    T_RETURN)
-MU_DEF_UINT(mu_tok_fn_def,        T_FN)
-MU_DEF_UINT(mu_tok_type_def,      T_TYPE)
-MU_DEF_UINT(mu_tok_if_def,        T_IF)
-MU_DEF_UINT(mu_tok_while_def,     T_WHILE)
-MU_DEF_UINT(mu_tok_for_def,       T_FOR)
-MU_DEF_UINT(mu_tok_nil_def,       T_NIL)
-MU_DEF_UINT(mu_tok_assign_def,    T_ASSIGN)
-MU_DEF_UINT(mu_tok_pair_def,      T_PAIR)
-MU_DEF_UINT(mu_tok_dot_def,       T_DOT)
-MU_DEF_UINT(mu_tok_arrow_def,     T_ARROW)
-MU_DEF_UINT(mu_tok_expand_def,    T_EXPAND)
+MU_DEF_UINT(mu_tok_let_def,     T_LET)
+MU_DEF_UINT(mu_tok_else_def,    T_ELSE)
+MU_DEF_UINT(mu_tok_and_def,     T_AND)
+MU_DEF_UINT(mu_tok_or_def,      T_OR)
+MU_DEF_UINT(mu_tok_cont_def,    T_CONTINUE)
+MU_DEF_UINT(mu_tok_break_def,   T_BREAK)
+MU_DEF_UINT(mu_tok_return_def,  T_RETURN)
+MU_DEF_UINT(mu_tok_fn_def,      T_FN)
+MU_DEF_UINT(mu_tok_type_def,    T_TYPE)
+MU_DEF_UINT(mu_tok_if_def,      T_IF)
+MU_DEF_UINT(mu_tok_while_def,   T_WHILE)
+MU_DEF_UINT(mu_tok_for_def,     T_FOR)
+MU_DEF_UINT(mu_tok_nil_def,     T_NIL)
+MU_DEF_UINT(mu_tok_assign_def,  T_ASSIGN)
+MU_DEF_UINT(mu_tok_pair_def,    T_PAIR)
+MU_DEF_UINT(mu_tok_dot_def,     T_DOT)
+MU_DEF_UINT(mu_tok_arrow_def,   T_ARROW)
+MU_DEF_UINT(mu_tok_expand_def,  T_EXPAND)
 
 MU_DEF_TBL(mu_keywords_def, {
-    { mu_let_key_def,        mu_tok_let_def    },
-    { mu_else_key_def,       mu_tok_else_def   },
-    { mu_and_key_def,        mu_tok_and_def    },
-    { mu_or_key_def,         mu_tok_or_def     },
-    { mu_continue_key_def,   mu_tok_cont_def   },
-    { mu_break_key_def,      mu_tok_break_def  },
-    { mu_return_key_def,     mu_tok_return_def },
-    { mu_fn_key_def,         mu_tok_fn_def     },
-    { mu_type_key_def,       mu_tok_type_def   },
-    { mu_if_key_def,         mu_tok_if_def     },
-    { mu_while_key_def,      mu_tok_while_def  },
-    { mu_for_key_def,        mu_tok_for_def    },
-    { mu_nil_key_def,        mu_tok_nil_def    },
-    { mu_def_key_nil2,       mu_tok_nil_def    },
-    { mu_assign_key_def,     mu_tok_assign_def },
-    { mu_pair_key_def,       mu_tok_pair_def   },
-    { mu_dot_key_def,        mu_tok_dot_def    },
-    { mu_arrow_key_def,      mu_tok_arrow_def  },
-    { mu_expand_key_def,     mu_tok_expand_def },
+    { mu_kw_let_def,        mu_tok_let_def    },
+    { mu_kw_else_def,       mu_tok_else_def   },
+    { mu_kw_and_def,        mu_tok_and_def    },
+    { mu_kw_or_def,         mu_tok_or_def     },
+    { mu_kw_continue_def,   mu_tok_cont_def   },
+    { mu_kw_break_def,      mu_tok_break_def  },
+    { mu_kw_return_def,     mu_tok_return_def },
+    { mu_kw_fn_def,         mu_tok_fn_def     },
+    { mu_kw_type_def,       mu_tok_type_def   },
+    { mu_kw_if_def,         mu_tok_if_def     },
+    { mu_kw_while_def,      mu_tok_while_def  },
+    { mu_kw_for_def,        mu_tok_for_def    },
+    { mu_kw_nil_def,        mu_tok_nil_def    },
+    { mu_kw_nil2_def,       mu_tok_nil_def    },
+    { mu_kw_assign_def,     mu_tok_assign_def },
+    { mu_kw_pair_def,       mu_tok_pair_def   },
+    { mu_kw_dot_def,        mu_tok_dot_def    },
+    { mu_kw_arrow_def,      mu_tok_arrow_def  },
+    { mu_kw_expand_def,     mu_tok_expand_def },
 })
 
 
@@ -1420,11 +1420,11 @@ static void p_block(struct mparse *p, bool root) {
 //// Parsing functions ////
 MU_DEF_STR(mu_cdata_key_def, "cdata")
 static mu_t (*const mu_attr_name[8])(void) = {
-    [MTNIL]  = mu_nil_key_def,
+    [MTNIL]  = mu_kw_nil_def,
     [MTNUM]  = mu_num_key_def,
     [MTSTR]  = mu_str_key_def,
     [MTTBL]  = mu_tbl_key_def,
-    [MTFN]   = mu_fn_key_def,
+    [MTFN]   = mu_kw_fn_def,
     [MTBUF]  = mu_cdata_key_def,
     [MTCBUF] = mu_cdata_key_def,
 };

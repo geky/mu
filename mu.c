@@ -560,7 +560,7 @@ static mcnt_t mu_and_bfn(mu_t *frame) {
     mu_checkargs(
         (mu_isnum(a) && mu_isnum(b)) ||
         (mu_istbl(a) && mu_istbl(b)),
-        MU_KEY_AND2, 0x2, frame);
+        MU_AND_KEY, 0x2, frame);
 
     if (mu_isnum(a) && mu_isnum(b)) {
         frame[0] = mu_num_and(a, b);
@@ -574,7 +574,7 @@ static mcnt_t mu_and_bfn(mu_t *frame) {
     mu_unreachable;
 }
 
-MU_DEF_STR(mu_def_key_and2, "&")
+MU_DEF_STR(mu_and_key_def, "&")
 MU_DEF_BFN(mu_and_def, 0x2, mu_and_bfn)
 
 static mcnt_t mu_or_bfn(mu_t *frame) {
@@ -583,7 +583,7 @@ static mcnt_t mu_or_bfn(mu_t *frame) {
     mu_checkargs(
         (mu_isnum(a) && mu_isnum(b)) ||
         (mu_istbl(a) && mu_istbl(b)),
-        MU_KEY_OR2, 0x2, frame);
+        MU_OR_KEY, 0x2, frame);
 
     if (mu_isnum(a) && mu_isnum(b)) {
         frame[0] = mu_num_or(a, b);
@@ -597,7 +597,7 @@ static mcnt_t mu_or_bfn(mu_t *frame) {
     mu_unreachable;
 }
 
-MU_DEF_STR(mu_def_key_or2, "|")
+MU_DEF_STR(mu_or_key_def, "|")
 MU_DEF_BFN(mu_or_def, 0x2, mu_or_bfn)
 
 static mcnt_t mu_xor_bfn(mu_t *frame) {
@@ -1411,7 +1411,7 @@ MU_DEF_TBL(mu_builtins_def, {
     { mu_num_key_def,       mu_num_def },
     { mu_str_key_def,       mu_str_def },
     { mu_tbl_key_def,       mu_tbl_def },
-    { mu_def_key_fn2,       mu_fn_def },
+    { mu_fn_key_def,       mu_fn_def },
 
     // Logic operations
     { mu_not_key_def,       mu_not_def },
@@ -1446,8 +1446,8 @@ MU_DEF_TBL(mu_builtins_def, {
     { mu_atan_key_def,      mu_atan_def },
 
     // Bitwise/Set operations
-    { mu_def_key_and2,      mu_and_def },
-    { mu_def_key_or2,       mu_or_def },
+    { mu_and_key_def,       mu_and_def },
+    { mu_or_key_def,        mu_or_def },
     { mu_xor_key_def,       mu_xor_def },
     { mu_diff_key_def,      mu_diff_def },
 

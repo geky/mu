@@ -122,9 +122,21 @@ mu_pure mu_t name(void) {                                                   \
         mref_t ref;                                                         \
         mlen_t len;                                                         \
         mbyte_t data[n];                                                    \
-    } inst = {0, n}                                                         \
+    } inst = {0, n, {0}};                                                   \
                                                                             \
     return (mu_t)((muint_t)&inst + MTBUF);                                  \
+}
+
+#define MU_DEF_BUFDTOR(name, n, dtor)                                       \
+mu_pure mu_t name(void) {                                                   \
+    static struct {                                                         \
+        mref_t ref;                                                         \
+        mlen_t len;                                                         \
+        mbyte_t data[n];                                                    \
+        void (*dtor)(mu_t);                                                 \
+    } inst = {0, n, {0}, dtor};                                             \
+                                                                            \
+    return (mu_t)((muint_t)&inst + MTCBUF);                                 \
 }
 
 

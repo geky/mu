@@ -22,47 +22,47 @@ mu_t mu_compile(const char *s, muint_t n);
 // Language keywords
 #define MU_KEYWORDS     mu_keywords_def()
 
-#define MU_KW_LET       mu_let_key_def()
-#define MU_KW_ELSE      mu_else_key_def()
-#define MU_KW_AND       mu_and_key_def()
-#define MU_KW_OR        mu_or_key_def()
-#define MU_KW_CONT      mu_continue_key_def()
-#define MU_KW_BREAK     mu_break_key_def()
-#define MU_KW_RETURN    mu_return_key_def()
-#define MU_KW_FN        mu_fn_key_def()
-#define MU_KW_TYPE      mu_type_key_def()
-#define MU_KW_IF        mu_if_key_def()
-#define MU_KW_WHILE     mu_while_key_def()
-#define MU_KW_FOR       mu_for_key_def()
-#define MU_KW_NIL       mu_nil_key_def()
-#define MU_KW_NIL2      mu_def_key_nil2()
-#define MU_KW_ASSIGN    mu_assign_key_def()
-#define MU_KW_PAIR      mu_pair_key_def()
-#define MU_KW_DOT       mu_dot_key_def()
-#define MU_KW_ARROW     mu_arrow_key_def()
-#define MU_KW_EXPAND    mu_expand_key_def()
+#define MU_KW_LET       mu_kw_let_def()
+#define MU_KW_ELSE      mu_kw_else_def()
+#define MU_KW_AND       mu_kw_and_def()
+#define MU_KW_OR        mu_kw_or_def()
+#define MU_KW_CONT      mu_kw_continue_def()
+#define MU_KW_BREAK     mu_kw_break_def()
+#define MU_KW_RETURN    mu_kw_return_def()
+#define MU_KW_FN        mu_kw_fn_def()
+#define MU_KW_TYPE      mu_kw_type_def()
+#define MU_KW_IF        mu_kw_if_def()
+#define MU_KW_WHILE     mu_kw_while_def()
+#define MU_KW_FOR       mu_kw_for_def()
+#define MU_KW_NIL       mu_kw_nil_def()
+#define MU_KW_NIL2      mu_kw_nil2_def()
+#define MU_KW_ASSIGN    mu_kw_assign_def()
+#define MU_KW_PAIR      mu_kw_pair_def()
+#define MU_KW_DOT       mu_kw_dot_def()
+#define MU_KW_ARROW     mu_kw_arrow_def()
+#define MU_KW_EXPAND    mu_kw_expand_def()
 
-mu_t mu_keywords_def(void);
+MU_DEF(mu_keywords_def)
 
-mu_t mu_let_key_def(void);
-mu_t mu_else_key_def(void);
-mu_t mu_and_key_def(void);
-mu_t mu_or_key_def(void);
-mu_t mu_continue_key_def(void);
-mu_t mu_break_key_def(void);
-mu_t mu_return_key_def(void);
-mu_t mu_fn_key_def(void);
-mu_t mu_type_key_def(void);
-mu_t mu_if_key_def(void);
-mu_t mu_while_key_def(void);
-mu_t mu_for_key_def(void);
-mu_t mu_nil_key_def(void);
-mu_t mu_def_key_nil2(void);
-mu_t mu_assign_key_def(void);
-mu_t mu_pair_key_def(void);
-mu_t mu_dot_key_def(void);
-mu_t mu_arrow_key_def(void);
-mu_t mu_expand_key_def(void);
+MU_DEF(mu_kw_let_def)
+MU_DEF(mu_kw_else_def)
+MU_DEF(mu_kw_and_def)
+MU_DEF(mu_kw_or_def)
+MU_DEF(mu_kw_continue_def)
+MU_DEF(mu_kw_break_def)
+MU_DEF(mu_kw_return_def)
+MU_DEF(mu_kw_fn_def)
+MU_DEF(mu_kw_type_def)
+MU_DEF(mu_kw_if_def)
+MU_DEF(mu_kw_while_def)
+MU_DEF(mu_kw_for_def)
+MU_DEF(mu_kw_nil_def)
+MU_DEF(mu_kw_nil2_def)
+MU_DEF(mu_kw_assign_def)
+MU_DEF(mu_kw_pair_def)
+MU_DEF(mu_kw_dot_def)
+MU_DEF(mu_kw_arrow_def)
+MU_DEF(mu_kw_expand_def)
 
 
 #endif

@@ -114,8 +114,8 @@ mu_pure mu_t name(void) {                                                   \
     static mu_t (*const def[])(void) = __VA_ARGS__;                         \
     static struct mtbl inst = {0};                                          \
                                                                             \
-    extern mu_t mu_tbl_initlist(                                            \
-            struct mtbl *, mu_t (*const *)(void), muint_t);                 \
+    extern mu_t mu_tbl_initlist(struct mtbl *,                              \
+            mu_t (*const *)(void), muint_t);                                \
     if (!ref) {                                                             \
         ref = mu_tbl_initlist(&inst, def, sizeof def / sizeof(def[0]));     \
     }                                                                       \
@@ -129,10 +129,27 @@ mu_pure mu_t name(void) {                                                   \
     static mu_t (*const def[][2])(void) = __VA_ARGS__;                      \
     static struct mtbl inst = {0};                                          \
                                                                             \
-    extern mu_t mu_tbl_initpairs(                                           \
-            struct mtbl *, mu_t (*const (*)[2])(void), muint_t);            \
+    extern mu_t mu_tbl_initpairs(struct mtbl *, mu_t (*)(void),             \
+            mu_t (*const (*)[2])(void), muint_t);                           \
     if (!ref) {                                                             \
-        ref = mu_tbl_initpairs(&inst, def, sizeof def / sizeof(def[0]));    \
+        ref = mu_tbl_initpairs(&inst, 0,                                    \
+                def, sizeof def / sizeof(def[0]));                          \
+    }                                                                       \
+                                                                            \
+    return ref;                                                             \
+}
+
+#define MU_DEF_TBLTAIL(name, tail, ...)                                     \
+mu_pure mu_t name(void) {                                                   \
+    static mu_t ref = 0;                                                    \
+    static mu_t (*const def[][2])(void) = __VA_ARGS__;                      \
+    static struct mtbl inst = {0};                                          \
+                                                                            \
+    extern mu_t mu_tbl_initpairs(struct mtbl *, mu_t (*)(void),             \
+            mu_t (*const (*)[2])(void), muint_t);                           \
+    if (!ref) {                                                             \
+        ref = mu_tbl_initpairs(&inst, tail,                                 \
+                def, sizeof def / sizeof(def[0]));                          \
     }                                                                       \
                                                                             \
     return ref;                                                             \

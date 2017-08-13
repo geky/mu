@@ -111,6 +111,11 @@ mu_t mu_eval(const char *s, muint_t n, mu_t scope, mcnt_t fc, ...);
     ((pred) ? (void)0 : mu_errorargs(__VA_ARGS__))
 mu_noreturn mu_errorargs(mu_t name, mcnt_t fc, mu_t *frame);
 
+// Declaration of mu constants, requires other MU_DEF_* for definition
+#define MU_DEF(name) \
+extern mu_pure mu_t name(void);
+
+
 
 // Standard functions in readonly builtins table
 #define MU_BUILTINS     mu_builtins_def()
@@ -227,7 +232,7 @@ mu_noreturn mu_errorargs(mu_t name, mcnt_t fc, mu_t *frame);
 #define MU_NUM_KEY      mu_num_key_def()
 #define MU_STR_KEY      mu_str_key_def()
 #define MU_TBL_KEY      mu_tbl_key_def()
-#define MU_KEY_FN2      mu_def_key_fn2()
+#define MU_FN_KEY      mu_fn_key_def()
 
 #define MU_NOT_KEY      mu_not_key_def()
 #define MU_EQ_KEY       mu_eq_key_def()
@@ -257,8 +262,8 @@ mu_noreturn mu_errorargs(mu_t name, mcnt_t fc, mu_t *frame);
 #define MU_TAN_KEY      mu_tan_key_def()
 #define MU_ATAN_KEY     mu_atan_key_def()
 
-#define MU_KEY_AND2     mu_def_key_and2()
-#define MU_KEY_OR2      mu_def_key_or2()
+#define MU_AND_KEY     mu_and_key_def()
+#define MU_OR_KEY      mu_or_key_def()
 #define MU_XOR_KEY      mu_xor_key_def()
 #define MU_DIFF_KEY     mu_diff_key_def()
 #define MU_SHL_KEY      mu_shl_key_def()
@@ -316,198 +321,198 @@ mu_noreturn mu_errorargs(mu_t name, mcnt_t fc, mu_t *frame);
 
 
 // Builtin deferating functions
-mu_t mu_builtins_def(void);
+MU_DEF(mu_builtins_def)
 
-mu_t mu_true_def(void);
-mu_t mu_inf_def(void);
-mu_t mu_ninf_def(void);
-mu_t mu_e_def(void);
-mu_t mu_pi_def(void);
+MU_DEF(mu_true_def)
+MU_DEF(mu_inf_def)
+MU_DEF(mu_ninf_def)
+MU_DEF(mu_e_def)
+MU_DEF(mu_pi_def)
 
-mu_t mu_num_def(void);
-mu_t mu_str_def(void);
-mu_t mu_tbl_def(void);
-mu_t mu_fn_def(void);
+MU_DEF(mu_num_def)
+MU_DEF(mu_str_def)
+MU_DEF(mu_tbl_def)
+MU_DEF(mu_fn_def)
 
-mu_t mu_not_def(void);
-mu_t mu_eq_def(void);
-mu_t mu_neq_def(void);
-mu_t mu_is_def(void);
-mu_t mu_lt_def(void);
-mu_t mu_lte_def(void);
-mu_t mu_gt_def(void);
-mu_t mu_gte_def(void);
+MU_DEF(mu_not_def)
+MU_DEF(mu_eq_def)
+MU_DEF(mu_neq_def)
+MU_DEF(mu_is_def)
+MU_DEF(mu_lt_def)
+MU_DEF(mu_lte_def)
+MU_DEF(mu_gt_def)
+MU_DEF(mu_gte_def)
 
-mu_t mu_add_def(void);
-mu_t mu_sub_def(void);
-mu_t mu_mul_def(void);
-mu_t mu_div_def(void);
-mu_t mu_abs_def(void);
-mu_t mu_floor_def(void);
-mu_t mu_ceil_def(void);
-mu_t mu_idiv_def(void);
-mu_t mu_mod_def(void);
-mu_t mu_pow_def(void);
-mu_t mu_log_def(void);
+MU_DEF(mu_add_def)
+MU_DEF(mu_sub_def)
+MU_DEF(mu_mul_def)
+MU_DEF(mu_div_def)
+MU_DEF(mu_abs_def)
+MU_DEF(mu_floor_def)
+MU_DEF(mu_ceil_def)
+MU_DEF(mu_idiv_def)
+MU_DEF(mu_mod_def)
+MU_DEF(mu_pow_def)
+MU_DEF(mu_log_def)
 
-mu_t mu_cos_def(void);
-mu_t mu_acos_def(void);
-mu_t mu_sin_def(void);
-mu_t mu_asin_def(void);
-mu_t mu_tan_def(void);
-mu_t mu_atan_def(void);
+MU_DEF(mu_cos_def)
+MU_DEF(mu_acos_def)
+MU_DEF(mu_sin_def)
+MU_DEF(mu_asin_def)
+MU_DEF(mu_tan_def)
+MU_DEF(mu_atan_def)
 
-mu_t mu_and_def(void);
-mu_t mu_or_def(void);
-mu_t mu_xor_def(void);
-mu_t mu_diff_def(void);
-mu_t mu_shl_def(void);
-mu_t mu_shr_def(void);
+MU_DEF(mu_and_def)
+MU_DEF(mu_or_def)
+MU_DEF(mu_xor_def)
+MU_DEF(mu_diff_def)
+MU_DEF(mu_shl_def)
+MU_DEF(mu_shr_def)
 
-mu_t mu_parse_def(void);
-mu_t mu_repr_def(void);
-mu_t mu_bin_def(void);
-mu_t mu_oct_def(void);
-mu_t mu_hex_def(void);
+MU_DEF(mu_parse_def)
+MU_DEF(mu_repr_def)
+MU_DEF(mu_bin_def)
+MU_DEF(mu_oct_def)
+MU_DEF(mu_hex_def)
 
-mu_t mu_len_def(void);
-mu_t mu_tail_def(void);
-mu_t mu_push_def(void);
-mu_t mu_pop_def(void);
-mu_t mu_concat_def(void);
-mu_t mu_subset_def(void);
+MU_DEF(mu_len_def)
+MU_DEF(mu_tail_def)
+MU_DEF(mu_push_def)
+MU_DEF(mu_pop_def)
+MU_DEF(mu_concat_def)
+MU_DEF(mu_subset_def)
 
-mu_t mu_find_def(void);
-mu_t mu_replace_def(void);
-mu_t mu_split_def(void);
-mu_t mu_join_def(void);
-mu_t mu_pad_def(void);
-mu_t mu_strip_def(void);
+MU_DEF(mu_find_def)
+MU_DEF(mu_replace_def)
+MU_DEF(mu_split_def)
+MU_DEF(mu_join_def)
+MU_DEF(mu_pad_def)
+MU_DEF(mu_strip_def)
 
-mu_t mu_bind_def(void);
-mu_t mu_comp_def(void);
-mu_t mu_map_def(void);
-mu_t mu_filter_def(void);
-mu_t mu_reduce_def(void);
-mu_t mu_any_def(void);
-mu_t mu_all_def(void);
+MU_DEF(mu_bind_def)
+MU_DEF(mu_comp_def)
+MU_DEF(mu_map_def)
+MU_DEF(mu_filter_def)
+MU_DEF(mu_reduce_def)
+MU_DEF(mu_any_def)
+MU_DEF(mu_all_def)
 
-mu_t mu_iter_def(void);
-mu_t mu_pairs_def(void);
-mu_t mu_range_def(void);
-mu_t mu_repeat_def(void);
-mu_t mu_random_def(void);
+MU_DEF(mu_iter_def)
+MU_DEF(mu_pairs_def)
+MU_DEF(mu_range_def)
+MU_DEF(mu_repeat_def)
+MU_DEF(mu_random_def)
 
-mu_t mu_zip_def(void);
-mu_t mu_chain_def(void);
-mu_t mu_take_def(void);
-mu_t mu_drop_def(void);
+MU_DEF(mu_zip_def)
+MU_DEF(mu_chain_def)
+MU_DEF(mu_take_def)
+MU_DEF(mu_drop_def)
 
-mu_t mu_min_def(void);
-mu_t mu_max_def(void);
-mu_t mu_reverse_def(void);
-mu_t mu_sort_def(void);
+MU_DEF(mu_min_def)
+MU_DEF(mu_max_def)
+MU_DEF(mu_reverse_def)
+MU_DEF(mu_sort_def)
 
-mu_t mu_error_def(void);
-mu_t mu_print_def(void);
-mu_t mu_import_def(void);
+MU_DEF(mu_error_def)
+MU_DEF(mu_print_def)
+MU_DEF(mu_import_def)
 
-mu_t mu_true_key_def(void);
-mu_t mu_false_key_def(void);
-mu_t mu_inf_key_def(void);
-mu_t mu_ninf_key_def(void);
-mu_t mu_e_key_def(void);
-mu_t mu_pi_key_def(void);
+MU_DEF(mu_true_key_def)
+MU_DEF(mu_false_key_def)
+MU_DEF(mu_inf_key_def)
+MU_DEF(mu_ninf_key_def)
+MU_DEF(mu_e_key_def)
+MU_DEF(mu_pi_key_def)
 
-mu_t mu_num_key_def(void);
-mu_t mu_str_key_def(void);
-mu_t mu_tbl_key_def(void);
-mu_t mu_def_key_fn2(void);
+MU_DEF(mu_num_key_def)
+MU_DEF(mu_str_key_def)
+MU_DEF(mu_tbl_key_def)
+MU_DEF(mu_fn_key_def)
 
-mu_t mu_not_key_def(void);
-mu_t mu_eq_key_def(void);
-mu_t mu_neq_key_def(void);
-mu_t mu_is_key_def(void);
-mu_t mu_lt_key_def(void);
-mu_t mu_lte_key_def(void);
-mu_t mu_gt_key_def(void);
-mu_t mu_gte_key_def(void);
+MU_DEF(mu_not_key_def)
+MU_DEF(mu_eq_key_def)
+MU_DEF(mu_neq_key_def)
+MU_DEF(mu_is_key_def)
+MU_DEF(mu_lt_key_def)
+MU_DEF(mu_lte_key_def)
+MU_DEF(mu_gt_key_def)
+MU_DEF(mu_gte_key_def)
 
-mu_t mu_add_key_def(void);
-mu_t mu_sub_key_def(void);
-mu_t mu_mul_key_def(void);
-mu_t mu_div_key_def(void);
-mu_t mu_abs_key_def(void);
-mu_t mu_floor_key_def(void);
-mu_t mu_ceil_key_def(void);
-mu_t mu_idiv_key_def(void);
-mu_t mu_mod_key_def(void);
-mu_t mu_pow_key_def(void);
-mu_t mu_log_key_def(void);
+MU_DEF(mu_add_key_def)
+MU_DEF(mu_sub_key_def)
+MU_DEF(mu_mul_key_def)
+MU_DEF(mu_div_key_def)
+MU_DEF(mu_abs_key_def)
+MU_DEF(mu_floor_key_def)
+MU_DEF(mu_ceil_key_def)
+MU_DEF(mu_idiv_key_def)
+MU_DEF(mu_mod_key_def)
+MU_DEF(mu_pow_key_def)
+MU_DEF(mu_log_key_def)
 
-mu_t mu_cos_key_def(void);
-mu_t mu_acos_key_def(void);
-mu_t mu_sin_key_def(void);
-mu_t mu_asin_key_def(void);
-mu_t mu_tan_key_def(void);
-mu_t mu_atan_key_def(void);
+MU_DEF(mu_cos_key_def)
+MU_DEF(mu_acos_key_def)
+MU_DEF(mu_sin_key_def)
+MU_DEF(mu_asin_key_def)
+MU_DEF(mu_tan_key_def)
+MU_DEF(mu_atan_key_def)
 
-mu_t mu_def_key_and2(void);
-mu_t mu_def_key_or2(void);
-mu_t mu_xor_key_def(void);
-mu_t mu_diff_key_def(void);
-mu_t mu_shl_key_def(void);
-mu_t mu_shr_key_def(void);
+MU_DEF(mu_and_key_def)
+MU_DEF(mu_or_key_def)
+MU_DEF(mu_xor_key_def)
+MU_DEF(mu_diff_key_def)
+MU_DEF(mu_shl_key_def)
+MU_DEF(mu_shr_key_def)
 
-mu_t mu_parse_key_def(void);
-mu_t mu_repr_key_def(void);
-mu_t mu_ord_key_def(void);
-mu_t mu_chr_key_def(void);
-mu_t mu_bin_key_def(void);
-mu_t mu_oct_key_def(void);
-mu_t mu_hex_key_def(void);
+MU_DEF(mu_parse_key_def)
+MU_DEF(mu_repr_key_def)
+MU_DEF(mu_ord_key_def)
+MU_DEF(mu_chr_key_def)
+MU_DEF(mu_bin_key_def)
+MU_DEF(mu_oct_key_def)
+MU_DEF(mu_hex_key_def)
 
-mu_t mu_len_key_def(void);
-mu_t mu_tail_key_def(void);
-mu_t mu_push_key_def(void);
-mu_t mu_pop_key_def(void);
-mu_t mu_concat_key_def(void);
-mu_t mu_subset_key_def(void);
+MU_DEF(mu_len_key_def)
+MU_DEF(mu_tail_key_def)
+MU_DEF(mu_push_key_def)
+MU_DEF(mu_pop_key_def)
+MU_DEF(mu_concat_key_def)
+MU_DEF(mu_subset_key_def)
 
-mu_t mu_find_key_def(void);
-mu_t mu_replace_key_def(void);
-mu_t mu_split_key_def(void);
-mu_t mu_join_key_def(void);
-mu_t mu_pad_key_def(void);
-mu_t mu_strip_key_def(void);
+MU_DEF(mu_find_key_def)
+MU_DEF(mu_replace_key_def)
+MU_DEF(mu_split_key_def)
+MU_DEF(mu_join_key_def)
+MU_DEF(mu_pad_key_def)
+MU_DEF(mu_strip_key_def)
 
-mu_t mu_bind_key_def(void);
-mu_t mu_comp_key_def(void);
-mu_t mu_map_key_def(void);
-mu_t mu_filter_key_def(void);
-mu_t mu_reduce_key_def(void);
-mu_t mu_any_key_def(void);
-mu_t mu_all_key_def(void);
+MU_DEF(mu_bind_key_def)
+MU_DEF(mu_comp_key_def)
+MU_DEF(mu_map_key_def)
+MU_DEF(mu_filter_key_def)
+MU_DEF(mu_reduce_key_def)
+MU_DEF(mu_any_key_def)
+MU_DEF(mu_all_key_def)
 
-mu_t mu_iter_key_def(void);
-mu_t mu_pairs_key_def(void);
-mu_t mu_range_key_def(void);
-mu_t mu_repeat_key_def(void);
-mu_t mu_random_key_def(void);
+MU_DEF(mu_iter_key_def)
+MU_DEF(mu_pairs_key_def)
+MU_DEF(mu_range_key_def)
+MU_DEF(mu_repeat_key_def)
+MU_DEF(mu_random_key_def)
 
-mu_t mu_zip_key_def(void);
-mu_t mu_chain_key_def(void);
-mu_t mu_take_key_def(void);
-mu_t mu_drop_key_def(void);
+MU_DEF(mu_zip_key_def)
+MU_DEF(mu_chain_key_def)
+MU_DEF(mu_take_key_def)
+MU_DEF(mu_drop_key_def)
 
-mu_t mu_min_key_def(void);
-mu_t mu_max_key_def(void);
-mu_t mu_reverse_key_def(void);
-mu_t mu_sort_key_def(void);
+MU_DEF(mu_min_key_def)
+MU_DEF(mu_max_key_def)
+MU_DEF(mu_reverse_key_def)
+MU_DEF(mu_sort_key_def)
 
-mu_t mu_error_key_def(void);
-mu_t mu_print_key_def(void);
-mu_t mu_import_key_def(void);
+MU_DEF(mu_error_key_def)
+MU_DEF(mu_print_key_def)
+MU_DEF(mu_import_key_def)
 
 
 #endif
