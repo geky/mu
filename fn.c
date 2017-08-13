@@ -88,6 +88,7 @@ void mu_code_destroy(mu_t c) {
 
 // C interface for calling functions
 mcnt_t mu_fn_tcall(mu_t f, mcnt_t fc, mu_t *frame) {
+    mu_assert(mu_isfn(f));
     mu_frame_convert(fc, mfn(f)->args, frame);
 
     switch (mfn(f)->flags & (MFN_BUILTIN | MFN_SCOPED)) {
@@ -116,11 +117,13 @@ mcnt_t mu_fn_tcall(mu_t f, mcnt_t fc, mu_t *frame) {
 }
 
 void mu_fn_fcall(mu_t f, mcnt_t fc, mu_t *frame) {
+    mu_assert(mu_isfn(f));
     mcnt_t rets = mu_fn_tcall(mu_inc(f), fc >> 4, frame);
     mu_frame_convert(rets, fc & 0xf, frame);
 }
 
 mu_t mu_fn_vcall(mu_t f, mcnt_t fc, va_list args) {
+    mu_assert(mu_isfn(f));
     mu_t frame[MU_FRAME];
 
     for (muint_t i = 0; i < mu_frame_count(fc >> 4); i++) {
@@ -137,6 +140,7 @@ mu_t mu_fn_vcall(mu_t f, mcnt_t fc, va_list args) {
 }
 
 mu_t mu_fn_call(mu_t f, mcnt_t fc, ...) {
+    mu_assert(mu_isfn(f));
     va_list args;
     va_start(args, fc);
     mu_t ret = mu_fn_vcall(f, fc, args);
@@ -226,7 +230,7 @@ static mcnt_t mu_fn_composed(mu_t fs, mu_t *frame) {
 mu_t mu_fn_comp(mu_t f, mu_t g) {
     mu_assert(mu_isfn(f) && mu_isfn(g));
     return mu_fn_fromsbfn(0xf, mu_fn_composed,
-            mu_tbl_fromlist((mu_t[]){f, g}, 2));
+            mu_tbl_fromlist((mu_t[]){mu_inc(f), g}, 2));
 }
 
 static mcnt_t mu_bfn_comp(mu_t *frame) {
@@ -235,6 +239,7 @@ static mcnt_t mu_bfn_comp(mu_t *frame) {
     mu_checkargs(mu_isfn(f) && mu_isfn(g), MU_KEY_COMP, 0xf, frame);
 
     frame[0] = mu_fn_comp(f, g);
+    mu_dec(f);
     return 1;
 }
 

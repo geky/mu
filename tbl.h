@@ -102,7 +102,7 @@ mu_inline mlen_t mu_tbl_getlen(mu_t m) {
 }
 
 mu_inline mu_t mu_tbl_gettail(mu_t m) {
-    return ((struct mtbl *)((muint_t)m - MTTBL))->tail;
+    return mu_tbl_inc(((struct mtbl *)((muint_t)m - MTTBL))->tail);
 }
 
 

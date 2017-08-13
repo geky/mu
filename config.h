@@ -88,7 +88,7 @@ typedef double   mfloat_t;
 #include <assert.h>
 #define mu_assert(x) assert(x)
 #else
-#define mu_assert(x)
+#define mu_assert(x) (void)0
 #endif
 
 

@@ -1431,15 +1431,21 @@ static mu_t (*const mu_attr_name[8])(void) = {
 };
 
 mu_t mu_repr(mu_t m, mu_t depth) {
+    mu_t r;
     switch (mu_gettype(m)) {
-        case MTNIL: return MU_KW_NIL;
-        case MTNUM: return mu_num_repr(m);
-        case MTSTR: return mu_str_repr(m);
-        case MTTBL: return mu_tbl_repr(m, depth);
-        default:    return mu_str_format("<%m 0x%wx>",
-                mu_attr_name[mu_gettype(m)](),
-                (muint_t)m & ~7);
+        case MTNIL: r = MU_KW_NIL; break;
+        case MTNUM: r = mu_num_repr(m); break;
+        case MTSTR: r = mu_str_repr(m); break;
+        case MTTBL: r = mu_tbl_repr(m, depth); break;
+        default:
+            r = mu_str_format("<%m 0x%wx>",
+                    mu_attr_name[mu_gettype(m)](),
+                    (muint_t)m & ~7);
+            break;
     }
+
+    mu_dec(m);
+    return r;
 }
 
 mu_t mu_parsen(const mbyte_t **ppos, const mbyte_t *end) {

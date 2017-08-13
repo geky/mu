@@ -196,6 +196,7 @@ mint_t mu_str_cmp(mu_t a, mu_t b) {
     mint_t cmp = memcmp(mu_str_getdata(a), mu_str_getdata(b),
                         alen < blen ? alen : blen);
 
+    mu_str_dec(b);
     return cmp != 0 ? cmp : alen - blen;
 }
 
@@ -227,7 +228,7 @@ static mcnt_t mu_str_step(mu_t scope, mu_t *frame) {
 mu_t mu_str_iter(mu_t s) {
     mu_assert(mu_isstr(s));
     return mu_fn_fromsbfn(0x00, mu_str_step,
-            mu_tbl_fromlist((mu_t[]){s, mu_num_fromuint(0)}, 2));
+            mu_tbl_fromlist((mu_t[]){mu_inc(s), mu_num_fromuint(0)}, 2));
 }
 
 
@@ -241,7 +242,6 @@ mu_t mu_str_concat(mu_t a, mu_t b) {
     memcpy((mbyte_t *)mu_buf_getdata(d), mu_str_getdata(a), an);
     memcpy((mbyte_t *)mu_buf_getdata(d)+an, mu_str_getdata(b), bn);
 
-    mu_str_dec(a);
     mu_str_dec(b);
     return mu_str_intern(d, an + bn);
 }
@@ -263,10 +263,9 @@ mu_t mu_str_subset(mu_t s, mint_t lower, mint_t upper) {
         return MU_EMPTY_STR;
     }
 
-    mu_t d = mu_str_fromdata(
-            (const mbyte_t *)mu_str_getdata(s) + lower, upper - lower);
-    mu_str_dec(s);
-    return d;
+    return mu_str_fromdata(
+            (const mbyte_t *)mu_str_getdata(s) + lower,
+            upper - lower);
 }
 
 
@@ -411,7 +410,6 @@ mu_t mu_str_repr(mu_t m) {
         }
     }
 
-    mu_str_dec(m);
     mu_buf_pushchr(&b, &n, '\'');
     return mu_str_intern(b, n);
 }
@@ -537,6 +535,7 @@ static mcnt_t mu_bfn_split(mu_t *frame) {
 
     if (mu_str_getlen(delim) == 0) {
         frame[0] = mu_str_iter(s);
+        mu_dec(s);
         return 1;
     }
 

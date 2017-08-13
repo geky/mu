@@ -408,7 +408,7 @@ static mcnt_t mu_tbl_iter_step(mu_t scope, mu_t *frame) {
 mu_t mu_tbl_iter(mu_t t) {
     mu_assert(mu_istbl(t));
     return mu_fn_fromsbfn(0x0, mu_tbl_iter_step,
-            mu_tbl_fromlist((mu_t[]){t, mu_num_fromuint(0)}, 2));
+            mu_tbl_fromlist((mu_t[]){mu_inc(t), mu_num_fromuint(0)}, 2));
 }
 
 static mcnt_t mu_tbl_pairs_step(mu_t scope, mu_t *frame) {
@@ -424,7 +424,7 @@ static mcnt_t mu_tbl_pairs_step(mu_t scope, mu_t *frame) {
 mu_t mu_tbl_pairs(mu_t t) {
     mu_assert(mu_istbl(t));
     return mu_fn_fromsbfn(0x0, mu_tbl_pairs_step,
-        mu_tbl_fromlist((mu_t[]){t, mu_num_fromuint(0)}, 2));
+        mu_tbl_fromlist((mu_t[]){mu_inc(t), mu_num_fromuint(0)}, 2));
 }
 
 
@@ -633,7 +633,6 @@ mu_t mu_tbl_concat(mu_t a, mu_t b, mu_t offset) {
         }
     }
 
-    mu_tbl_dec(a);
     mu_tbl_dec(b);
     return d;
 }
@@ -673,7 +672,6 @@ mu_t mu_tbl_subset(mu_t t, mint_t lower, mint_t upper) {
         mu_tbl_insert(d, k, v);
     }
 
-    mu_dec(t);
     return d;
 }
 
@@ -696,7 +694,6 @@ mu_t mu_tbl_and(mu_t a, mu_t b) {
         }
     }
 
-    mu_tbl_dec(a);
     mu_tbl_dec(b);
     return d;
 }
@@ -714,7 +711,6 @@ mu_t mu_tbl_or(mu_t a, mu_t b) {
         mu_tbl_insert(d, k, v);
     }
 
-    mu_tbl_dec(a);
     mu_tbl_dec(b);
     return d;
 }
@@ -748,7 +744,6 @@ mu_t mu_tbl_xor(mu_t a, mu_t b) {
         }
     }
 
-    mu_tbl_dec(a);
     mu_tbl_dec(b);
     return d;
 }
@@ -769,7 +764,6 @@ mu_t mu_tbl_diff(mu_t a, mu_t b) {
         }
     }
 
-    mu_tbl_dec(a);
     mu_tbl_dec(b);
     return d;
 }
@@ -862,6 +856,7 @@ static void mu_tbl_repr_nested(mu_t t, mu_t *s, muint_t *n, mu_t depth) {
 
         if (mu_istbl(v)) {
             mu_tbl_repr_nested(v, s, n, mu_num_sub(depth, mu_num_fromuint(1)));
+            mu_dec(v);
             mu_buf_pushf(s, n, ", ");
         } else {
             mu_buf_pushf(s, n, "%r, ", v);
@@ -873,7 +868,6 @@ static void mu_tbl_repr_nested(mu_t t, mu_t *s, muint_t *n, mu_t depth) {
     }
 
     mu_buf_pushchr(s, n, ']');
-    mu_tbl_dec(t);
 }
 
 mu_t mu_tbl_repr(mu_t t, mu_t depth) {
@@ -912,7 +906,7 @@ MU_GEN_BFN(mu_gen_tbl, 0x2, mu_bfn_tbl)
 
 static mcnt_t mu_bfn_tail(mu_t *frame) {
     mu_checkargs(mu_istbl(frame[0]), MU_KEY_TAIL, 0x1, frame);
-    frame[0] = mu_tbl_inc(mu_tbl_gettail(frame[0]));
+    frame[0] = mu_tbl_gettail(frame[0]);
     return 1;
 }
 

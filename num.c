@@ -60,7 +60,7 @@ mu_t mu_num_frommu(mu_t m) {
             mu_t n = mu_num_parse(
                     mu_str_getdata(m),
                     mu_str_getlen(m));
-            mu_dec(m);
+            mu_str_dec(m);
             return n;
         }
 
