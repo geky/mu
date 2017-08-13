@@ -18,9 +18,8 @@
 
 // Number constants
 MU_DEF_STR(mu_inf_key_def,  "inf")
-MU_DEF_STR(mu_ninf_key_def, "ninf")
-MU_DEF_STR(mu_e_key_def,    "e")
-MU_DEF_STR(mu_pi_key_def,   "pi")
+MU_DEF_STR(mu_e_key_def,    "E")
+MU_DEF_STR(mu_pi_key_def,   "PI")
 
 MU_DEF_FLOAT(mu_inf_def,    INFINITY)
 MU_DEF_FLOAT(mu_ninf_def,   -INFINITY)
