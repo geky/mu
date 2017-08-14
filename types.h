@@ -58,7 +58,7 @@ typedef mu_aligned(8) muinth_t mref_t;
 // Tags for mu types. The tag is a three bit type specifier
 // located in lowest bits of each variable.
 // 3b00x indicates type is not reference counted
-enum mtype {
+typedef enum mtype {
     MTNIL  = 0, // nil
     MTNUM  = 1, // number
     MTSTR  = 3, // string
@@ -66,7 +66,7 @@ enum mtype {
     MTCBUF = 6, // managed buffer
     MTTBL  = 4, // table
     MTFN   = 5, // function
-};
+} mtype_t;
 
 // Here is the heart of Mu, the mu_t type
 //
@@ -75,7 +75,7 @@ enum mtype {
 typedef struct mu *mu_t;
 
 // Access to mu type components
-mu_inline enum mtype mu_gettype(mu_t m) { return 7 & (muint_t)m; }
+mu_inline mtype_t mu_gettype(mu_t m) { return 7 & (muint_t)m; }
 mu_inline mref_t mu_getref(mu_t m) { return *(mref_t *)(~7 & (muint_t)m); }
 
 // Properties of variables

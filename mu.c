@@ -1175,7 +1175,7 @@ static mcnt_t mu_min_bfn(mu_t *frame) {
         mu_errorf("no elements passed to min");
     }
 
-    enum mtype type = mu_gettype(min);
+    mtype_t type = mu_gettype(min);
     mint_t (*cmp)(mu_t, mu_t) = mu_attr_cmp[type];
     if (!cmp) {
         mu_errorf("unable to compare %r", min);
@@ -1224,7 +1224,7 @@ static mcnt_t mu_max_bfn(mu_t *frame) {
         mu_errorf("no elements passed to max");
     }
 
-    enum mtype type = mu_gettype(max);
+    mtype_t type = mu_gettype(max);
     mint_t (*cmp)(mu_t, mu_t) = mu_attr_cmp[type];
     if (!cmp) {
         mu_errorf("unable to compare %r", max);
@@ -1301,7 +1301,7 @@ static void mu_fn_merge_sort(mu_t elems) {
     mu_t (*a)[2] = mu_alloc(len*sizeof(mu_t[2]));
     mu_t (*b)[2] = mu_alloc(len*sizeof(mu_t[2]));
 
-    enum mtype type = MTNUM;
+    mtype_t type = MTNUM;
 
     for (muint_t i = 0, j = 0; mu_tbl_next(elems, &i, 0, &a[j][1]); j++) {
         a[j][0] = mu_tbl_lookup(a[j][1], mu_num_fromuint(0));
