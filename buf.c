@@ -1,9 +1,5 @@
 #include "buf.h"
-
-#include "str.h"
-#include "num.h"
-#include "fn.h"
-#include "parse.h"
+#include "mu.h"
 
 
 // Functions for handling buffers
@@ -17,11 +13,11 @@ mu_t mu_buf_createdtor(muint_t n, void (*dtor)(mu_t)) {
     }
 
     if (!dtor) {
-        struct mbuf *b = mu_ref_alloc(mu_offsetof(struct mbuf, data) + n);
+        struct mbuf *b = mu_refalloc(mu_offsetof(struct mbuf, data) + n);
         b->len = n;
         return (mu_t)((muint_t)b + MTBUF);
     } else {
-        struct mbuf *b = mu_ref_alloc(mu_offsetof(struct mbuf, data) +
+        struct mbuf *b = mu_refalloc(mu_offsetof(struct mbuf, data) +
                 mu_align(n) + sizeof(dtor));
         b->len = n;
         *(void (**)(mu_t))(b->data + mu_align(b->len)) = dtor;
@@ -30,12 +26,12 @@ mu_t mu_buf_createdtor(muint_t n, void (*dtor)(mu_t)) {
 }
 
 void mu_buf_destroy(mu_t b) {
-    mu_ref_dealloc(b, mu_offsetof(struct mbuf, data) + mu_buf_getlen(b));
+    mu_refdealloc(b, mu_offsetof(struct mbuf, data) + mu_buf_getlen(b));
 }
 
 void mu_buf_destroydtor(mu_t b) {
     mu_buf_getdtor(b)(b);
-    mu_ref_dealloc(b, mu_offsetof(struct mbuf, data) +
+    mu_refdealloc(b, mu_offsetof(struct mbuf, data) +
             mu_align(mu_buf_getlen(b)) + sizeof(void (*)(mu_t)));
 }
 

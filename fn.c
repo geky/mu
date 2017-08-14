@@ -1,10 +1,5 @@
 #include "fn.h"
-
-#include "num.h"
-#include "str.h"
-#include "tbl.h"
-#include "parse.h"
-#include "vm.h"
+#include "mu.h"
 
 
 // Function access
@@ -20,7 +15,7 @@ mu_t mu_fn_fromcode(mu_t c, mu_t closure) {
         mu_dec(closure);
     }
 
-    struct mfn *f = mu_ref_alloc(sizeof(struct mfn));
+    struct mfn *f = mu_refalloc(sizeof(struct mfn));
     f->args = mu_code_getargs(c);
     f->flags = mu_code_getflags(c);
     f->closure = closure;
@@ -29,7 +24,7 @@ mu_t mu_fn_fromcode(mu_t c, mu_t closure) {
 }
 
 mu_t mu_fn_frombfn(mcnt_t args, mbfn_t *bfn) {
-    struct mfn *f = mu_ref_alloc(sizeof(struct mfn));
+    struct mfn *f = mu_refalloc(sizeof(struct mfn));
     f->args = args;
     f->flags = MFN_BUILTIN;
     f->closure = 0;
@@ -38,7 +33,7 @@ mu_t mu_fn_frombfn(mcnt_t args, mbfn_t *bfn) {
 }
 
 mu_t mu_fn_fromsbfn(mcnt_t args, msbfn_t *sbfn, mu_t closure) {
-    struct mfn *f = mu_ref_alloc(sizeof(struct mfn));
+    struct mfn *f = mu_refalloc(sizeof(struct mfn));
     f->args = args;
     f->flags = MFN_BUILTIN | MFN_SCOPED;
     f->closure = closure;
@@ -86,7 +81,7 @@ void mu_fn_destroy(mu_t f) {
         mu_dec(mfn(f)->closure);
     }
 
-    mu_ref_dealloc(mfn(f), sizeof(struct mfn));
+    mu_refdealloc(mfn(f), sizeof(struct mfn));
 }
 
 void mu_code_destroy(mu_t c) {
@@ -99,7 +94,7 @@ void mu_code_destroy(mu_t c) {
 // C interface for calling functions
 mcnt_t mu_fn_tcall(mu_t f, mcnt_t fc, mu_t *frame) {
     mu_assert(mu_isfn(f));
-    mu_frame_convert(fc, mfn(f)->args, frame);
+    mu_frameconvert(fc, mfn(f)->args, frame);
 
     switch (mfn(f)->flags & (MFN_BUILTIN | MFN_SCOPED)) {
         case MFN_BUILTIN: {
@@ -129,20 +124,20 @@ mcnt_t mu_fn_tcall(mu_t f, mcnt_t fc, mu_t *frame) {
 void mu_fn_fcall(mu_t f, mcnt_t fc, mu_t *frame) {
     mu_assert(mu_isfn(f));
     mcnt_t rets = mu_fn_tcall(mu_inc(f), fc >> 4, frame);
-    mu_frame_convert(rets, fc & 0xf, frame);
+    mu_frameconvert(rets, fc & 0xf, frame);
 }
 
 mu_t mu_fn_vcall(mu_t f, mcnt_t fc, va_list args) {
     mu_assert(mu_isfn(f));
     mu_t frame[MU_FRAME];
 
-    for (muint_t i = 0; i < mu_frame_count(fc >> 4); i++) {
+    for (muint_t i = 0; i < mu_framecount(fc >> 4); i++) {
         frame[i] = va_arg(args, mu_t);
     }
 
     mu_fn_fcall(f, fc, frame);
 
-    for (muint_t i = 1; i < mu_frame_count(0xf & fc); i++) {
+    for (muint_t i = 1; i < mu_framecount(0xf & fc); i++) {
         *va_arg(args, mu_t *) = frame[i];
     }
 
@@ -171,7 +166,7 @@ bool mu_fn_next(mu_t f, mcnt_t fc, mu_t *frame) {
             }
             return true;
         } else {
-            mu_frame_convert(fc, 0, frame);
+            mu_frameconvert(fc, 0, frame);
             return false;
         }
     } else {

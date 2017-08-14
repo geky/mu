@@ -1,10 +1,5 @@
 #include "parse.h"
-
-#include "vm.h"
-#include "num.h"
-#include "str.h"
-#include "tbl.h"
-#include "fn.h"
+#include "mu.h"
 
 
 //// Definitions ////

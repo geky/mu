@@ -1,10 +1,5 @@
 #include "str.h"
-
-#include "buf.h"
-#include "num.h"
-#include "tbl.h"
-#include "fn.h"
-#include "parse.h"
+#include "mu.h"
 
 
 #define MU_EMPTY_STR mu_empty_str()
@@ -139,7 +134,7 @@ void mu_str_destroy(mu_t s) {
     mu_assert(i >= 0);
     mu_str_table_remove(i);
 
-    mu_ref_dealloc(s, mu_offsetof(struct mstr, data) + mu_str_getlen(s));
+    mu_refdealloc(s, mu_offsetof(struct mstr, data) + mu_str_getlen(s));
 }
 
 

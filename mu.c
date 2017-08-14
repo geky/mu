@@ -1,13 +1,5 @@
 #include "mu.h"
 
-#include "sys.h"
-#include "num.h"
-#include "str.h"
-#include "tbl.h"
-#include "fn.h"
-#include "parse.h"
-#include "vm.h"
-
 
 // Constants
 MU_DEF_STR(mu_true_key_def,  "true")
@@ -16,56 +8,50 @@ MU_DEF_STR(mu_false_key_def, "false")
 MU_DEF_UINT(mu_true_def, 1)
 
 
-// Mu type destructors
-extern void mu_str_destroy(mu_t);
-extern void mu_buf_destroy(mu_t);
-extern void mu_buf_destroydtor(mu_t);
-extern void mu_tbl_destroy(mu_t);
-extern void mu_fn_destroy(mu_t);
+// Uses malloc/free if MU_MALLOC is defined
+#ifdef MU_MALLOC
+extern void *malloc(muint_t);
+extern void free(void *);
+#define mu_sys_alloc(size) malloc(size)
+#define mu_sys_dealloc(m, size) free(m)
+#endif
 
-static void (*const mu_attr_destroy[8])(mu_t) = {
-    [MTSTR]  = mu_str_destroy,
-    [MTBUF]  = mu_buf_destroy,
-    [MTCBUF] = mu_buf_destroydtor,
-    [MTTBL]  = mu_tbl_destroy,
-    [MTFN]   = mu_fn_destroy,
-};
-
-void mu_destroy(mu_t m) {
-    mu_attr_destroy[mu_gettype(m)](m);
-}
-
-// Frame operations
-void mu_frame_move(mcnt_t fc, mu_t *dframe, mu_t *sframe) {
-    memcpy(dframe, sframe, sizeof(mu_t)*mu_frame_count(fc));
-}
-
-void mu_frame_convert(mcnt_t sc, mcnt_t dc, mu_t *frame) {
-    if (dc != 0xf && sc != 0xf) {
-        for (muint_t i = dc; i < sc; i++) {
-            mu_dec(frame[i]);
-        }
-
-        for (muint_t i = sc; i < dc; i++) {
-            frame[i] = 0;
-        }
-    } else if (dc != 0xf) {
-        mu_t t = *frame;
-
-        for (muint_t i = 0; i < dc; i++) {
-            frame[i] = mu_tbl_lookup(t, mu_num_fromuint(i));
-        }
-
-        mu_tbl_dec(t);
-    } else if (sc != 0xf) {
-        mu_t t = mu_tbl_create(sc);
-
-        for (muint_t i = 0; i < sc; i++) {
-            mu_tbl_insert(t, mu_num_fromuint(i), frame[i]);
-        }
-
-        *frame = t;
+// Manual memory management
+// Currently just a wrapper over malloc and free
+// Garuntees 8 byte alignment
+void *mu_alloc(muint_t size) {
+    if (size == 0) {
+        return 0;
     }
+
+#ifdef MU_DEBUG
+    size += sizeof(muint_t);
+#endif
+
+    void *m = mu_sys_alloc(size);
+
+    if (m == 0) {
+        const char *message = "out of memory";
+        mu_error(message, strlen(message));
+    }
+
+    mu_assert(sizeof m == sizeof(muint_t)); // garuntee address width
+    mu_assert((7 & (muint_t)m) == 0); // garuntee alignment
+
+#ifdef MU_DEBUG
+    size -= sizeof(muint_t);
+    *(muint_t*)&((char*)m)[size] = size;
+#endif
+
+    return m;
+}
+
+void mu_dealloc(void *m, muint_t size) {
+#ifdef MU_DEBUG
+    mu_assert(!m || *(muint_t*)&((char*)m)[size] == size);
+#endif
+
+    mu_sys_dealloc(m, size);
 }
 
 
@@ -170,7 +156,7 @@ MU_DEF_BFN(mu_import_def, 0x1, mu_import_bfn)
 void mu_feval(const char *s, muint_t n, mu_t scope, mcnt_t fc, mu_t *frame) {
     mu_t c = mu_compile(s, n);
     mcnt_t rets = mu_exec(c, mu_inc(scope), frame);
-    mu_frame_convert(rets, fc, frame);
+    mu_frameconvert(rets, fc, frame);
 }
 
 mu_t mu_veval(const char *s, muint_t n, mu_t scope, mcnt_t fc, va_list args) {
@@ -178,7 +164,7 @@ mu_t mu_veval(const char *s, muint_t n, mu_t scope, mcnt_t fc, va_list args) {
 
     mu_feval(s, n, scope, fc, frame);
 
-    for (muint_t i = 1; i < mu_frame_count(fc); i++) {
+    for (muint_t i = 1; i < mu_framecount(fc); i++) {
         *va_arg(args, mu_t *) = frame[i];
     }
 

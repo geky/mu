@@ -4,7 +4,8 @@
 
 #ifndef MU_VM_H
 #define MU_VM_H
-#include "mu.h"
+#include "config.h"
+#include "types.h"
 #include "fn.h"
 
 

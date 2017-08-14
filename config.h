@@ -8,7 +8,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-
+#include <string.h>
+#include <stdarg.h>
 
 // Determine if mu is 32-bit or 64-bit
 #if !defined(MU32) && !defined(MU64)
@@ -21,25 +22,6 @@
 #endif
 #endif
 
-// Definitions of the basic types used in Mu
-// Default and half-sized integer types
-#ifdef MU32
-typedef int8_t   mintq_t;
-typedef uint8_t  muintq_t;
-typedef int16_t  minth_t;
-typedef uint16_t muinth_t;
-typedef int32_t  mint_t;
-typedef uint32_t muint_t;
-typedef float    mfloat_t;
-#else
-typedef int16_t  mintq_t;
-typedef uint16_t muintq_t;
-typedef int32_t  minth_t;
-typedef uint32_t muinth_t;
-typedef int64_t  mint_t;
-typedef uint64_t muint_t;
-typedef double   mfloat_t;
-#endif
 
 // Flags for Mu options
 //#define MU_DEBUG

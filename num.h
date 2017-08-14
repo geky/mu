@@ -4,7 +4,8 @@
 
 #ifndef MU_NUM_H
 #define MU_NUM_H
-#include "mu.h"
+#include "config.h"
+#include "types.h"
 
 
 // Conversion operations

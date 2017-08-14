@@ -1,9 +1,5 @@
 #include "num.h"
-
-#include "str.h"
-#include "tbl.h"
-#include "fn.h"
-#include "parse.h"
+#include "mu.h"
 
 #include <math.h>
 

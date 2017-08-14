@@ -4,7 +4,8 @@
 
 #ifndef MU_PARSE_H
 #define MU_PARSE_H
-#include "mu.h"
+#include "config.h"
+#include "types.h"
 
 
 // Print parsable representation of literals

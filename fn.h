@@ -4,7 +4,8 @@
 
 #ifndef MU_FN_H
 #define MU_FN_H
-#include "mu.h"
+#include "config.h"
+#include "types.h"
 #include "buf.h"
 
 
@@ -148,14 +149,14 @@ mu_inline void *mu_code_getbcode(mu_t c) {
 // Function reference counting
 mu_inline mu_t mu_fn_inc(mu_t f) {
     mu_assert(mu_isfn(f));
-    mu_ref_inc(f);
+    mu_refinc(f);
     return f;
 }
 
 mu_inline void mu_fn_dec(mu_t f) {
     mu_assert(mu_isfn(f));
     extern void mu_fn_destroy(mu_t);
-    if (mu_ref_dec(f)) {
+    if (mu_refdec(f)) {
         mu_fn_destroy(f);
     }
 }

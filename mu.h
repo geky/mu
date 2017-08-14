@@ -5,89 +5,22 @@
 #ifndef MU_H
 #define MU_H
 #include "config.h"
-#include "mem.h"
-#include <string.h>
-#include <stdarg.h>
+#include "types.h"
+#include "sys.h"
+#include "num.h"
+#include "buf.h"
+#include "str.h"
+#include "tbl.h"
+#include "fn.h"
+#include "parse.h"
+#include "vm.h"
 
 
-// Three bit type specifier located in lowest bits of each variable
-// 3b00x indicates type is not reference counted
-enum mtype {
-    MTNIL  = 0, // nil
-    MTNUM  = 1, // number
-    MTSTR  = 3, // string
-    MTBUF  = 2, // buffer
-    MTCBUF = 6, // managed buffer
-    MTTBL  = 4, // table
-    MTFN   = 5, // function
-};
-
-// Declaration of mu type
-// It doesn't necessarily point to anything, but using a
-// void * would risk unwanted implicit conversions.
-typedef struct mu *mu_t;
-
-
-// Access to type and deferal components
-mu_inline enum mtype mu_gettype(mu_t m) { return 7 & (muint_t)m; }
-mu_inline mref_t mu_getref(mu_t m) { return *(mref_t *)(~7 & (muint_t)m); }
-
-// Properties of variables
-mu_inline bool mu_isnil(mu_t m) { return !m; }
-mu_inline bool mu_isnum(mu_t m) { return mu_gettype(m) == MTNUM; }
-mu_inline bool mu_isstr(mu_t m) { return mu_gettype(m) == MTSTR; }
-mu_inline bool mu_isbuf(mu_t m) { return (3 & (muint_t)m) == MTBUF; }
-mu_inline bool mu_istbl(mu_t m) { return mu_gettype(m) == MTTBL; }
-mu_inline bool mu_isfn(mu_t m)  { return mu_gettype(m) == MTFN;  }
-mu_inline bool mu_isref(mu_t m) { return 6 & (muint_t)m; }
-
-
-// Smallest addressable unit
-typedef unsigned char mbyte_t;
-
-// Length type for strings/tables
-typedef muinth_t mlen_t;
-
-
-// Multiple variables can be passed in a frame,
-// which is a small array of MU_FRAME elements.
-//
-// If more than MU_FRAME elements need to be passed, the
-// frame count of 0xf indicates a table containing the true
-// elements is passed as the first value in the frame.
-// 
-// For function calls, the frame count is split into two
-// nibbles for arguments and return values, in that order.
-#define MU_FRAME 4
-
-// Type for specific one or two frame counts
-typedef uint8_t mcnt_t;
-
-// Frame operations
-mu_inline mlen_t mu_frame_count(mcnt_t fc) {
-    return (fc > MU_FRAME) ? 1 : fc;
-}
-
-void mu_frame_move(mcnt_t fc, mu_t *dframe, mu_t *sframe);
-void mu_frame_convert(mcnt_t sc, mcnt_t dc, mu_t *frame);
-
-
-// Reference counting
-mu_inline mu_t mu_inc(mu_t m) {
-    if (mu_isref(m)) {
-        mu_ref_inc(m);
-    }
-
-    return m;
-}
-
-mu_inline void mu_dec(mu_t m) {
-    if (mu_isref(m) && mu_ref_dec(m)) {
-        extern void mu_destroy(mu_t m);
-        mu_destroy(m);
-    }
-}
-
+// Manual memory management
+// simple wrapper over malloc and free if available
+// returns 0 when size == 0
+void *mu_alloc(muint_t size);
+void mu_dealloc(void *, muint_t size);
 
 // System operations
 mu_noreturn mu_verrorf(const char *f, va_list args);

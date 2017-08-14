@@ -1,11 +1,5 @@
 #include "vm.h"
-
 #include "mu.h"
-#include "parse.h"
-#include "num.h"
-#include "str.h"
-#include "tbl.h"
-#include "fn.h"
 
 
 // Bytecode errors
@@ -278,7 +272,7 @@ reenter:
     {   // Setup the registers and scope
         mu_t regs[mu_code_getregs(c)];
         regs[0] = scope;
-        mu_frame_move(mu_code_getargs(c), &regs[1], frame);
+        mu_framemove(mu_code_getargs(c), &regs[1], frame);
 
         // Setup other state
         imms = mu_code_getimms(c);
@@ -367,14 +361,14 @@ reenter:
                     mu_errorf("unable to call %r", regs[d]);
                 }
 
-                mu_frame_move(a >> 4, frame, &regs[d+1]);
+                mu_framemove(a >> 4, frame, &regs[d+1]);
                 mu_fn_fcall(regs[d], a, frame);
                 mu_dec(regs[d]);
-                mu_frame_move(0xf & a, &regs[d], frame);
+                mu_framemove(0xf & a, &regs[d], frame);
             VM_ENTRY_END
 
             VM_ENTRY_DA(MOP_RET, d, a)
-                mu_frame_move(a, frame, &regs[d]);
+                mu_framemove(a, frame, &regs[d]);
                 mu_tbl_dec(scope);
                 mu_code_dec(c);
                 return a;
@@ -382,7 +376,7 @@ reenter:
 
             VM_ENTRY_DA(MOP_TCALL, d, a)
                 mu_t scratch = regs[d];
-                mu_frame_move(a, frame, &regs[d+1]);
+                mu_framemove(a, frame, &regs[d+1]);
                 mu_tbl_dec(scope);
                 mu_code_dec(c);
 
@@ -395,7 +389,7 @@ reenter:
 
                 c = mu_fn_getcode(scratch);
                 if (c) {
-                    mu_frame_convert(a, mu_code_getargs(c), frame);
+                    mu_frameconvert(a, mu_code_getargs(c), frame);
                     scope = mu_tbl_create(mu_code_getscope(c));
                     mu_tbl_settail(scope, mu_fn_getclosure(scratch));
                     mu_fn_dec(scratch);

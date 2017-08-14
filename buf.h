@@ -4,7 +4,8 @@
 
 #ifndef MU_BUF_H
 #define MU_BUF_H
-#include "mu.h"
+#include "config.h"
+#include "types.h"
 
 
 // Definition of internal Mu buffers
@@ -77,7 +78,7 @@ mu_inline mu_t mu_buf_fromchr(char s) {
 // Reference counting
 mu_inline mu_t mu_buf_inc(mu_t b) {
     mu_assert(mu_isbuf(b));
-    mu_ref_inc(b);
+    mu_refinc(b);
     return b;
 }
 

@@ -4,7 +4,8 @@
 
 #ifndef MU_TBL_H
 #define MU_TBL_H
-#include "mu.h"
+#include "config.h"
+#include "types.h"
 
 
 // Definition of Mu's table type
@@ -85,14 +86,14 @@ mu_t mu_tbl_diff(mu_t a, mu_t b);
 // Table reference counting
 mu_inline mu_t mu_tbl_inc(mu_t m) {
     mu_assert(mu_istbl(m));
-    mu_ref_inc(m);
+    mu_refinc(m);
     return m;
 }
 
 mu_inline void mu_tbl_dec(mu_t m) {
     mu_assert(mu_istbl(m));
     extern void mu_tbl_destroy(mu_t);
-    if (mu_ref_dec(m)) {
+    if (mu_refdec(m)) {
         mu_tbl_destroy(m);
     }
 }

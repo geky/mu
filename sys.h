@@ -4,7 +4,8 @@
 
 #ifndef MU_SYS_H
 #define MU_SYS_H
-#include "mu.h"
+#include "config.h"
+#include "types.h"
 
 
 // It's up to the system using Mu to provide the following functions

@@ -1,9 +1,5 @@
 #include "tbl.h"
-
-#include "num.h"
-#include "str.h"
-#include "fn.h"
-#include "parse.h"
+#include "mu.h"
 
 
 // Table access
@@ -112,7 +108,7 @@ static void mu_tbl_setpair(mu_t t, muint_t i, mu_t *p) {
 
 // Functions for managing tables
 mu_t mu_tbl_create(muint_t len) {
-    struct mtbl *t = mu_ref_alloc(sizeof(struct mtbl));
+    struct mtbl *t = mu_refalloc(sizeof(struct mtbl));
 
     t->npw2 = mu_tbl_listnpw2(len);
     t->isize = 0;
@@ -148,7 +144,7 @@ void mu_tbl_destroy(mu_t t) {
 
     mu_dealloc(mtbl(t)->array, size*sizeof(mu_t));
     mu_dec(mtbl(t)->tail);
-    mu_ref_dealloc(t, sizeof(struct mtbl));
+    mu_refdealloc(t, sizeof(struct mtbl));
 }
 
 
