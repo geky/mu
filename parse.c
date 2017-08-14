@@ -677,8 +677,8 @@ static mu_t compile(struct mparse *p, bool weak) {
     mbyte_t *bcode = mu_code_getbcode(b);
     memcpy(bcode, mu_buf_getdata(p->bcode), p->bcount);
 
-    mu_tbl_dec(p->imms);
-    mu_buf_dec(p->bcode);
+    mu_dec(p->imms);
+    mu_dec(p->bcode);
     mu_dec(p->m.val);
     return b;
 }

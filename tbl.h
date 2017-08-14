@@ -36,10 +36,6 @@ mu_t mu_tbl_fromlist(mu_t *list, muint_t n);
 mu_t mu_tbl_frompairs(mu_t (*pairs)[2], muint_t n);
 mu_t mu_tbl_frommu(mu_t m);
 
-// Table reference counting
-mu_inline mu_t mu_tbl_inc(mu_t m);
-mu_inline void mu_tbl_dec(mu_t m);
-
 // Table access functions
 mu_inline mlen_t mu_tbl_getlen(mu_t m);
 mu_inline mu_t mu_tbl_gettail(mu_t m);
@@ -83,28 +79,13 @@ mu_t mu_tbl_xor(mu_t a, mu_t b);
 mu_t mu_tbl_diff(mu_t a, mu_t b);
 
 
-// Table reference counting
-mu_inline mu_t mu_tbl_inc(mu_t m) {
-    mu_assert(mu_istbl(m));
-    mu_refinc(m);
-    return m;
-}
-
-mu_inline void mu_tbl_dec(mu_t m) {
-    mu_assert(mu_istbl(m));
-    extern void mu_tbl_destroy(mu_t);
-    if (mu_refdec(m)) {
-        mu_tbl_destroy(m);
-    }
-}
-
 // Table access functions
 mu_inline mlen_t mu_tbl_getlen(mu_t m) {
     return ((struct mtbl *)((muint_t)m - MTTBL))->len;
 }
 
 mu_inline mu_t mu_tbl_gettail(mu_t m) {
-    return mu_tbl_inc(((struct mtbl *)((muint_t)m - MTTBL))->tail);
+    return mu_inc(((struct mtbl *)((muint_t)m - MTTBL))->tail);
 }
 
 

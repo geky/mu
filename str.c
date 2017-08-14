@@ -93,8 +93,8 @@ mu_t mu_str_intern(mu_t b, muint_t n) {
 
     mint_t i = mu_str_table_find(mu_buf_getdata(b), n);
     if (i >= 0) {
-        mu_buf_dec(b);
-        return mu_str_inc(mu_str_table[i]);
+        mu_dec(b);
+        return mu_inc(mu_str_table[i]);
     }
 
     if (mu_buf_getdtor(b)) {
@@ -107,7 +107,7 @@ mu_t mu_str_intern(mu_t b, muint_t n) {
 
     mu_t s = (mu_t)((muint_t)b - MTBUF + MTSTR);
     mu_str_table_insert(~i, s);
-    return mu_str_inc(s);
+    return mu_inc(s);
 }
 
 mu_t mu_str_fromdata(const void *s, muint_t n) {
@@ -117,7 +117,7 @@ mu_t mu_str_fromdata(const void *s, muint_t n) {
 
     mint_t i = mu_str_table_find(s, n);
     if (i >= 0) {
-        return mu_str_inc(mu_str_table[i]);
+        return mu_inc(mu_str_table[i]);
     }
 
     // create new string and insert
@@ -126,7 +126,7 @@ mu_t mu_str_fromdata(const void *s, muint_t n) {
 
     mu_t ns = (mu_t)((muint_t)b - MTBUF + MTSTR);
     mu_str_table_insert(~i, ns);
-    return mu_str_inc(ns);
+    return mu_inc(ns);
 }
 
 void mu_str_destroy(mu_t s) {
@@ -134,7 +134,8 @@ void mu_str_destroy(mu_t s) {
     mu_assert(i >= 0);
     mu_str_table_remove(i);
 
-    mu_refdealloc(s, mu_offsetof(struct mstr, data) + mu_str_getlen(s));
+    mu_dealloc((struct mstr *)((muint_t)s - MTSTR),
+            mu_offsetof(struct mstr, data) + mu_str_getlen(s));
 }
 
 
@@ -191,7 +192,7 @@ mint_t mu_str_cmp(mu_t a, mu_t b) {
     mint_t cmp = memcmp(mu_str_getdata(a), mu_str_getdata(b),
                         alen < blen ? alen : blen);
 
-    mu_str_dec(b);
+    mu_dec(b);
     return cmp != 0 ? cmp : alen - blen;
 }
 
@@ -215,7 +216,7 @@ static mcnt_t mu_str_step(mu_t scope, mu_t *frame) {
     muint_t i = mu_num_getuint(mu_tbl_lookup(scope, mu_num_fromuint(1)));
 
     bool next = mu_str_next(s, &i, &frame[0]);
-    mu_str_dec(s);
+    mu_dec(s);
     mu_tbl_insert(scope, mu_num_fromuint(1), mu_num_fromuint(i));
     return next ? 1 : 0;
 }
@@ -237,7 +238,7 @@ mu_t mu_str_concat(mu_t a, mu_t b) {
     memcpy((mbyte_t *)mu_buf_getdata(d), mu_str_getdata(a), an);
     memcpy((mbyte_t *)mu_buf_getdata(d)+an, mu_str_getdata(b), bn);
 
-    mu_str_dec(b);
+    mu_dec(b);
     return mu_str_intern(d, an + bn);
 }
 
@@ -279,7 +280,7 @@ mu_t mu_str_parsen(const mbyte_t **ppos, const mbyte_t *end) {
     muint_t n = 0;
 
     if (quote != '\'' && quote != '"') {
-        mu_buf_dec(b);
+        mu_dec(b);
         return 0;
     }
 
@@ -356,7 +357,7 @@ mu_t mu_str_parsen(const mbyte_t **ppos, const mbyte_t *end) {
     }
 
     if (quote != *pos++) {
-        mu_buf_dec(b);
+        mu_dec(b);
         return 0;
     }
 
@@ -435,16 +436,16 @@ static mcnt_t mu_find_bfn(mu_t *frame) {
 
     for (muint_t i = 0; i+mlen <= slen; i++) {
         if (memcmp(&sb[i], mb, mlen) == 0) {
-            mu_str_dec(m);
-            mu_str_dec(s);
+            mu_dec(m);
+            mu_dec(s);
             frame[0] = mu_num_fromuint(i);
             frame[1] = mu_num_fromuint(i + mlen);
             return 2;
         }
     }
 
-    mu_str_dec(s);
-    mu_str_dec(m);
+    mu_dec(s);
+    mu_dec(m);
     return 0;
 }
 
@@ -471,7 +472,7 @@ static mcnt_t mu_replace_bfn(mu_t *frame) {
         bool match = memcmp(&sb[i], mb, mlen) == 0;
 
         if (match) {
-            mu_buf_pushmu(&d, &n, mu_str_inc(r));
+            mu_buf_pushmu(&d, &n, mu_inc(r));
             i += mlen;
         }
 
@@ -483,9 +484,9 @@ static mcnt_t mu_replace_bfn(mu_t *frame) {
 
     mu_buf_pushdata(&d, &n, &sb[i], slen-i);
 
-    mu_str_dec(s);
-    mu_str_dec(m);
-    mu_str_dec(r);
+    mu_dec(s);
+    mu_dec(m);
+    mu_dec(r);
     frame[0] = mu_str_intern(d, n);
     return 1;
 }
@@ -501,7 +502,7 @@ static mcnt_t mu_str_split_step(mu_t scope, mu_t *frame) {
     muint_t i = mu_num_getuint(mu_tbl_lookup(scope, mu_num_fromuint(2)));
 
     if (i > alen) {
-        mu_str_dec(a);
+        mu_dec(a);
         return 0;
     }
 
@@ -518,8 +519,8 @@ static mcnt_t mu_str_split_step(mu_t scope, mu_t *frame) {
 
     frame[0] = mu_str_fromdata(ab+i, j-i);
     mu_tbl_insert(scope, mu_num_fromuint(2), mu_num_fromuint(j+slen));
-    mu_str_dec(a);
-    mu_str_dec(s);
+    mu_dec(a);
+    mu_dec(s);
     return 1;
 }
 
@@ -561,14 +562,14 @@ static mcnt_t mu_join_bfn(mu_t *frame) {
         if (first) {
             first = false;
         } else {
-            mu_buf_pushmu(&b, &n, mu_str_inc(delim));
+            mu_buf_pushmu(&b, &n, mu_inc(delim));
         }
 
         mu_buf_pushmu(&b, &n, frame[0]);
     }
 
-    mu_fn_dec(iter);
-    mu_str_dec(delim);
+    mu_dec(iter);
+    mu_dec(delim);
     frame[0] = mu_str_intern(b, n);
     return 1;
 }
@@ -597,7 +598,7 @@ static mcnt_t mu_pad_bfn(mu_t *frame) {
     }
 
     if (mu_str_getlen(s) >= len) {
-        mu_str_dec(pad);
+        mu_dec(pad);
         return 1;
     }
 
@@ -610,7 +611,7 @@ static mcnt_t mu_pad_bfn(mu_t *frame) {
     }
 
     for (muint_t i = 0; i < count; i++) {
-        mu_buf_pushmu(&d, &n, mu_str_inc(pad));
+        mu_buf_pushmu(&d, &n, mu_inc(pad));
     }
 
     if (!left) {
@@ -659,8 +660,8 @@ static mcnt_t mu_strip_bfn(mu_t *frame) {
     }
 
     frame[0] = mu_str_fromdata(pos, end-pos);
-    mu_str_dec(s);
-    mu_str_dec(pad);
+    mu_dec(s);
+    mu_dec(pad);
     return 1;
 }
 

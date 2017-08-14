@@ -15,7 +15,8 @@ mu_t mu_fn_fromcode(mu_t c, mu_t closure) {
         mu_dec(closure);
     }
 
-    struct mfn *f = mu_refalloc(sizeof(struct mfn));
+    struct mfn *f = mu_alloc(sizeof(struct mfn));
+    f->ref = 1;
     f->args = mu_code_getargs(c);
     f->flags = mu_code_getflags(c);
     f->closure = closure;
@@ -24,7 +25,8 @@ mu_t mu_fn_fromcode(mu_t c, mu_t closure) {
 }
 
 mu_t mu_fn_frombfn(mcnt_t args, mbfn_t *bfn) {
-    struct mfn *f = mu_refalloc(sizeof(struct mfn));
+    struct mfn *f = mu_alloc(sizeof(struct mfn));
+    f->ref = 1;
     f->args = args;
     f->flags = MFN_BUILTIN;
     f->closure = 0;
@@ -33,7 +35,8 @@ mu_t mu_fn_frombfn(mcnt_t args, mbfn_t *bfn) {
 }
 
 mu_t mu_fn_fromsbfn(mcnt_t args, msbfn_t *sbfn, mu_t closure) {
-    struct mfn *f = mu_refalloc(sizeof(struct mfn));
+    struct mfn *f = mu_alloc(sizeof(struct mfn));
+    f->ref = 1;
     f->args = args;
     f->flags = MFN_BUILTIN | MFN_SCOPED;
     f->closure = closure;
@@ -74,14 +77,14 @@ mu_t mu_fn_initsbfn(struct mfn *f, mcnt_t args,
 // Called by garbage collector to clean up
 void mu_fn_destroy(mu_t f) {
     if (!(mfn(f)->flags & MFN_BUILTIN)) {
-        mu_code_dec(mfn(f)->fn.code);
+        mu_dec(mfn(f)->fn.code);
     }
 
     if (!(mfn(f)->flags & MFN_WEAK)) {
         mu_dec(mfn(f)->closure);
     }
 
-    mu_refdealloc(mfn(f), sizeof(struct mfn));
+    mu_dealloc(mfn(f), sizeof(struct mfn));
 }
 
 void mu_code_destroy(mu_t c) {
@@ -99,21 +102,21 @@ mcnt_t mu_fn_tcall(mu_t f, mcnt_t fc, mu_t *frame) {
     switch (mfn(f)->flags & (MFN_BUILTIN | MFN_SCOPED)) {
         case MFN_BUILTIN: {
             mbfn_t *bfn = mfn(f)->fn.bfn;
-            mu_fn_dec(f);
+            mu_dec(f);
             return bfn(frame);
         }
 
         case MFN_BUILTIN | MFN_SCOPED: {
             mcnt_t rc = mfn(f)->fn.sbfn(mfn(f)->closure, frame);
-            mu_fn_dec(f);
+            mu_dec(f);
             return rc;
         }
 
         case MFN_SCOPED: {
-            mu_t c = mu_code_inc(mfn(f)->fn.code);
+            mu_t c = mu_inc(mfn(f)->fn.code);
             mu_t scope = mu_tbl_create(mu_code_getscope(c));
             mu_tbl_settail(scope, mu_fn_getclosure(f));
-            mu_fn_dec(f);
+            mu_dec(f);
             return mu_exec(c, scope, frame);
         }
     }
@@ -175,7 +178,7 @@ bool mu_fn_next(mu_t f, mcnt_t fc, mu_t *frame) {
             mu_dec(m);
             return true;
         } else {
-            mu_tbl_dec(frame[0]);
+            mu_dec(frame[0]);
             return false;
         }
     }

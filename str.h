@@ -29,10 +29,6 @@ mu_inline mu_t mu_str_fromcstr(const char *s);
 mu_inline mu_t mu_str_fromchr(char s);
 mu_t mu_str_frommu(mu_t m);
 
-// Reference counting
-mu_inline mu_t mu_str_inc(mu_t m);
-mu_inline void mu_str_dec(mu_t m);
-
 // String access functions
 mu_inline mlen_t mu_str_getlen(mu_t m);
 mu_inline const void *mu_str_getdata(mu_t m);
@@ -57,21 +53,6 @@ mu_t mu_str_parsen(const mbyte_t **pos, const mbyte_t *end);
 mu_t mu_str_parse(const char *s, muint_t n);
 mu_t mu_str_repr(mu_t s);
 
-
-// Reference counting
-mu_inline mu_t mu_str_inc(mu_t m) {
-    mu_assert(mu_isstr(m));
-    mu_refinc(m);
-    return m;
-}
-
-mu_inline void mu_str_dec(mu_t m) {
-    mu_assert(mu_isstr(m));
-    extern void mu_str_destroy(mu_t);
-    if (mu_refdec(m)) {
-        mu_str_destroy(m);
-    }
-}
 
 // String creation stuff
 mu_inline mu_t mu_str_fromcstr(const char *s) {

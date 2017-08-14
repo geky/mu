@@ -287,7 +287,7 @@ reenter:
             VM_ENTRY_END
 
             VM_ENTRY_DI(MU_OP_FN, d, i)
-                regs[d] = mu_fn_fromcode(mu_code_inc(imms[i]), mu_inc(regs[0]));
+                regs[d] = mu_fn_fromcode(mu_inc(imms[i]), mu_inc(regs[0]));
             VM_ENTRY_END
 
             VM_ENTRY_DI(MU_OP_TBL, d, i)
@@ -371,16 +371,16 @@ reenter:
 
             VM_ENTRY_DA(MU_OP_RET, d, a)
                 mu_framemove(a, frame, &regs[d]);
-                mu_tbl_dec(scope);
-                mu_code_dec(c);
+                mu_dec(scope);
+                mu_dec(c);
                 return a;
             VM_ENTRY_END
 
             VM_ENTRY_DA(MU_OP_TCALL, d, a)
                 mu_t scratch = regs[d];
                 mu_framemove(a, frame, &regs[d+1]);
-                mu_tbl_dec(scope);
-                mu_code_dec(c);
+                mu_dec(scope);
+                mu_dec(c);
 
                 // Use a direct goto to garuntee a tail call when the target
                 // is another mu function. Otherwise, we just try our hardest
@@ -394,7 +394,7 @@ reenter:
                     mu_frameconvert(a, mu_code_getargs(c), frame);
                     scope = mu_tbl_create(mu_code_getscope(c));
                     mu_tbl_settail(scope, mu_fn_getclosure(scratch));
-                    mu_fn_dec(scratch);
+                    mu_dec(scratch);
                     goto reenter;
                 } else {
                     return mu_fn_tcall(scratch, a, frame);

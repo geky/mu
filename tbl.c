@@ -108,8 +108,8 @@ static void mu_tbl_setpair(mu_t t, muint_t i, mu_t *p) {
 
 // Functions for managing tables
 mu_t mu_tbl_create(muint_t len) {
-    struct mtbl *t = mu_refalloc(sizeof(struct mtbl));
-
+    struct mtbl *t = mu_alloc(sizeof(struct mtbl));
+    t->ref = 1;
     t->npw2 = mu_tbl_listnpw2(len);
     t->isize = 0;
     t->len = 0;
@@ -144,7 +144,7 @@ void mu_tbl_destroy(mu_t t) {
 
     mu_dealloc(mtbl(t)->array, size*sizeof(mu_t));
     mu_dec(mtbl(t)->tail);
-    mu_refdealloc(t, sizeof(struct mtbl));
+    mu_dealloc(mtbl(t), sizeof(struct mtbl));
 }
 
 
@@ -402,7 +402,7 @@ static mcnt_t mu_tbl_iter_step(mu_t scope, mu_t *frame) {
     muint_t i = mu_num_getuint(mu_tbl_lookup(scope, mu_num_fromuint(1)));
 
     bool next = mu_tbl_next(t, &i, 0, &frame[0]);
-    mu_tbl_dec(t);
+    mu_dec(t);
     mu_tbl_insert(scope, mu_num_fromuint(1), mu_num_fromuint(i));
     return next ? 1 : 0;
 }
@@ -418,7 +418,7 @@ static mcnt_t mu_tbl_pairs_step(mu_t scope, mu_t *frame) {
     muint_t i = mu_num_getuint(mu_tbl_lookup(scope, mu_num_fromuint(1)));
 
     bool next = mu_tbl_next(t, &i, &frame[0], &frame[1]);
-    mu_tbl_dec(t);
+    mu_dec(t);
     mu_tbl_insert(scope, mu_num_fromuint(1), mu_num_fromuint(i));
     return next ? 2 : 0;
 }
@@ -490,7 +490,7 @@ static mu_t mu_tbl_fromiter(mu_t i) {
         }
     }
 
-    mu_fn_dec(i);
+    mu_dec(i);
     return t;
 }
 
@@ -639,7 +639,7 @@ mu_t mu_tbl_concat(mu_t a, mu_t b, mu_t offset) {
         }
     }
 
-    mu_tbl_dec(b);
+    mu_dec(b);
     return d;
 }
 
@@ -700,7 +700,7 @@ mu_t mu_tbl_and(mu_t a, mu_t b) {
         }
     }
 
-    mu_tbl_dec(b);
+    mu_dec(b);
     return d;
 }
 
@@ -717,7 +717,7 @@ mu_t mu_tbl_or(mu_t a, mu_t b) {
         mu_tbl_insert(d, k, v);
     }
 
-    mu_tbl_dec(b);
+    mu_dec(b);
     return d;
 }
 
@@ -750,7 +750,7 @@ mu_t mu_tbl_xor(mu_t a, mu_t b) {
         }
     }
 
-    mu_tbl_dec(b);
+    mu_dec(b);
     return d;
 }
 
@@ -770,7 +770,7 @@ mu_t mu_tbl_diff(mu_t a, mu_t b) {
         }
     }
 
-    mu_tbl_dec(b);
+    mu_dec(b);
     return d;
 }
 
@@ -788,7 +788,7 @@ mu_t mu_tbl_parsen(const mbyte_t **ppos, const mbyte_t *end) {
     while (pos < end && *pos != ']') {
         mu_t k = mu_parsen(&pos, end);
         if (!k) {
-            mu_tbl_dec(t);
+            mu_dec(t);
             return 0;
         }
 
@@ -797,7 +797,7 @@ mu_t mu_tbl_parsen(const mbyte_t **ppos, const mbyte_t *end) {
             mu_t v = mu_parsen(&pos, end);
             if (!v) {
                 mu_dec(k);
-                mu_tbl_dec(t);
+                mu_dec(t);
                 return 0;
             }
             mu_tbl_insert(t, k, v);
@@ -815,7 +815,7 @@ mu_t mu_tbl_parsen(const mbyte_t **ppos, const mbyte_t *end) {
 
     if (pos == end || *pos++ != ']') {
         // unterminated table
-        mu_tbl_dec(t);
+        mu_dec(t);
         return 0;
     }
 

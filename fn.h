@@ -46,10 +46,6 @@ mu_t mu_fn_fromsbfn(mcnt_t args, msbfn_t *sbfn, mu_t closure);
 mu_t mu_fn_fromcode(mu_t code, mu_t closure);
 mu_t mu_fn_frommu(mu_t m);
 
-// Function reference counting
-mu_inline mu_t mu_fn_inc(mu_t f);
-mu_inline void mu_fn_dec(mu_t f);
-
 // Function access
 mu_inline mu_t mu_fn_getcode(mu_t m);
 mu_inline mu_t mu_fn_getclosure(mu_t m);
@@ -85,10 +81,8 @@ struct mcode {
 };
 
 
-// Code reference counting
+// Code checking
 mu_inline bool mu_iscode(mu_t m);
-mu_inline mu_t mu_code_inc(mu_t c);
-mu_inline void mu_code_dec(mu_t c);
 
 // Code access functions
 mu_inline mlen_t mu_code_getimmslen(mu_t c);
@@ -97,20 +91,10 @@ mu_inline mu_t *mu_code_getimms(mu_t c);
 mu_inline void *mu_code_getbcode(mu_t c);
 
 
-// Code reference counting
+// Code checking 
 mu_inline bool mu_iscode(mu_t m) {
     extern void mu_code_destroy(mu_t);
     return mu_isbuf(m) && mu_buf_getdtor(m) == mu_code_destroy;
-}
-
-mu_inline mu_t mu_code_inc(mu_t c) {
-    mu_assert(mu_iscode(c));
-    return mu_buf_inc(c);
-}
-
-mu_inline void mu_code_dec(mu_t c) {
-    mu_assert(mu_iscode(c));
-    mu_buf_dec(c);
 }
 
 // Code access functions
@@ -146,25 +130,10 @@ mu_inline void *mu_code_getbcode(mu_t c) {
     return mu_code_getimms(c) + mu_code_getimmslen(c);
 }
 
-// Function reference counting
-mu_inline mu_t mu_fn_inc(mu_t f) {
-    mu_assert(mu_isfn(f));
-    mu_refinc(f);
-    return f;
-}
-
-mu_inline void mu_fn_dec(mu_t f) {
-    mu_assert(mu_isfn(f));
-    extern void mu_fn_destroy(mu_t);
-    if (mu_refdec(f)) {
-        mu_fn_destroy(f);
-    }
-}
-
 // Function access
 mu_inline mu_t mu_fn_getcode(mu_t m) {
     if (!(((struct mfn *)((muint_t)m - MTFN))->flags & MFN_BUILTIN)) {
-        return mu_code_inc(((struct mfn *)((muint_t)m - MTFN))->fn.code);
+        return mu_inc(((struct mfn *)((muint_t)m - MTFN))->fn.code);
     } else {
         return 0;
     }

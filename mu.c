@@ -98,7 +98,7 @@ void mu_vprintf(const char *f, va_list args) {
     muint_t n = 0;
     mu_buf_vpushf(&b, &n, f, args);
     mu_print(mu_buf_getdata(b), n);
-    mu_buf_dec(b);
+    mu_dec(b);
 }
 
 void mu_printf(const char *f, ...) {
@@ -118,8 +118,8 @@ static mcnt_t mu_print_bfn(mu_t *frame) {
     }
 
     mu_print(mu_buf_getdata(b), n);
-    mu_buf_dec(b);
-    mu_tbl_dec(frame[0]);
+    mu_dec(b);
+    mu_dec(frame[0]);
     return 0;
 }
 
@@ -135,14 +135,14 @@ static mcnt_t mu_import_bfn(mu_t *frame) {
         import_history = mu_tbl_create(0);
     }
 
-    mu_t module = mu_tbl_lookup(import_history, mu_str_inc(name));
+    mu_t module = mu_tbl_lookup(import_history, mu_inc(name));
     if (module) {
-        mu_str_dec(name);
+        mu_dec(name);
         frame[0] = module;
         return 1;
     }
 
-    module = mu_sys_import(mu_str_inc(name));
+    module = mu_sys_import(mu_inc(name));
     mu_tbl_insert(import_history, name, mu_inc(module));
     frame[0] = module;
     return 1;
@@ -334,7 +334,7 @@ static mcnt_t mu_parse_bfn(mu_t *frame) {
     mu_checkargs(mu_isstr(s), MU_PARSE_KEY, 0x1, frame);
 
     frame[0] = mu_parse(mu_str_getdata(s), mu_str_getlen(s));
-    mu_str_dec(s);
+    mu_dec(s);
     return 1;
 }
 
@@ -359,7 +359,7 @@ static mcnt_t mu_ord_bfn(mu_t *frame) {
             MU_ORD_KEY, 0x1, frame);
 
     frame[0] = mu_num_fromuint(*(const mbyte_t *)mu_str_getdata(m));
-    mu_str_dec(m);
+    mu_dec(m);
     return 1;
 }
 
@@ -420,11 +420,11 @@ static mcnt_t mu_len_bfn(mu_t *frame) {
 
     if (mu_isstr(a)) {
         frame[0] = mu_num_fromuint(mu_str_getlen(a));
-        mu_str_dec(a);
+        mu_dec(a);
         return 1;
     } else if (mu_istbl(a)) {
         frame[0] = mu_num_fromuint(mu_tbl_getlen(a));
-        mu_tbl_dec(a);
+        mu_dec(a);
         return 1;
     }
 
@@ -446,11 +446,11 @@ static mcnt_t mu_concat_bfn(mu_t *frame) {
 
     if (mu_isstr(a) && mu_isstr(b)) {
         frame[0] = mu_str_concat(a, b);
-        mu_str_dec(a);
+        mu_dec(a);
         return 1;
     } else if (mu_istbl(a) && mu_istbl(b)) {
         frame[0] = mu_tbl_concat(a, b, offset);
-        mu_tbl_dec(a);
+        mu_dec(a);
         return 1;
     }
 
@@ -481,11 +481,11 @@ static mcnt_t mu_subset_bfn(mu_t *frame) {
 
     if (mu_isstr(a)) {
         frame[0] = mu_str_subset(a, loweri, upperi);
-        mu_str_dec(a);
+        mu_dec(a);
         return 1;
     } else if (mu_istbl(a)) {
         frame[0] = mu_tbl_subset(a, loweri, upperi);
-        mu_tbl_dec(a);
+        mu_dec(a);
         return 1;
     }
 
@@ -511,7 +511,7 @@ static mcnt_t mu_push_bfn(mu_t *frame) {
     }
 
     mu_tbl_push(t, v, ii);
-    mu_tbl_dec(t);
+    mu_dec(t);
     return 0;
 }
 
@@ -533,7 +533,7 @@ static mcnt_t mu_pop_bfn(mu_t *frame) {
     }
 
     frame[0] = mu_tbl_pop(t, ii);
-    mu_tbl_dec(t);
+    mu_dec(t);
     return 1;
 }
 
@@ -553,7 +553,7 @@ static mcnt_t mu_and_bfn(mu_t *frame) {
         return 1;
     } else if (mu_istbl(a) && mu_istbl(b)) {
         frame[0] = mu_tbl_and(a, b);
-        mu_tbl_dec(a);
+        mu_dec(a);
         return 1;
     }
 
@@ -576,7 +576,7 @@ static mcnt_t mu_or_bfn(mu_t *frame) {
         return 1;
     } else if (mu_istbl(a) && mu_istbl(b)) {
         frame[0] = mu_tbl_or(a, b);
-        mu_tbl_dec(a);
+        mu_dec(a);
         return 1;
     }
 
@@ -602,7 +602,7 @@ static mcnt_t mu_xor_bfn(mu_t *frame) {
         return 1;
     } else if (mu_istbl(a) && mu_istbl(b)) {
         frame[0] = mu_tbl_xor(a, b);
-        mu_tbl_dec(a);
+        mu_dec(a);
         return 1;
     }
 
@@ -625,7 +625,7 @@ static mcnt_t mu_diff_bfn(mu_t *frame) {
         return 1;
     } else if (mu_istbl(a) && mu_istbl(b)) {
         frame[0] = mu_tbl_diff(a, b);
-        mu_tbl_dec(a);
+        mu_dec(a);
         return 1;
     }
 
@@ -690,15 +690,15 @@ static mcnt_t mu_map_step_bfn(mu_t scope, mu_t *frame) {
         mu_t m = mu_tbl_lookup(frame[0], mu_num_fromuint(0));
         if (m) {
             mu_dec(m);
-            mu_fn_dec(f);
-            mu_fn_dec(i);
+            mu_dec(f);
+            mu_dec(i);
             return 0xf;
         }
-        mu_tbl_dec(frame[0]);
+        mu_dec(frame[0]);
     }
 
-    mu_fn_dec(f);
-    mu_fn_dec(i);
+    mu_dec(f);
+    mu_dec(i);
     return 0;
 }
 
@@ -725,7 +725,7 @@ static mcnt_t mu_filter_step_bfn(mu_t scope, mu_t *frame) {
     mu_t i = mu_tbl_lookup(scope, mu_num_fromuint(1));
 
     while (mu_fn_next(i, 0xf, frame)) {
-        mu_t m = mu_tbl_inc(frame[0]);
+        mu_t m = mu_inc(frame[0]);
         mu_fn_fcall(f, 0xf1, frame);
         if (frame[0]) {
             mu_dec(frame[0]);
@@ -734,11 +734,11 @@ static mcnt_t mu_filter_step_bfn(mu_t scope, mu_t *frame) {
             mu_dec(i);
             return 0xf;
         }
-        mu_tbl_dec(m);
+        mu_dec(m);
     }
 
-    mu_fn_dec(f);
-    mu_fn_dec(i);
+    mu_dec(f);
+    mu_dec(i);
     return 0;
 }
 
@@ -781,8 +781,8 @@ static mcnt_t mu_reduce_bfn(mu_t *frame) {
         acc = frame[0];
     }
 
-    mu_fn_dec(f);
-    mu_fn_dec(iter);
+    mu_dec(f);
+    mu_dec(iter);
     frame[0] = acc;
     return 0xf;
 }
@@ -810,8 +810,8 @@ static mcnt_t mu_any_bfn(mu_t *frame) {
         }
     }
 
-    mu_fn_dec(pred);
-    mu_fn_dec(iter);
+    mu_dec(pred);
+    mu_dec(iter);
     return 0;
 }
 
@@ -833,14 +833,14 @@ static mcnt_t mu_all_bfn(mu_t *frame) {
         if (frame[0]) {
             mu_dec(frame[0]);
         } else {
-            mu_fn_dec(pred);
-            mu_fn_dec(iter);
+            mu_dec(pred);
+            mu_dec(iter);
             return 0;
         }
     }
 
-    mu_fn_dec(pred);
-    mu_fn_dec(iter);
+    mu_dec(pred);
+    mu_dec(iter);
     return 1;
 }
 
@@ -929,7 +929,7 @@ static mcnt_t mu_zip_step_bfn(mu_t scope, mu_t *frame) {
                     mu_fn_call(MU_ITER, 0x11, frame[0]));
         }
 
-        mu_fn_dec(iteriter);
+        mu_dec(iteriter);
         mu_tbl_insert(scope, mu_num_fromuint(1), mu_inc(iters));
     }
 
@@ -938,13 +938,13 @@ static mcnt_t mu_zip_step_bfn(mu_t scope, mu_t *frame) {
 
     for (muint_t i = 0; mu_tbl_next(iters, &i, 0, &iter);) {
         mu_fn_fcall(iter, 0x0f, frame);
-        mu_fn_dec(iter);
+        mu_dec(iter);
 
         mu_t m = mu_tbl_lookup(frame[0], mu_num_fromuint(0));
         if (!m) {
             mu_dec(acc);
             mu_dec(frame[0]);
-            mu_tbl_dec(iters);
+            mu_dec(iters);
             return 0;
         }
         mu_dec(m);
@@ -952,7 +952,7 @@ static mcnt_t mu_zip_step_bfn(mu_t scope, mu_t *frame) {
         acc = mu_tbl_concat(acc, frame[0], 0);
     }
 
-    mu_tbl_dec(iters);
+    mu_dec(iters);
     frame[0] = acc;
     return 0xf;
 }
@@ -981,7 +981,7 @@ static mcnt_t mu_chain_step_bfn(mu_t scope, mu_t *frame) {
 
     if (iter) {
         mu_fn_fcall(iter, 0x0f, frame);
-        mu_fn_dec(iter);
+        mu_dec(iter);
 
         mu_t m = mu_tbl_lookup(frame[0], mu_num_fromuint(0));
         if (m) {
@@ -993,7 +993,7 @@ static mcnt_t mu_chain_step_bfn(mu_t scope, mu_t *frame) {
 
     mu_t iters = mu_tbl_lookup(scope, mu_num_fromuint(0));
     mu_fn_fcall(iters, 0x01, frame);
-    mu_fn_dec(iters);
+    mu_dec(iters);
     if (frame[0]) {
         mu_tbl_insert(scope, mu_num_fromuint(1),
                 mu_fn_call(MU_ITER, 0x11, frame[0]));
@@ -1037,7 +1037,7 @@ static mcnt_t mu_take_count_step_bfn(mu_t scope, mu_t *frame) {
 static mcnt_t mu_take_while_step_bfn(mu_t scope, mu_t *frame) {
     mu_t iter = mu_tbl_lookup(scope, mu_num_fromuint(1));
     mu_fn_fcall(iter, 0x0f, frame);
-    mu_fn_dec(iter);
+    mu_dec(iter);
 
     mu_t m = mu_tbl_lookup(frame[0], mu_num_fromuint(0));
     if (!m) {
@@ -1049,9 +1049,9 @@ static mcnt_t mu_take_while_step_bfn(mu_t scope, mu_t *frame) {
     m = mu_inc(frame[0]);
     mu_t cond = mu_tbl_lookup(scope, mu_num_fromuint(0));
     mu_fn_fcall(cond, 0xf1, frame);
-    mu_fn_dec(cond);
+    mu_dec(cond);
     if (!frame[0]) {
-        mu_tbl_dec(m);
+        mu_dec(m);
         return 0;
     }
     mu_dec(frame[0]);
@@ -1111,11 +1111,11 @@ static mcnt_t mu_drop_while_step_bfn(mu_t scope, mu_t *frame) {
 
     if (cond) {
         while (mu_fn_next(iter, 0xf, frame)) {
-            mu_t m = mu_tbl_inc(frame[0]);
+            mu_t m = mu_inc(frame[0]);
             mu_fn_fcall(cond, 0xf1, frame);
             if (!frame[0]) {
-                mu_fn_dec(iter);
-                mu_fn_dec(cond);
+                mu_dec(iter);
+                mu_dec(cond);
                 frame[0] = m;
                 mu_tbl_insert(scope, mu_num_fromuint(0), 0);
                 return 0xf;
@@ -1123,8 +1123,8 @@ static mcnt_t mu_drop_while_step_bfn(mu_t scope, mu_t *frame) {
             mu_dec(m);
         }
 
-        mu_fn_dec(iter);
-        mu_fn_dec(cond);
+        mu_dec(iter);
+        mu_dec(cond);
         return 0;
     }
 
@@ -1189,16 +1189,16 @@ static mcnt_t mu_min_bfn(mu_t *frame) {
 
         if (cmp(m, mu_inc(min)) < 0) {
             mu_dec(min);
-            mu_tbl_dec(min_frame);
+            mu_dec(min_frame);
             min = m;
             min_frame = frame[0];
         } else {
             mu_dec(m);
-            mu_tbl_dec(frame[0]);
+            mu_dec(frame[0]);
         }
     }
 
-    mu_fn_dec(iter);
+    mu_dec(iter);
     mu_dec(min);
     frame[0] = min_frame;
     return 0xf;
@@ -1238,16 +1238,16 @@ static mcnt_t mu_max_bfn(mu_t *frame) {
 
         if (cmp(m, mu_inc(max)) >= 0) {
             mu_dec(max);
-            mu_tbl_dec(max_frame);
+            mu_dec(max_frame);
             max = m;
             max_frame = frame[0];
         } else {
             mu_dec(m);
-            mu_tbl_dec(frame[0]);
+            mu_dec(frame[0]);
         }
     }
 
-    mu_fn_dec(iter);
+    mu_dec(iter);
     mu_dec(max);
     frame[0] = max_frame;
     return 0xf;
@@ -1280,7 +1280,7 @@ static mcnt_t mu_reverse_bfn(mu_t *frame) {
         mu_tbl_insert(store, mu_num_fromuint(mu_tbl_getlen(store)), frame[0]);
     }
 
-    mu_fn_dec(iter);
+    mu_dec(iter);
 
     frame[0] = mu_fn_fromsbfn(0x0, mu_reverse_step_bfn,
             mu_tbl_fromlist((mu_t[]){

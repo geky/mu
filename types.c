@@ -38,7 +38,7 @@ void mu_frameconvert(mcnt_t sc, mcnt_t dc, mu_t *frame) {
             frame[i] = mu_tbl_lookup(t, mu_num_fromuint(i));
         }
 
-        mu_tbl_dec(t);
+        mu_dec(t);
     } else if (sc != 0xf) {
         mu_t t = mu_tbl_create(sc);
 

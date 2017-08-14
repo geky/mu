@@ -87,61 +87,40 @@ mu_inline bool mu_istbl(mu_t m) { return mu_gettype(m) == MTTBL; }
 mu_inline bool mu_isfn(mu_t m)  { return mu_gettype(m) == MTFN;  }
 mu_inline bool mu_isref(mu_t m) { return 6 & (muint_t)m; }
 
-// Garbage collected memory based on reference counting
-// Each block of memory starts with a mu_reft reference count.
-// Deallocated immediately when ref hits zero.
-// A reference count of zero indicates a constant variable
-// which could be statically allocated. This nicely handles
-// overflow allowing a small reference count size.
-// It is up to the user to avoid cyclic dependencies.
-mu_inline void *mu_refalloc(muint_t size) {
-    extern void *mu_alloc(muint_t size);
-    mref_t *ref = mu_alloc(size);
-    *ref = 1;
-
-    return ref;
-}
-
-mu_inline void mu_refdealloc(void *m, muint_t size) {
-    extern void mu_dealloc(void *, muint_t size);
-    mu_dealloc((mref_t *)(~7 & (muint_t)m), size);
-}
-
-mu_inline void mu_refinc(void *m) {
-    mref_t *ref = (mref_t *)(~7 & (muint_t)m);
-
-    if (*ref != 0) {
-        (*ref)++;
-    }
-}
-
-mu_inline bool mu_refdec(void *m) {
-    mref_t *ref = (mref_t *)(~7 & (muint_t)m);
-
-    if (*ref != 0) {
-        (*ref)--;
-
-        if (*ref == 0) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 // Reference counting for mu types
+//
+// Deallocates immediately when reference count hits zero. If a type
+// does have zero, this indicates the variable is constant and may be
+// statically allocated. As a nice side effect, overflow results in
+// constant variables.
 mu_inline mu_t mu_inc(mu_t m) {
     if (mu_isref(m)) {
-        mu_refinc(m);
+        mref_t *ref = (mref_t *)(~7 & (muint_t)m);
+        mref_t count = *ref;
+
+        if (count != 0) {
+            count++;
+            *ref = count;
+        }
     }
 
     return m;
 }
 
 mu_inline void mu_dec(mu_t m) {
-    if (mu_isref(m) && mu_refdec(m)) {
-        extern void mu_destroy(mu_t m);
-        mu_destroy(m);
+    if (mu_isref(m)) {
+        mref_t *ref = (mref_t *)(~7 & (muint_t)m);
+        mref_t count = *ref;
+
+        if (count != 0) {
+            count--;
+            *ref = count;
+
+            if (count == 0) {
+                extern void mu_destroy(mu_t m);
+                mu_destroy(m);
+            }
+        }
     }
 }
 

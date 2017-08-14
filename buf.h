@@ -30,10 +30,6 @@ mu_inline mu_t mu_buf_fromcstr(const char *s);
 mu_inline mu_t mu_buf_fromchr(char s);
 mu_t mu_buf_frommu(mu_t s);
 
-// Reference counting
-mu_inline mu_t mu_buf_inc(mu_t b);
-mu_inline void mu_buf_dec(mu_t m);
-
 // Buffer access
 mu_inline mlen_t mu_buf_getlen(mu_t b);
 mu_inline void *mu_buf_getdata(mu_t b);
@@ -73,18 +69,6 @@ mu_inline mu_t mu_buf_fromcstr(const char *s) {
 
 mu_inline mu_t mu_buf_fromchr(char s) {
     return mu_buf_fromdata(&s, 1);
-}
-
-// Reference counting
-mu_inline mu_t mu_buf_inc(mu_t b) {
-    mu_assert(mu_isbuf(b));
-    mu_refinc(b);
-    return b;
-}
-
-mu_inline void mu_buf_dec(mu_t m) {
-    mu_assert(mu_isbuf(m));
-    mu_dec(m);
 }
 
 // Buffer access functions

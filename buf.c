@@ -13,12 +13,14 @@ mu_t mu_buf_createdtor(muint_t n, void (*dtor)(mu_t)) {
     }
 
     if (!dtor) {
-        struct mbuf *b = mu_refalloc(mu_offsetof(struct mbuf, data) + n);
+        struct mbuf *b = mu_alloc(mu_offsetof(struct mbuf, data) + n);
+        b->ref = 1;
         b->len = n;
         return (mu_t)((muint_t)b + MTBUF);
     } else {
-        struct mbuf *b = mu_refalloc(mu_offsetof(struct mbuf, data) +
+        struct mbuf *b = mu_alloc(mu_offsetof(struct mbuf, data) +
                 mu_align(n) + sizeof(dtor));
+        b->ref = 1;
         b->len = n;
         *(void (**)(mu_t))(b->data + mu_align(b->len)) = dtor;
         return (mu_t)((muint_t)b + MTCBUF);
@@ -26,12 +28,14 @@ mu_t mu_buf_createdtor(muint_t n, void (*dtor)(mu_t)) {
 }
 
 void mu_buf_destroy(mu_t b) {
-    mu_refdealloc(b, mu_offsetof(struct mbuf, data) + mu_buf_getlen(b));
+    mu_dealloc((struct mbuf *)((muint_t)b - MTBUF),
+            mu_offsetof(struct mbuf, data) + mu_buf_getlen(b));
 }
 
 void mu_buf_destroydtor(mu_t b) {
     mu_buf_getdtor(b)(b);
-    mu_refdealloc(b, mu_offsetof(struct mbuf, data) +
+    mu_dealloc((struct mbuf *)((muint_t)b - MTCBUF),
+            mu_offsetof(struct mbuf, data) +
             mu_align(mu_buf_getlen(b)) + sizeof(void (*)(mu_t)));
 }
 
@@ -44,7 +48,7 @@ void mu_buf_resize(mu_t *b, muint_t n) {
     memcpy(mu_buf_getdata(nb), mu_buf_getdata(*b),
             (n < mu_buf_getlen(*b)) ? n : mu_buf_getlen(*b));
 
-    mu_buf_dec(*b);
+    mu_dec(*b);
     *b = nb;
 }
 
@@ -74,7 +78,7 @@ void mu_buf_setdtor(mu_t *b, void (*dtor)(mu_t)) {
     mu_t nb = mu_buf_createdtor(mu_buf_getlen(*b), dtor);
     memcpy(mu_buf_getdata(nb), mu_buf_getdata(*b), mu_buf_getlen(nb));
 
-    mu_buf_dec(*b);
+    mu_dec(*b);
     *b = nb;
 }
 
