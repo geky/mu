@@ -9,16 +9,19 @@ mu_inline struct mtbl *mtbl(mu_t t) {
 
 
 // General purpose hash for mu types
-mu_inline muint_t mu_tbl_hash(mu_t m) {
-    // Mu garuntees bitwise equality for Mu types, which has the very
-    // nice property of being a free hash function.
+mu_inline muint_t mu_tbl_hash(mu_t t, mu_t m) {
+    // Mu types have bitwise equality but aren't distributed very well.
     //
-    // We remove the lower 3 bits, since they store the type, which
-    // deferally doesn't vary in tables. And we xor the upper and lower
-    // halves so all bits can affect the range of the length type.
-    // This is the boundary on the table size so it's really the only
-    // part that matters.
-    return ((muint_t)m >> (8*sizeof(mlen_t))) ^ ((muint_t)m >> 3);
+    // We can kinda fix this with Knuth's multiplicitive hash
+    // (2^32 / golden ratio), but multiplication only propogates entropy
+    // upwards, and later masking will lose most of the integer's variation.
+    // So instead of masking, we just shift the integer downwards, keeping the
+    // most impacted bits.
+#ifdef MU64
+    return ((muint_t)m * 11400714819323198485UL) >> (64 - mtbl(t)->npw2);
+#else
+    return ((muint_t)m * 2654435761UL) >> (32 - mtbl(t)->npw2);
+#endif
 }
 
 // Find smallest integer size for table length
@@ -173,7 +176,7 @@ mu_t mu_tbl_lookup(mu_t t, mu_t k) {
                 return mu_inc(mtbl(t)->array[i]);
             }
         } else {
-            for (muint_t i = mu_tbl_hash(k);; i++) {
+            for (muint_t i = mu_tbl_hash(t, k);; i++) {
                 mu_t *p = mu_tbl_getpair(t, i & mask);
 
                 if (p && p[0] == k) {
@@ -282,7 +285,7 @@ void mu_tbl_insert(mu_t t, mu_t k, mu_t v) {
             return;
         }
     } else {
-        for (muint_t i = mu_tbl_hash(k);; i++) {
+        for (muint_t i = mu_tbl_hash(t, k);; i++) {
             mu_t *p = mu_tbl_getpair(t, i & mask);
 
             if (p && p[0] == k) {
@@ -346,7 +349,7 @@ void mu_tbl_assign(mu_t head, mu_t k, mu_t v) {
                 return;
             }
         } else {
-            for (muint_t i = mu_tbl_hash(k);; i++) {
+            for (muint_t i = mu_tbl_hash(t, k);; i++) {
                 mu_t *p = mu_tbl_getpair(t, i & mask);
 
                 if (p && p[0] == k && p[1]) {
