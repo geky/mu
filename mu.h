@@ -38,16 +38,21 @@ void mu_feval(const char *s, muint_t n, mu_t scope, mcnt_t fc, mu_t *frame);
 mu_t mu_veval(const char *s, muint_t n, mu_t scope, mcnt_t fc, va_list args);
 mu_t mu_eval(const char *s, muint_t n, mu_t scope, mcnt_t fc, ...);
 
-// Check arguments to function
+// Checks for various conditions
 // using a macro here helps pathing and avoids cost of pushing args
 #define mu_checkargs(pred, ...) \
     ((pred) ? (void)0 : mu_errorargs(__VA_ARGS__))
 mu_noreturn mu_errorargs(mu_t name, mcnt_t fc, mu_t *frame);
+#define mu_checkconst(pred, ...) \
+    ((pred) ? (void)0 : mu_errorro(__VA_ARGS__))
+mu_noreturn mu_errorro(const char *name);
+#define mu_checklen(pred, ...) \
+    ((pred) ? (void)0 : mu_errorlen(__VA_ARGS__))
+mu_noreturn mu_errorlen(const char *name);
 
 // Declaration of mu constants, requires other MU_DEF_* for definition
 #define MU_DEF(name) \
 extern mu_pure mu_t name(void);
-
 
 
 // Standard functions in readonly builtins table
@@ -115,6 +120,7 @@ extern mu_pure mu_t name(void);
 
 #define MU_LEN          mu_len_def()
 #define MU_TAIL         mu_tail_def()
+#define MU_CONST        mu_const_def()
 #define MU_PUSH         mu_push_def()
 #define MU_POP          mu_pop_def()
 #define MU_CONCAT       mu_concat_def()
@@ -212,6 +218,7 @@ extern mu_pure mu_t name(void);
 
 #define MU_LEN_KEY      mu_len_key_def()
 #define MU_TAIL_KEY     mu_tail_key_def()
+#define MU_CONST_KEY    mu_const_key_def()
 #define MU_PUSH_KEY     mu_push_key_def()
 #define MU_POP_KEY      mu_pop_key_def()
 #define MU_CONCAT_KEY   mu_concat_key_def()

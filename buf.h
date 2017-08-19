@@ -84,11 +84,11 @@ mu_inline mu_t mu_buf_fromchr(char s) {
 
 // Buffer access functions
 mu_inline bool mu_isdtor(mu_t b, mdtor_t *dtor) {
-    if (mu_gettype(b) != MTBUFD) {
+    if (mu_gettype(b) != MTDBUF) {
         return false;
     }
 
-    struct mbuf *buf = (struct mbuf *)((muint_t)b - MTBUFD);
+    struct mbuf *buf = (struct mbuf *)((muint_t)b - MTDBUF);
     return *(mdtor_t **)(buf->data + mu_align(buf->len)) == dtor;
 }
 
@@ -101,8 +101,8 @@ mu_inline void *mu_buf_getdata(mu_t b) {
 }
 
 mu_inline mdtor_t *mu_buf_getdtor(mu_t b) {
-    if ((MTBUFD^MTBUF) & (muint_t)b) {
-        struct mbuf *buf = (struct mbuf *)((muint_t)b - MTBUFD);
+    if ((MTDBUF^MTBUF) & (muint_t)b) {
+        struct mbuf *buf = (struct mbuf *)((muint_t)b - MTDBUF);
         return *(mdtor_t **)(buf->data + mu_align(buf->len));
     } else {
         return 0;
@@ -110,8 +110,8 @@ mu_inline mdtor_t *mu_buf_getdtor(mu_t b) {
 }
 
 mu_inline mu_t mu_buf_gettail(mu_t b) {
-    if ((MTBUFD^MTBUF) & (muint_t)b) {
-        struct mbuf *buf = (struct mbuf *)((muint_t)b - MTBUFD);
+    if ((MTDBUF^MTBUF) & (muint_t)b) {
+        struct mbuf *buf = (struct mbuf *)((muint_t)b - MTDBUF);
         return mu_inc(*(mu_t *)(buf->data + mu_align(buf->len) +
                 sizeof(mdtor_t *)));
     } else {
@@ -152,7 +152,7 @@ mu_pure mu_t name(void) {                                                   \
         mu_t tail;                                                          \
     } inst = {0, n, {0}, 0};                                                \
                                                                             \
-    return (mu_t)((muint_t)&inst + MTBUFD);                                 \
+    return (mu_t)((muint_t)&inst + MTDBUF);                                 \
 }
 
 #define MU_DEF_BUFTAIL(name, n, dtor, tail)                                 \

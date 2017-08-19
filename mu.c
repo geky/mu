@@ -207,6 +207,14 @@ mu_noreturn mu_errorargs(mu_t name, mcnt_t fc, mu_t *frame) {
     }
 }
 
+mu_noreturn mu_errorro(const char *name) {
+    mu_errorf("attempted to modify read-only %s", name);
+}
+
+mu_noreturn mu_errorlen(const char *name) {
+    mu_errorf("exceeded maximum length in %s", name);
+}
+
 
 // wrappers for comparison operations
 static mint_t (*const mu_attr_cmp[8])(mu_t, mu_t) = {
@@ -338,12 +346,13 @@ static mcnt_t mu_is_bfn(mu_t *frame) {
 
     mu_dec(m);
     switch (mu_gettype(m)) {
-        case MTNIL: return !type;
-        case MTNUM: return type == MU_NUM;
-        case MTSTR: return type == MU_STR;
-        case MTTBL: return type == MU_TBL;
-        case MTFN:  return type == MU_FN;
-        default:    return false;
+        case MTNIL:  return !type;
+        case MTNUM:  return type == MU_NUM;
+        case MTSTR:  return type == MU_STR;
+        case MTTBL: 
+        case MTRTBL: return type == MU_TBL;
+        case MTFN:   return type == MU_FN;
+        default:     return false;
     }
 }
 
@@ -477,6 +486,19 @@ static mcnt_t mu_tail_bfn(mu_t *frame) {
 
 MU_DEF_STR(mu_tail_key_def, "tail")
 MU_DEF_BFN(mu_tail_def, 0x1, mu_tail_bfn)
+
+static mcnt_t mu_const_bfn(mu_t *frame) {
+    mu_t t = frame[0];
+    if (mu_istbl(t)) {
+        frame[0] = mu_tbl_const(t);
+        mu_dec(t);
+    }
+
+    return 1;
+}
+
+MU_DEF_STR(mu_const_key_def, "const")
+MU_DEF_BFN(mu_const_def, 0x1, mu_const_bfn)
 
 static mcnt_t mu_concat_bfn(mu_t *frame) {
     mu_t a      = frame[0];
@@ -683,9 +705,10 @@ MU_DEF_BFN(mu_diff_def, 0x2, mu_diff_bfn)
 // Iterators and deferators
 static mu_t mu_fn_iter(mu_t m) { return mu_inc(m); }
 static mu_t (*const mu_attr_iter[8])(mu_t) = {
-    [MTSTR] = mu_str_iter,
-    [MTTBL] = mu_tbl_iter,
-    [MTFN]  = mu_fn_iter,
+    [MTSTR]  = mu_str_iter,
+    [MTTBL]  = mu_tbl_iter,
+    [MTRTBL] = mu_tbl_iter,
+    [MTFN]   = mu_fn_iter,
 };
 
 static mcnt_t mu_iter_bfn(mu_t *frame) {
@@ -1496,6 +1519,7 @@ MU_DEF_TBL(mu_builtins_def, {
     // Data structure operations
     { mu_len_key_def,       mu_len_def },
     { mu_tail_key_def,      mu_tail_def },
+    { mu_const_key_def,     mu_const_def },
 
     { mu_push_key_def,      mu_push_def },
     { mu_pop_key_def,       mu_pop_def },

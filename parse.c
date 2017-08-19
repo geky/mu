@@ -1419,18 +1419,20 @@ static mu_t (*const mu_attr_name[8])(void) = {
     [MTNUM]  = mu_num_key_def,
     [MTSTR]  = mu_str_key_def,
     [MTTBL]  = mu_tbl_key_def,
+    [MTRTBL] = mu_tbl_key_def,
     [MTFN]   = mu_kw_fn_def,
     [MTBUF]  = mu_cdata_key_def,
-    [MTBUFD] = mu_cdata_key_def,
+    [MTDBUF] = mu_cdata_key_def,
 };
 
 mu_t mu_repr(mu_t m, mu_t depth) {
     mu_t r;
     switch (mu_gettype(m)) {
-        case MTNIL: r = MU_KW_NIL; break;
-        case MTNUM: r = mu_num_repr(m); break;
-        case MTSTR: r = mu_str_repr(m); break;
-        case MTTBL: r = mu_tbl_repr(m, depth); break;
+        case MTNIL:  r = MU_KW_NIL; break;
+        case MTNUM:  r = mu_num_repr(m); break;
+        case MTSTR:  r = mu_str_repr(m); break;
+        case MTTBL:
+        case MTRTBL: r = mu_tbl_repr(m, depth); break;
         default:
             r = mu_str_format("<%m 0x%wx>",
                     mu_attr_name[mu_gettype(m)](),

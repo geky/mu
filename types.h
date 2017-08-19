@@ -63,9 +63,10 @@ typedef enum mtype {
     MTNUM  = 1, // number
     MTSTR  = 3, // string
     MTBUF  = 2, // buffer
-    MTBUFD = 6, // managed buffer
+    MTDBUF = 6, // managed buffer
     MTTBL  = 4, // table
-    MTFN   = 5, // function
+    MTRTBL = 5, // read-only table
+    MTFN   = 7, // function
 } mtype_t;
 
 // Here is the heart of Mu, the mu_t type
@@ -83,7 +84,7 @@ mu_inline bool mu_isnil(mu_t m) { return !m; }
 mu_inline bool mu_isnum(mu_t m) { return mu_gettype(m) == MTNUM; }
 mu_inline bool mu_isstr(mu_t m) { return mu_gettype(m) == MTSTR; }
 mu_inline bool mu_isbuf(mu_t m) { return (3 & (muint_t)m) == MTBUF; }
-mu_inline bool mu_istbl(mu_t m) { return mu_gettype(m) == MTTBL; }
+mu_inline bool mu_istbl(mu_t m) { return (6 & (muint_t)m) == MTTBL; }
 mu_inline bool mu_isfn(mu_t m)  { return mu_gettype(m) == MTFN;  }
 mu_inline bool mu_isref(mu_t m) { return 6 & (muint_t)m; }
 

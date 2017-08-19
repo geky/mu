@@ -8,6 +8,12 @@ MU_DEF_STR(mu_empty_str, "")
 MU_DEF_STR(mu_space_str, " ")
 
 
+// String access, useful for debugging
+mu_inline struct mstr *mstr(mu_t s) {
+    return (struct mstr *)((muint_t)s & ~7);
+}
+
+
 // String interning
 //
 // Currently interning is implemented using a sorted array with a
@@ -111,9 +117,7 @@ mu_t mu_str_intern(mu_t b, muint_t n) {
 }
 
 mu_t mu_str_fromdata(const void *s, muint_t n) {
-    if (n > (mlen_t)-1) {
-        mu_errorf("exceeded max length in string");
-    }
+    mu_checklen(n <= (mlen_t)-1, "string");
 
     mint_t i = mu_str_table_find(s, n);
     if (i >= 0) {

@@ -4,7 +4,11 @@
 
 // Table access
 mu_inline struct mtbl *mtbl(mu_t t) {
-    return (struct mtbl *)((muint_t)t - MTTBL);
+    return (struct mtbl *)((muint_t)t & ~7);
+}
+
+mu_inline bool mu_isrtbl(mu_t t) {
+    return (MTTBL^MTRTBL) & (muint_t)t;
 }
 
 
@@ -134,6 +138,7 @@ mu_t mu_tbl_createtail(muint_t len, mu_t tail) {
 
 void mu_tbl_settail(mu_t t, mu_t tail) {
     mu_assert(!tail || mu_istbl(tail) || mu_isbuf(tail));
+    mu_checkconst(!mu_isrtbl(t), "table");
 
     if (mu_isbuf(tail)) {
         mu_t b = tail;
@@ -236,6 +241,8 @@ static void mu_tbl_pairsexpand(mu_t t, mlen_t len) {
 // without decending down the tail chain
 void mu_tbl_insert(mu_t t, mu_t k, mu_t v) {
     mu_assert(mu_istbl(t));
+    mu_checkconst(!mu_isrtbl(t), "table");
+
     if (!k) {
         mu_dec(v);
         return;
@@ -259,9 +266,7 @@ void mu_tbl_insert(mu_t t, mu_t k, mu_t v) {
             // nothing to remove
             return;
         } else {
-            if ((muint_t)mtbl(t)->len + 1 > (mlen_t)-1) {
-                mu_errorf("exceeded max length in table");
-            }
+            mu_checklen((muint_t)mtbl(t)->len + 1 <= (mlen_t)-1, "table");
 
             if (!(k == mu_num_fromuint(i) && i >= mu_tbl_count(t))) {
                 muint_t i = mu_num_getuint(k) & (2*mask+1);
@@ -301,9 +306,7 @@ void mu_tbl_insert(mu_t t, mu_t k, mu_t v) {
                 // nothing to remove
                 return;
             } else if (!p) {
-                if ((muint_t)mtbl(t)->len + 1 > (mlen_t)-1) {
-                    mu_errorf("exceeded max length in table");
-                }
+                mu_checklen((muint_t)mtbl(t)->len + 1 <= (mlen_t)-1, "table");
 
                 muint_t j = mu_tbl_off(t) + mu_tbl_count(t);
                 if (j >= mu_tbl_size(t)) {
@@ -327,6 +330,8 @@ void mu_tbl_insert(mu_t t, mu_t k, mu_t v) {
 // decends down the tail chain until its found
 void mu_tbl_assign(mu_t head, mu_t k, mu_t v) {
     mu_assert(mu_istbl(head));
+    mu_checkconst(!mu_isrtbl(head), "table");
+
     if (!k) {
         mu_dec(k);
         return;
@@ -443,19 +448,19 @@ mu_t mu_tbl_pairs(mu_t t) {
 // Table creating functions
 mu_t mu_tbl_initlist(struct mtbl *t, mu_t (*const *def)(void), muint_t n) {
     mu_t m = (mu_t)((muint_t)t + MTTBL);
-    mu_tbl_listexpand(m, n);
+    //mu_tbl_listexpand(m, n);
 
     for (muint_t i = 0; i < n; i++) {
         mu_tbl_insert(m, mu_num_fromuint(i), def[i]());
     }
 
-    return m;
+    return (mu_t)((muint_t)t + MTRTBL);
 }
 
 mu_t mu_tbl_initpairs(struct mtbl *t, mu_t (*tail)(void),
             mu_t (*const (*def)[2])(void), muint_t n) {
     mu_t m = (mu_t)((muint_t)t + MTTBL);
-    mu_tbl_pairsexpand(m, n);
+    //mu_tbl_pairsexpand(m, n);
     if (tail) {
         mu_tbl_settail(m, tail());
     }
@@ -464,7 +469,7 @@ mu_t mu_tbl_initpairs(struct mtbl *t, mu_t (*tail)(void),
         mu_tbl_insert(m, def[i][0](), def[i][1]());
     }
 
-    return m;
+    return (mu_t)((muint_t)t + MTRTBL);
 }
 
 mu_t mu_tbl_fromlist(mu_t *list, muint_t n) {
@@ -516,6 +521,7 @@ mu_t mu_tbl_frommu(mu_t m) {
             return mu_tbl_fromiter(mu_fn_call(MU_ITER, 0x11, m));
 
         case MTTBL:
+        case MTRTBL:
             return mu_tbl_fromiter(mu_fn_call(MU_PAIRS, 0x11, m));
 
         case MTFN:
@@ -530,13 +536,12 @@ mu_t mu_tbl_frommu(mu_t m) {
 // Table operations
 void mu_tbl_push(mu_t t, mu_t p, mint_t i) {
     mu_assert(mu_istbl(t));
+    mu_checkconst(!mu_isrtbl(t), "table");
     i = (i >= 0) ? i : i + mtbl(t)->len;
     i = (i > mtbl(t)->len) ? mtbl(t)->len : (i < 0) ? 0 : i;
 
     if (mu_tbl_count(t) + 1 >= mu_tbl_size(t)) {
-        if ((muint_t)mtbl(t)->len + 1 > (mlen_t)-1) {
-            mu_errorf("exceeded max length in table");
-        }
+        mu_checklen((muint_t)mtbl(t)->len + 1 <= (mlen_t)-1, "table");
 
         if (mu_tbl_islist(t)) {
             mu_tbl_listexpand(t, i+1);
@@ -583,6 +588,7 @@ void mu_tbl_push(mu_t t, mu_t p, mint_t i) {
 
 mu_t mu_tbl_pop(mu_t t, mint_t i) {
     mu_assert(mu_istbl(t));
+    mu_checkconst(!mu_isrtbl(t), "table");
     i = (i >= 0) ? i : i + mtbl(t)->len;
     i = (i > mtbl(t)->len) ? mtbl(t)->len : (i < 0) ? 0 : i;
 

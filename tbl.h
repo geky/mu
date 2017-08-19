@@ -43,6 +43,9 @@ mu_inline mu_t mu_tbl_gettail(mu_t m);
 // Changing the tail of the table
 void mu_tbl_settail(mu_t t, mu_t tail);
 
+// Create constant reference to table
+mu_inline mu_t mu_tbl_const(mu_t t);
+
 // Recursively looks up a key in the table
 // returns either that value or nil
 mu_t mu_tbl_lookup(mu_t t, mu_t k);
@@ -81,11 +84,15 @@ mu_t mu_tbl_diff(mu_t a, mu_t b);
 
 // Table access functions
 mu_inline mlen_t mu_tbl_getlen(mu_t m) {
-    return ((struct mtbl *)((muint_t)m - MTTBL))->len;
+    return ((struct mtbl *)((muint_t)m & ~7))->len;
 }
 
 mu_inline mu_t mu_tbl_gettail(mu_t m) {
-    return mu_inc(((struct mtbl *)((muint_t)m - MTTBL))->tail);
+    return mu_inc(((struct mtbl *)((muint_t)m & ~7))->tail);
+}
+
+mu_inline mu_t mu_tbl_const(mu_t t) {
+    return mu_inc((mu_t)((MTTBL ^ MTRTBL) | (muint_t)t));
 }
 
 

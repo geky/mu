@@ -13,8 +13,9 @@ void mu_destroy(mu_t m) {
     switch (mu_gettype(m)) {
         case MTSTR:  mu_str_destroy(m);     return;
         case MTBUF:  mu_buf_destroy(m);     return;
-        case MTBUFD: mu_buf_destroydtor(m); return;
+        case MTDBUF: mu_buf_destroydtor(m); return;
         case MTTBL:  mu_tbl_destroy(m);     return;
+        case MTRTBL: mu_tbl_destroy(m);     return;
         case MTFN:   mu_fn_destroy(m);      return;
         default:     mu_unreachable;
     }
