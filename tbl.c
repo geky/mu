@@ -286,6 +286,8 @@ void mu_tbl_insert(mu_t t, mu_t k, mu_t v) {
             // new value fits
             mtbl(t)->array[i] = v;
             mtbl(t)->len += 1;
+            memset(&mtbl(t)->array[mtbl(t)->len-1], 0,
+                    (i - (mtbl(t)->len-1))*sizeof(mu_t));
             mtbl(t)->nils += i - (mtbl(t)->len-1);
             return;
         }
