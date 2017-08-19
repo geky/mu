@@ -67,10 +67,10 @@ mu_t mu_fn_comp(mu_t f, mu_t g);
 // Definition of code structure used to represent the
 // executable component of Mu functions.
 struct mcode {
-    mcnt_t args;    // argument count
-    uint8_t flags;  // function flags
-    muintq_t regs;  // number of registers
-    muintq_t scope; // size of scope
+    mcnt_t args;     // argument count
+    uint8_t flags;   // function flags
+    muintq_t regs;   // number of registers
+    muintq_t locals; // size of scope
 
     mlen_t icount;  // number of immediate values
     mlen_t bcount;  // number of bytecode instructions
@@ -110,8 +110,8 @@ mu_inline muintq_t mu_code_getregs(mu_t c) {
     return ((struct mcode *)mu_buf_getdata(c))->regs;
 }
 
-mu_inline muintq_t mu_code_getscope(mu_t c) {
-    return ((struct mcode *)mu_buf_getdata(c))->scope;
+mu_inline muintq_t mu_code_getlocals(mu_t c) {
+    return ((struct mcode *)mu_buf_getdata(c))->locals;
 }
 
 mu_inline mlen_t mu_code_getimmslen(mu_t c) {

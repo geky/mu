@@ -103,7 +103,7 @@ mcnt_t mu_fn_tcall(mu_t f, mcnt_t fc, mu_t *frame) {
 
         case MFN_SCOPED: {
             mu_t c = mu_inc(mfn(f)->fn.code);
-            mu_t scope = mu_tbl_create(mu_code_getscope(c));
+            mu_t scope = mu_tbl_create(mu_code_getlocals(c));
             mu_tbl_settail(scope, mu_fn_getclosure(f));
             mu_dec(f);
             return mu_exec(c, scope, frame);

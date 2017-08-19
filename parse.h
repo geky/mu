@@ -16,8 +16,8 @@ mu_t mu_parsen(const mbyte_t **s, const mbyte_t *end);
 mu_t mu_parse(const char *s, muint_t n);
 
 // Compile Mu source code into code objects
-mu_t mu_compilen(const mbyte_t **s, const mbyte_t *end);
-mu_t mu_compile(const char *s, muint_t n);
+mu_t mu_compilen(const mbyte_t **s, const mbyte_t *end, mu_t scope);
+mu_t mu_compile(const char *s, muint_t n, mu_t scope);
 
 
 // Language keywords

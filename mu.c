@@ -154,7 +154,7 @@ MU_DEF_BFN(mu_import_def, 0x1, mu_import_bfn)
 
 // Evaluation and entry into Mu
 void mu_feval(const char *s, muint_t n, mu_t scope, mcnt_t fc, mu_t *frame) {
-    mu_t c = mu_compile(s, n);
+    mu_t c = mu_compile(s, n, mu_inc(scope));
     mcnt_t rets = mu_exec(c, mu_inc(scope), frame);
     mu_frameconvert(rets, fc, frame);
 }

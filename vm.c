@@ -102,9 +102,9 @@ void mu_dis(mu_t c) {
     const uint16_t *end = pc + mu_code_getbcodelen(c)/2;
 
     mu_printf("-- dis 0x%wx --", c);
-    mu_printf("regs: %qu, scope: %qu, args: 0x%bx",
+    mu_printf("regs: %qu, locals: %qu, args: 0x%bx",
             mu_code_getregs(c),
-            mu_code_getscope(c),
+            mu_code_getlocals(c),
             mu_code_getargs(c));
 
     if (mu_code_getimmslen(c) > 0) {
@@ -398,7 +398,7 @@ reenter:
                 c = mu_fn_getcode(scratch);
                 if (c) {
                     mu_frameconvert(a, mu_code_getargs(c), frame);
-                    scope = mu_tbl_create(mu_code_getscope(c));
+                    scope = mu_tbl_create(mu_code_getlocals(c));
                     mu_tbl_settail(scope, mu_fn_getclosure(scratch));
                     mu_dec(scratch);
                     goto reenter;
