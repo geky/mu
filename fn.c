@@ -63,17 +63,6 @@ mu_t mu_fn_frommu(mu_t m) {
     }
 }
 
-// Direct initialization
-mu_t mu_fn_initsbfn(struct mfn *f, mcnt_t args,
-            msbfn_t *sbfn, mu_t (*closure)(void)) {
-    f->args = args;
-    f->flags = MFN_BUILTIN | MFN_SCOPED;
-    f->closure = closure();
-    f->fn.sbfn = sbfn;
-    return (mu_t)((muint_t)f + MTFN);
-}
-
-
 // Called by garbage collector to clean up
 void mu_fn_destroy(mu_t f) {
     if (!(mfn(f)->flags & MFN_BUILTIN)) {

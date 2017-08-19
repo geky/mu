@@ -57,14 +57,6 @@ void mu_buf_destroydtor(mu_t b) {
             sizeof(mdtor_t *) + sizeof(mu_t));
 }
 
-mu_t mu_buf_inittail(struct mbuf *b, mlen_t n,
-        mdtor_t *dtor, mu_t (*tail)(void)) {
-    b->len = n;
-    *(mdtor_t **)(b->data + mu_align(b->len)) = dtor;
-    *(mu_t *)(b->data + mu_align(b->len) + sizeof(mdtor_t *)) = tail();
-    return (mu_t)((muint_t)b + MTDBUF);
-}
-
 void mu_buf_resize(mu_t *b, muint_t n) {
     mu_checklen(n <= (mlen_t)-1, "buffer");
 

@@ -147,19 +147,21 @@ mu_inline mu_t mu_fn_getclosure(mu_t m) {
 // Function constant macro
 #define MU_DEF_BFN(name, args, bfn)                                         \
 mu_pure mu_t name(void) {                                                   \
-    static const struct mfn inst = {0, args, MFN_BUILTIN, 0, {bfn}};        \
+    static const struct mfn inst = {                                        \
+            0, args, MFN_BUILTIN, 0, {bfn}};                                \
     return (mu_t)((muint_t)&inst + MTFN);                                   \
 }
 
 #define MU_DEF_SBFN(name, args, sbfn, closure)                              \
 mu_pure mu_t name(void) {                                                   \
     static mu_t ref = 0;                                                    \
-    static struct mfn inst = {0};                                           \
+    static struct mfn inst = {                                              \
+            0, args, MFN_BUILTIN | MFN_SCOPED, 0, {sbfn}};                  \
                                                                             \
-    extern mu_t mu_fn_initsbfn(struct mfn *, mcnt_t,                        \
-            msbfn_t *, mu_t (*)(void));                                     \
     if (!ref) {                                                             \
-        ref = mu_fn_initsbfn(&inst, args, sbfn, closure);                   \
+        mu_t (*closuredef)(void) = closure;                                 \
+        inst.closure = closuredef();                                        \
+        ref = (mu_t)((muint_t)&inst + MTFN);                                \
     }                                                                       \
                                                                             \
     return ref;                                                             \

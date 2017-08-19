@@ -129,51 +129,71 @@ mu_inline void mu_buf_pushchr(mu_t *b, muint_t *i, char c) {
 }
 
 
-
 // Buffer macro for allocating buffers in global space
-#define MU_DEF_BUF(name, n)                                                 \
+#define _MU_DEF_BUF(name, cv, type, ...)                                    \
 mu_pure mu_t name(void) {                                                   \
-    static struct {                                                         \
+    typedef type t;                                                         \
+    static cv struct {                                                      \
         mref_t ref;                                                         \
         mlen_t len;                                                         \
-        mbyte_t data[n];                                                    \
-    } inst = {0, n, {0}};                                                   \
+        t data[sizeof((t[])__VA_ARGS__) / sizeof(t)];                       \
+    } inst = {0, sizeof((t[])__VA_ARGS__), __VA_ARGS__};                    \
                                                                             \
     return (mu_t)((muint_t)&inst + MTBUF);                                  \
 }
 
-#define MU_DEF_BUFDTOR(name, n, dtor)                                       \
+#define _MU_DEF_BUFDTOR(name, dtor, cv, type, ...)                          \
 mu_pure mu_t name(void) {                                                   \
-    static struct {                                                         \
+    typedef type t;                                                         \
+    static cv struct {                                                      \
         mref_t ref;                                                         \
         mlen_t len;                                                         \
-        mbyte_t data[n];                                                    \
-        mdtor_t *dtor;                                                      \
-        mu_t tail;                                                          \
-    } inst = {0, n, {0}, 0};                                                \
+        t data[sizeof((t[])__VA_ARGS__) / sizeof(t)];                       \
+        mu_aligned(sizeof(muint_t)) mdtor_t *dtor;                          \
+        mu_aligned(sizeof(muint_t)) mu_t tail;                              \
+    } inst = {0, sizeof((t[])__VA_ARGS__), __VA_ARGS__, dtor, 0};           \
                                                                             \
     return (mu_t)((muint_t)&inst + MTDBUF);                                 \
 }
 
-#define MU_DEF_BUFTAIL(name, n, dtor, tail)                                 \
+#define _MU_DEF_BUFTAIL(name, dtor, tail, cv, type, ...)                    \
 mu_pure mu_t name(void) {                                                   \
+    typedef type t;                                                         \
     static mu_t ref = 0;                                                    \
-    static struct {                                                         \
+    static cv struct {                                                      \
         mref_t ref;                                                         \
         mlen_t len;                                                         \
-        mbyte_t data[n];                                                    \
-        mdtor_t *dtor;                                                      \
-        mu_t tail;                                                          \
-    } inst = {0};                                                           \
+        t data[sizeof((t[])__VA_ARGS__) / sizeof(t)];                       \
+        mu_aligned(sizeof(muint_t)) mdtor_t *dtor;                          \
+        mu_aligned(sizeof(muint_t)) mu_t tail;                              \
+    } inst = {0, sizeof((t[])__VA_ARGS__), __VA_ARGS__, dtor, 0};           \
                                                                             \
-    extern mu_t mu_buf_inittail(struct mbuf *, mlen_t,                      \
-            mdtor_t *, mu_t (*)(void));                                     \
     if (!ref) {                                                             \
-        ref = mu_buf_inittail((struct mbuf *)&inst, n, dtor, tail);         \
+        mu_t (*taildef)(void) = tail;                                       \
+        inst.tail = taildef();                                              \
+        ref = (mu_t)((muint_t)&inst + MTDBUF);                              \
     }                                                                       \
                                                                             \
     return ref;                                                             \
 }
+
+#define MU_DEF_BUF(name, type, ...) \
+        _MU_DEF_BUF(name, , type, __VA_ARGS__)
+
+#define MU_DEF_BUFDTOR(name, dtor, type, ...) \
+        _MU_DEF_BUFDTOR(name, dtor, , type, __VA_ARGS__)
+
+#define MU_DEF_BUFTAIL(name, dtor, tail, type, ...) \
+        _MU_DEF_BUFTAIL(name, dtor, tail, , type, __VA_ARGS__)
+
+#define MU_DEF_CONSTBUF(name, type, ...) \
+        _MU_DEF_BUF(name, const, type, __VA_ARGS__)
+
+#define MU_DEF_CONSTBUFDTOR(name, dtor, type, ...) \
+        _MU_DEF_BUFDTOR(name, dtor, const, type, __VA_ARGS__)
+
+#define MU_DEF_CONSTBUFTAIL(name, dtor, tail, type, ...) \
+        _MU_DEF_BUFTAIL(name, dtor, tail, , type, __VA_ARGS__)
 
 
 #endif
