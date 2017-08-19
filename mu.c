@@ -310,10 +310,33 @@ MU_DEF_BFN(mu_gte_def, 0x2, mu_gte_bfn)
 static mcnt_t mu_is_bfn(mu_t *frame) {
     mu_t m    = frame[0];
     mu_t type = frame[1];
-    mu_dec(m);
+    frame[0] = MU_TRUE;
     mu_dec(type);
 
-    frame[0] = MU_TRUE;
+    if (mu_istbl(type)) {
+        while (m) {
+            mu_t tail;
+            if (mu_istbl(m)) {
+                tail = mu_tbl_gettail(m);
+            } else if (mu_isbuf(m)) {
+                tail = mu_buf_gettail(m);
+            } else {
+                tail = 0;
+            }
+            mu_dec(m);
+
+            if (tail == type) {
+                mu_dec(tail);
+                return true;
+            }
+
+            m = tail;
+        }
+
+        return false;
+    }
+
+    mu_dec(m);
     switch (mu_gettype(m)) {
         case MTNIL: return !type;
         case MTNUM: return type == MU_NUM;
@@ -433,6 +456,27 @@ static mcnt_t mu_len_bfn(mu_t *frame) {
 
 MU_DEF_STR(mu_len_key_def, "len")
 MU_DEF_BFN(mu_len_def, 0x1, mu_len_bfn)
+
+static mcnt_t mu_tail_bfn(mu_t *frame) {
+    mu_t t = frame[0];
+    mu_checkargs(mu_istbl(frame[0]) || mu_isbuf(frame[0]),
+            MU_TAIL_KEY, 0x1, frame);
+
+    if (mu_istbl(t)) {
+        frame[0] = mu_tbl_gettail(t);
+        mu_dec(t);
+        return 1;
+    } else if (mu_isbuf(t)) {
+        frame[0] = mu_buf_gettail(t);
+        mu_dec(t);
+        return 1;
+    }
+
+    mu_unreachable;
+}
+
+MU_DEF_STR(mu_tail_key_def, "tail")
+MU_DEF_BFN(mu_tail_def, 0x1, mu_tail_bfn)
 
 static mcnt_t mu_concat_bfn(mu_t *frame) {
     mu_t a      = frame[0];

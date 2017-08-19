@@ -4,26 +4,31 @@
 
 // Functions for handling buffers
 mu_t mu_buf_create(muint_t n) {
-    return mu_buf_createdtor(n, 0);
+    return mu_buf_createtail(n, 0, 0);
 }
 
-mu_t mu_buf_createdtor(muint_t n, void (*dtor)(mu_t)) {
+mu_t mu_buf_createdtor(muint_t n, mdtor_t *dtor) {
+    return mu_buf_createtail(n, dtor, 0);
+}
+
+mu_t mu_buf_createtail(muint_t n, mdtor_t *dtor, mu_t tail) {
     if (n > (mlen_t)-1) {
         mu_errorf("exceeded max length in buffer");
     }
 
-    if (!dtor) {
+    if (!dtor && !tail) {
         struct mbuf *b = mu_alloc(mu_offsetof(struct mbuf, data) + n);
         b->ref = 1;
         b->len = n;
         return (mu_t)((muint_t)b + MTBUF);
     } else {
         struct mbuf *b = mu_alloc(mu_offsetof(struct mbuf, data) +
-                mu_align(n) + sizeof(dtor));
+                mu_align(n) + sizeof(dtor) + sizeof(tail));
         b->ref = 1;
         b->len = n;
-        *(void (**)(mu_t))(b->data + mu_align(b->len)) = dtor;
-        return (mu_t)((muint_t)b + MTCBUF);
+        *(mdtor_t **)(b->data + mu_align(b->len)) = dtor;
+        *(mu_t *)(b->data + mu_align(b->len) + sizeof(mdtor_t *)) = tail;
+        return (mu_t)((muint_t)b + MTBUFD);
     }
 }
 
@@ -33,10 +38,24 @@ void mu_buf_destroy(mu_t b) {
 }
 
 void mu_buf_destroydtor(mu_t b) {
-    mu_buf_getdtor(b)(b);
-    mu_dealloc((struct mbuf *)((muint_t)b - MTCBUF),
+    struct mbuf *mb = (struct mbuf *)((muint_t)b - MTBUFD);
+    if (*(mdtor_t **)(mb->data + mu_align(mb->len))) {
+        (*(mdtor_t **)(mb->data + mu_align(mb->len)))(b);
+    }
+
+    mu_dec(*(mu_t *)(mb->data + mu_align(mb->len) + sizeof(mdtor_t *)));
+    mu_dealloc(mb,
             mu_offsetof(struct mbuf, data) +
-            mu_align(mu_buf_getlen(b)) + sizeof(void (*)(mu_t)));
+            mu_align(mu_buf_getlen(b)) +
+            sizeof(mdtor_t *) + sizeof(mu_t));
+}
+
+mu_t mu_buf_inittail(struct mbuf *b, mlen_t n,
+        mdtor_t *dtor, mu_t (*tail)(void)) {
+    b->len = n;
+    *(mdtor_t **)(b->data + mu_align(b->len)) = dtor;
+    *(mu_t *)(b->data + mu_align(b->len) + sizeof(mdtor_t *)) = tail();
+    return (mu_t)((muint_t)b + MTBUFD);
 }
 
 void mu_buf_resize(mu_t *b, muint_t n) {
@@ -44,7 +63,7 @@ void mu_buf_resize(mu_t *b, muint_t n) {
         mu_errorf("exceeded max length in buffer");
     }
 
-    mu_t nb = mu_buf_createdtor(n, mu_buf_getdtor(*b));
+    mu_t nb = mu_buf_createtail(n, mu_buf_getdtor(*b), mu_buf_gettail(*b));
     memcpy(mu_buf_getdata(nb), mu_buf_getdata(*b),
             (n < mu_buf_getlen(*b)) ? n : mu_buf_getlen(*b));
 
@@ -58,8 +77,8 @@ void mu_buf_expand(mu_t *b, muint_t n) {
     }
 
     muint_t overhead = mu_offsetof(struct mbuf, data);
-    if (mu_buf_getdtor(*b)) {
-        overhead += sizeof(void (*)(mu_t));
+    if ((MTBUFD^MTBUF) & (muint_t)*b) {
+        overhead += sizeof(mdtor_t *) + sizeof(mu_t);
     }
 
     muint_t size = overhead + mu_buf_getlen(*b);
@@ -74,12 +93,45 @@ void mu_buf_expand(mu_t *b, muint_t n) {
     mu_buf_resize(b, size - overhead);
 }
 
-void mu_buf_setdtor(mu_t *b, void (*dtor)(mu_t)) {
-    mu_t nb = mu_buf_createdtor(mu_buf_getlen(*b), dtor);
-    memcpy(mu_buf_getdata(nb), mu_buf_getdata(*b), mu_buf_getlen(nb));
+void mu_buf_setdtor(mu_t *b, mdtor_t *dtor) {
+    if (!((MTBUFD^MTBUF) & (muint_t)*b)) {
+        mu_t nb = mu_buf_createdtor(mu_buf_getlen(*b), dtor);
+        memcpy(mu_buf_getdata(nb), mu_buf_getdata(*b), mu_buf_getlen(nb));
 
-    mu_dec(*b);
-    *b = nb;
+        mu_dec(*b);
+        *b = nb;
+    } else {
+        struct mbuf *mb = (struct mbuf *)((muint_t)*b - MTBUFD);
+        *(mdtor_t **)(mb->data + mu_align(mb->len)) = dtor;
+    }
+}
+
+void mu_buf_settail(mu_t *b, mu_t tail) {
+    if (!((MTBUFD^MTBUF) & (muint_t)*b)) {
+        mu_t nb = mu_buf_createtail(mu_buf_getlen(*b), 0, tail);
+        memcpy(mu_buf_getdata(nb), mu_buf_getdata(*b), mu_buf_getlen(nb));
+
+        mu_dec(*b);
+        *b = nb;
+    } else {
+        struct mbuf *mb = (struct mbuf *)((muint_t)*b - MTBUFD);
+        *(mu_t *)(mb->data + mu_align(mb->len) + sizeof(mdtor_t *)) = tail;
+    }
+}
+
+// Attribute access
+mu_t mu_buf_lookup(mu_t b, mu_t k) {
+    if (!((MTBUFD^MTBUF) & (muint_t)b)) {
+        return 0;
+    }
+
+    struct mbuf *mb = (struct mbuf *)((muint_t)b - MTBUFD);
+    mu_t tail = *(mu_t *)(mb->data + mu_align(mb->len) + sizeof(mdtor_t *));
+    if (!tail) {
+        return 0;
+    }
+
+    return mu_tbl_lookup(tail, k);
 }
 
 // From functions

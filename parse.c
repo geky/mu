@@ -1421,7 +1421,7 @@ static mu_t (*const mu_attr_name[8])(void) = {
     [MTTBL]  = mu_tbl_key_def,
     [MTFN]   = mu_kw_fn_def,
     [MTBUF]  = mu_cdata_key_def,
-    [MTCBUF] = mu_cdata_key_def,
+    [MTBUFD] = mu_cdata_key_def,
 };
 
 mu_t mu_repr(mu_t m, mu_t depth) {

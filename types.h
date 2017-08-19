@@ -63,7 +63,7 @@ typedef enum mtype {
     MTNUM  = 1, // number
     MTSTR  = 3, // string
     MTBUF  = 2, // buffer
-    MTCBUF = 6, // managed buffer
+    MTBUFD = 6, // managed buffer
     MTTBL  = 4, // table
     MTFN   = 5, // function
 } mtype_t;

@@ -130,7 +130,14 @@ mu_t mu_tbl_createtail(muint_t len, mu_t tail) {
 }
 
 void mu_tbl_settail(mu_t t, mu_t tail) {
-    mu_assert(!tail || mu_istbl(tail));
+    mu_assert(!tail || mu_istbl(tail) || mu_isbuf(tail));
+
+    if (mu_isbuf(tail)) {
+        mu_t b = tail;
+        tail = mu_buf_gettail(b);
+        mu_dec(b);
+    }
+
     mtbl(t)->tail = tail;
 }
 
@@ -896,25 +903,23 @@ mu_t mu_tbl_repr(mu_t t, mu_t depth) {
 // Table related Mu functions
 static mcnt_t mu_tbl_bfn(mu_t *frame) {
     mu_t tail = frame[1];
-    mu_checkargs(!tail || mu_istbl(tail), MU_TBL_KEY, 0x2, frame);
+    mu_checkargs(!tail || mu_istbl(tail) || mu_isbuf(tail),
+            MU_TBL_KEY, 0x2, frame);
 
     mu_t m = mu_tbl_frommu(mu_inc(frame[0]));
     mu_checkargs(m, MU_TBL_KEY, 0x2, frame);
     mu_dec(frame[0]);
     frame[0] = m;
 
-    mu_tbl_settail(frame[0], tail);
+    if (mu_istbl(tail)) {
+        mu_tbl_settail(frame[0], tail);
+    } else {
+        mu_tbl_settail(frame[0], mu_buf_gettail(tail));
+        mu_dec(tail);
+    }
+
     return 1;
 }
 
 MU_DEF_STR(mu_tbl_key_def, "tbl")
 MU_DEF_BFN(mu_tbl_def, 0x2, mu_tbl_bfn)
-
-static mcnt_t mu_tail_bfn(mu_t *frame) {
-    mu_checkargs(mu_istbl(frame[0]), MU_TAIL_KEY, 0x1, frame);
-    frame[0] = mu_tbl_gettail(frame[0]);
-    return 1;
-}
-
-MU_DEF_STR(mu_tail_key_def, "tail")
-MU_DEF_BFN(mu_tail_def, 0x1, mu_tail_bfn)

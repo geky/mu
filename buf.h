@@ -20,10 +20,14 @@ struct mbuf {
     // optional destructor stored at end
 };
 
+// Destructor type for deallocating buffers
+typedef void mdtor_t(mu_t);
+
 
 // Creates buffer with specified size
 mu_t mu_buf_create(muint_t n);
-mu_t mu_buf_createdtor(muint_t n, void (*dtor)(mu_t));
+mu_t mu_buf_createdtor(muint_t n, mdtor_t *dtor);
+mu_t mu_buf_createtail(muint_t n, mdtor_t *dtor, mu_t tail);
 
 mu_inline mu_t mu_buf_fromdata(const void *s, muint_t n);
 mu_inline mu_t mu_buf_fromcstr(const char *s);
@@ -31,12 +35,19 @@ mu_inline mu_t mu_buf_fromchr(char s);
 mu_t mu_buf_frommu(mu_t s);
 
 // Buffer access
+mu_inline bool mu_isdtor(mu_t b, mdtor_t *dtor);
+
 mu_inline mlen_t mu_buf_getlen(mu_t b);
 mu_inline void *mu_buf_getdata(mu_t b);
-mu_inline void (*mu_buf_getdtor(mu_t b))(mu_t);
+mu_inline mdtor_t *mu_buf_getdtor(mu_t b);
+mu_inline mu_t mu_buf_gettail(mu_t b);
 
 // Set destructor for a buffer
-void mu_buf_setdtor(mu_t *b, void (*dtor)(mu_t));
+void mu_buf_setdtor(mu_t *b, mdtor_t *dtor);
+void mu_buf_settail(mu_t *b, mu_t tail);
+
+// Support for read-only attribute access through tail
+mu_t mu_buf_lookup(mu_t b, mu_t k);
 
 // Formatting buffers with format strings
 mu_t mu_buf_vformat(const char *f, va_list args);
@@ -72,6 +83,15 @@ mu_inline mu_t mu_buf_fromchr(char s) {
 }
 
 // Buffer access functions
+mu_inline bool mu_isdtor(mu_t b, mdtor_t *dtor) {
+    if (mu_gettype(b) != MTBUFD) {
+        return false;
+    }
+
+    struct mbuf *buf = (struct mbuf *)((muint_t)b - MTBUFD);
+    return *(mdtor_t **)(buf->data + mu_align(buf->len)) == dtor;
+}
+
 mu_inline mlen_t mu_buf_getlen(mu_t b) {
     return ((struct mbuf *)(~7 & (muint_t)b))->len;
 }
@@ -80,10 +100,20 @@ mu_inline void *mu_buf_getdata(mu_t b) {
     return ((struct mbuf *)(~7 & (muint_t)b))->data;
 }
 
-mu_inline void (*mu_buf_getdtor(mu_t b))(mu_t) {
-    if ((MTCBUF^MTBUF) & (muint_t)b) {
-        struct mbuf *buf = (struct mbuf *)((muint_t)b - MTCBUF);
-        return *(void (**)(mu_t))(buf->data + mu_align(buf->len));
+mu_inline mdtor_t *mu_buf_getdtor(mu_t b) {
+    if ((MTBUFD^MTBUF) & (muint_t)b) {
+        struct mbuf *buf = (struct mbuf *)((muint_t)b - MTBUFD);
+        return *(mdtor_t **)(buf->data + mu_align(buf->len));
+    } else {
+        return 0;
+    }
+}
+
+mu_inline mu_t mu_buf_gettail(mu_t b) {
+    if ((MTBUFD^MTBUF) & (muint_t)b) {
+        struct mbuf *buf = (struct mbuf *)((muint_t)b - MTBUFD);
+        return mu_inc(*(mu_t *)(buf->data + mu_align(buf->len) +
+                sizeof(mdtor_t *)));
     } else {
         return 0;
     }
@@ -118,10 +148,31 @@ mu_pure mu_t name(void) {                                                   \
         mref_t ref;                                                         \
         mlen_t len;                                                         \
         mbyte_t data[n];                                                    \
-        void (*dtor)(mu_t);                                                 \
-    } inst = {0, n, {0}, dtor};                                             \
+        mdtor_t *dtor;                                                      \
+        mu_t tail;                                                          \
+    } inst = {0, n, {0}, 0};                                                \
                                                                             \
-    return (mu_t)((muint_t)&inst + MTCBUF);                                 \
+    return (mu_t)((muint_t)&inst + MTBUFD);                                 \
+}
+
+#define MU_DEF_BUFTAIL(name, n, dtor, tail)                                 \
+mu_pure mu_t name(void) {                                                   \
+    static mu_t ref = 0;                                                    \
+    static struct {                                                         \
+        mref_t ref;                                                         \
+        mlen_t len;                                                         \
+        mbyte_t data[n];                                                    \
+        mdtor_t *dtor;                                                      \
+        mu_t tail;                                                          \
+    } inst = {0};                                                           \
+                                                                            \
+    extern mu_t mu_buf_inittail(struct mbuf *, mlen_t,                      \
+            mdtor_t *, mu_t (*)(void));                                     \
+    if (!ref) {                                                             \
+        ref = mu_buf_inittail((struct mbuf *)&inst, n, dtor, tail);         \
+    }                                                                       \
+                                                                            \
+    return ref;                                                             \
 }
 
 

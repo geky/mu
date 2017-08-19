@@ -307,19 +307,25 @@ reenter:
             VM_ENTRY_END
 
             VM_ENTRY_DAB(MU_OP_LOOKUP, d, a, b)
-                if (!mu_istbl(regs[a])) {
+                if (mu_istbl(regs[a])) {
+                    regs[d] = mu_tbl_lookup(regs[a], regs[b]);
+                } else if (mu_isbuf(regs[a])) {
+                    regs[d] = mu_buf_lookup(regs[a], regs[b]);
+                } else {
                     mu_errorf("unable to lookup %r in %r", regs[b], regs[a]);
                 }
-
-                regs[d] = mu_tbl_lookup(regs[a], regs[b]);
             VM_ENTRY_END
 
             VM_ENTRY_DAB(MU_OP_LOOKDN, d, a, b)
-                if (!mu_istbl(regs[a])) {
+                mu_t scratch;
+                if (mu_istbl(regs[a])) {
+                    scratch = mu_tbl_lookup(regs[a], regs[b]);
+                } else if (mu_isbuf(regs[a])) {
+                    scratch = mu_buf_lookup(regs[a], regs[b]);
+                } else {
                     mu_errorf("unable to lookup %r in %r", regs[b], regs[a]);
                 }
 
-                mu_t scratch = mu_tbl_lookup(regs[a], regs[b]);
                 mu_dec(regs[a]);
                 regs[d] = scratch;
             VM_ENTRY_END
