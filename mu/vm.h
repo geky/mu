@@ -1,7 +1,9 @@
 /*
  * Mu virtual machine
+ *
+ * Copyright (c) 2016 Christopher Haster
+ * Distributed under the MIT license in mu.h
  */
-
 #ifndef MU_VM_H
 #define MU_VM_H
 #include "config.h"

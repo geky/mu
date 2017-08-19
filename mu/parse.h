@@ -1,7 +1,9 @@
 /*
  * Mu parsing and compilation
+ *
+ * Copyright (c) 2016 Christopher Haster
+ * Distributed under the MIT license in mu.h
  */
-
 #ifndef MU_PARSE_H
 #define MU_PARSE_H
 #include "config.h"

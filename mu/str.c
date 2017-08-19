@@ -1,3 +1,9 @@
+/*
+ * Mu strs, the representation of strings
+ *
+ * Copyright (c) 2016 Christopher Haster
+ * Distributed under the MIT license in mu.h
+ */
 #include "str.h"
 #include "mu.h"
 

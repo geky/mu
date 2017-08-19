@@ -1,7 +1,9 @@
 /*
- * Mu config
+ * Type definitions for Mu
+ *
+ * Copyright (c) 2016 Christopher Haster
+ * Distributed under the MIT license in mu.h
  */
-
 #ifndef MU_TYPES_H
 #define MU_TYPES_H
 #include "config.h"

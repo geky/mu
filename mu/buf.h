@@ -1,7 +1,9 @@
 /*
- * Dynamically allocated buffers
+ * Mu bufs, opaque user buffers
+ *
+ * Copyright (c) 2016 Christopher Haster
+ * Distributed under the MIT license in mu.h
  */
-
 #ifndef MU_BUF_H
 #define MU_BUF_H
 #include "config.h"

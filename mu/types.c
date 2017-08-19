@@ -1,3 +1,9 @@
+/*
+ * Type definitions for Mu
+ *
+ * Copyright (c) 2016 Christopher Haster
+ * Distributed under the MIT license in mu.h
+ */
 #include "types.h"
 #include "mu.h"
 
