@@ -242,7 +242,6 @@ static void mu_tbl_pairsexpand(mu_t t, mlen_t len) {
 void mu_tbl_insert(mu_t t, mu_t k, mu_t v) {
     mu_assert(mu_istbl(t));
     mu_checkconst(!mu_isrtbl(t), "table");
-
     if (!k) {
         mu_dec(v);
         return;
@@ -332,14 +331,14 @@ void mu_tbl_insert(mu_t t, mu_t k, mu_t v) {
 // decends down the tail chain until its found
 void mu_tbl_assign(mu_t head, mu_t k, mu_t v) {
     mu_assert(mu_istbl(head));
-    mu_checkconst(!mu_isrtbl(head), "table");
-
+    bool ro = false;
     if (!k) {
         mu_dec(k);
         return;
     }
 
     for (mu_t t = head; t; t = mtbl(t)->tail) {
+        ro = ro || mu_isrtbl(t);
         muint_t mask = (1 << mtbl(t)->npw2) - 1;
 
         if (mu_tbl_islist(t)) {
@@ -347,6 +346,8 @@ void mu_tbl_assign(mu_t head, mu_t k, mu_t v) {
 
             if (k == mu_num_fromuint(i) &&
                     i < mu_tbl_count(t) && mtbl(t)->array[i]) {
+                mu_checkconst(!ro, "table");
+
                 // replace old value
                 mu_t oldv = mtbl(t)->array[i];
                 mtbl(t)->array[i] = v;
@@ -360,6 +361,8 @@ void mu_tbl_assign(mu_t head, mu_t k, mu_t v) {
                 mu_t *p = mu_tbl_getpair(t, i & mask);
 
                 if (p && p[0] == k && p[1]) {
+                    mu_checkconst(!ro, "table");
+
                     // replace old value
                     mu_t oldv = p[1];
                     p[1] = v;
