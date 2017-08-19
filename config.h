@@ -1,7 +1,9 @@
 /*
  * Mu config
+ *
+ * Copyright (c) 2016 Christopher Haster
+ * Distributed under the MIT license in mu.h
  */
-
 #ifndef MU_CONFIG_H
 #define MU_CONFIG_H
 

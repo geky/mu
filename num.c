@@ -1,3 +1,9 @@
+/*
+ * Mu num, the representation of numbers
+ *
+ * Copyright (c) 2016 Christopher Haster
+ * Distributed under the MIT license in mu.h
+ */
 #include "num.h"
 #include "mu.h"
 

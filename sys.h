@@ -1,7 +1,9 @@
 /*
- * System dependent implementation
+ * System dependent hooks for Mu
+ *
+ * Copyright (c) 2016 Christopher Haster
+ * Distributed under the MIT license in mu.h
  */
-
 #ifndef MU_SYS_H
 #define MU_SYS_H
 #include "config.h"

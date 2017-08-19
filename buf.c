@@ -1,3 +1,9 @@
+/*
+ * Mu bufs, opaque user buffers
+ *
+ * Copyright (c) 2016 Christopher Haster
+ * Distributed under the MIT license in mu.h
+ */
 #include "buf.h"
 #include "mu.h"
 

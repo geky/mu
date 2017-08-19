@@ -1,3 +1,9 @@
+/*
+ * Mu tbls, key-value lookup tables
+ *
+ * Copyright (c) 2016 Christopher Haster
+ * Distributed under the MIT license in mu.h
+ */
 #include "tbl.h"
 #include "mu.h"
 

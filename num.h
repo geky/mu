@@ -1,7 +1,9 @@
 /*
- * Number type
+ * Mu num, the representation of numbers
+ *
+ * Copyright (c) 2016 Christopher Haster
+ * Distributed under the MIT license in mu.h
  */
-
 #ifndef MU_NUM_H
 #define MU_NUM_H
 #include "config.h"

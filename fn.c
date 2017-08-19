@@ -1,3 +1,9 @@
+/*
+ * Mu fns, first class functions
+ *
+ * Copyright (c) 2016 Christopher Haster
+ * Distributed under the MIT license in mu.h
+ */
 #include "fn.h"
 #include "mu.h"
 

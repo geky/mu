@@ -1,7 +1,9 @@
 /*
- * First class functions
+ * Mu fns, first class functions
+ *
+ * Copyright (c) 2016 Christopher Haster
+ * Distributed under the MIT license in mu.h
  */
-
 #ifndef MU_FN_H
 #define MU_FN_H
 #include "config.h"
