@@ -17,9 +17,9 @@ typedef mcnt_t msbfn_t(mu_t closure, mu_t *frame);
 
 // Function tags
 enum mu_fn_flags {
-    MFN_BUILTIN = 1 << 0, // C builtin function
-    MFN_SCOPED  = 1 << 1, // Closure attached to function
-    MFN_WEAK    = 1 << 2, // Closure is weakly referenced
+    MU_FN_BUILTIN = 1 << 0, // C builtin function
+    MU_FN_SCOPED  = 1 << 1, // Closure attached to function
+    MU_FN_WEAK    = 1 << 2, // Closure is weakly referenced
 };
 
 // Definition of the function type
@@ -134,7 +134,7 @@ mu_inline void *mu_code_getbcode(mu_t c) {
 
 // Function access
 mu_inline mu_t mu_fn_getcode(mu_t m) {
-    if (!(((struct mfn *)((muint_t)m - MTFN))->flags & MFN_BUILTIN)) {
+    if (!(((struct mfn *)((muint_t)m - MTFN))->flags & MU_FN_BUILTIN)) {
         return mu_inc(((struct mfn *)((muint_t)m - MTFN))->fn.code);
     } else {
         return 0;
@@ -150,7 +150,7 @@ mu_inline mu_t mu_fn_getclosure(mu_t m) {
 #define MU_DEF_BFN(name, args, bfn)                                         \
 mu_pure mu_t name(void) {                                                   \
     static const struct mfn inst = {                                        \
-            0, args, MFN_BUILTIN, 0, {bfn}};                                \
+            0, args, MU_FN_BUILTIN, 0, {bfn}};                                \
     return (mu_t)((muint_t)&inst + MTFN);                                   \
 }
 
@@ -158,7 +158,7 @@ mu_pure mu_t name(void) {                                                   \
 mu_pure mu_t name(void) {                                                   \
     static mu_t ref = 0;                                                    \
     static struct mfn inst = {                                              \
-            0, args, MFN_BUILTIN | MFN_SCOPED, 0, {sbfn}};                  \
+            0, args, MU_FN_BUILTIN | MU_FN_SCOPED, 0, {sbfn}};                  \
                                                                             \
     if (!ref) {                                                             \
         mu_t (*closuredef)(void) = closure;                                 \

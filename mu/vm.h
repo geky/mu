@@ -64,9 +64,4 @@ mint_t mu_patch(void *c, mint_t j);
 mcnt_t mu_exec(mu_t code, mu_t scope, mu_t *frame);
 
 
-// Disassemble bytecode for debugging and introspection
-// currently outputs to stdout
-void mu_dis(mu_t code);
-
-
 #endif

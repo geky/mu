@@ -686,7 +686,7 @@ static mu_t compile(struct mparse *p, bool weak) {
 
     struct mcode *code = mu_buf_getdata(b);
     code->args = p->args;
-    code->flags = MFN_SCOPED | (weak ? MFN_WEAK : 0);
+    code->flags = MU_FN_SCOPED | (weak ? MU_FN_WEAK : 0);
     code->regs = p->regs;
     code->locals = mu_tbl_getlen(p->scope);
     code->icount = mu_tbl_getlen(p->imms);
@@ -1441,18 +1441,6 @@ static void p_block(struct mparse *p, bool root) {
 
 
 //// Parsing functions ////
-MU_DEF_STR(mu_cdata_key_def, "cdata")
-static mu_t (*const mu_attr_name[8])(void) = {
-    [MTNIL]  = mu_kw_nil_def,
-    [MTNUM]  = mu_num_key_def,
-    [MTSTR]  = mu_str_key_def,
-    [MTTBL]  = mu_tbl_key_def,
-    [MTRTBL] = mu_tbl_key_def,
-    [MTFN]   = mu_kw_fn_def,
-    [MTBUF]  = mu_cdata_key_def,
-    [MTDBUF] = mu_cdata_key_def,
-};
-
 mu_t mu_repr(mu_t m, mu_t depth) {
     mu_t r;
     switch (mu_gettype(m)) {
@@ -1461,11 +1449,7 @@ mu_t mu_repr(mu_t m, mu_t depth) {
         case MTSTR:  r = mu_str_repr(m); break;
         case MTTBL:
         case MTRTBL: r = mu_tbl_repr(m, depth); break;
-        default:
-            r = mu_str_format("<%m 0x%wx>",
-                    mu_attr_name[mu_gettype(m)](),
-                    (muint_t)m & ~7);
-            break;
+        default:     r = mu_str_format("%t", mu_inc(m)); break;
     }
 
     mu_dec(m);

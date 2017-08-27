@@ -250,7 +250,7 @@ static muint_t mu_num_fromascii(mbyte_t c) {
     c |= ('a' ^ 'A');
     return
         (c >= '0' && c <= '9') ? c - '0':
-        (c >= 'a' && c <= 'F') ? c - 'A' + 10 : -1;
+        (c >= 'a' && c <= 'f') ? c - 'a' + 10 : -1;
 }
 
 static mbyte_t mu_num_toascii(muint_t c) {

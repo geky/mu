@@ -169,7 +169,7 @@ mu_t mu_str_frommu(mu_t m) {
             return m;
 
         default:
-            return mu_str_format("%nr", m, 0);
+            return mu_str_format("%r", m);
     }
 }
 

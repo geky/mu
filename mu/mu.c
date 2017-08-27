@@ -205,8 +205,8 @@ mu_noreturn mu_errorargs(mu_t name, mcnt_t fc, mu_t *frame) {
         }
 
         for (muint_t i = 0; i < fc; i++) {
-            mu_buf_pushf(&message, &n, "%nr%c ",
-                    frame[i], 0, (i != fc-1) ? ',' : ')');
+            mu_buf_pushf(&message, &n, "%r%c ",
+                    frame[i], (i != fc-1) ? ',' : ')');
         }
 
         mu_error(mu_buf_getdata(message), n);

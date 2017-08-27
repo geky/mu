@@ -16,7 +16,7 @@ mu_inline struct mfn *mfn(mu_t f) {
 
 // Creation functions
 mu_t mu_fn_fromcode(mu_t c, mu_t closure) {
-    if (mu_code_getflags(c) & MFN_WEAK) {
+    if (mu_code_getflags(c) & MU_FN_WEAK) {
         mu_assert(mu_getref(closure) > 1);
         mu_dec(closure);
     }
@@ -34,7 +34,7 @@ mu_t mu_fn_frombfn(mcnt_t args, mbfn_t *bfn) {
     struct mfn *f = mu_alloc(sizeof(struct mfn));
     f->ref = 1;
     f->args = args;
-    f->flags = MFN_BUILTIN;
+    f->flags = MU_FN_BUILTIN;
     f->closure = 0;
     f->fn.bfn = bfn;
     return (mu_t)((muint_t)f + MTFN);
@@ -44,7 +44,7 @@ mu_t mu_fn_fromsbfn(mcnt_t args, msbfn_t *sbfn, mu_t closure) {
     struct mfn *f = mu_alloc(sizeof(struct mfn));
     f->ref = 1;
     f->args = args;
-    f->flags = MFN_BUILTIN | MFN_SCOPED;
+    f->flags = MU_FN_BUILTIN | MU_FN_SCOPED;
     f->closure = closure;
     f->fn.sbfn = sbfn;
     return (mu_t)((muint_t)f + MTFN);
@@ -71,11 +71,11 @@ mu_t mu_fn_frommu(mu_t m) {
 
 // Called by garbage collector to clean up
 void mu_fn_destroy(mu_t f) {
-    if (!(mfn(f)->flags & MFN_BUILTIN)) {
+    if (!(mfn(f)->flags & MU_FN_BUILTIN)) {
         mu_dec(mfn(f)->fn.code);
     }
 
-    if (!(mfn(f)->flags & MFN_WEAK)) {
+    if (!(mfn(f)->flags & MU_FN_WEAK)) {
         mu_dec(mfn(f)->closure);
     }
 
@@ -94,20 +94,20 @@ mcnt_t mu_fn_tcall(mu_t f, mcnt_t fc, mu_t *frame) {
     mu_assert(mu_isfn(f));
     mu_frameconvert(fc, mfn(f)->args, frame);
 
-    switch (mfn(f)->flags & (MFN_BUILTIN | MFN_SCOPED)) {
-        case MFN_BUILTIN: {
+    switch (mfn(f)->flags & (MU_FN_BUILTIN | MU_FN_SCOPED)) {
+        case MU_FN_BUILTIN: {
             mbfn_t *bfn = mfn(f)->fn.bfn;
             mu_dec(f);
             return bfn(frame);
         }
 
-        case MFN_BUILTIN | MFN_SCOPED: {
+        case MU_FN_BUILTIN | MU_FN_SCOPED: {
             mcnt_t rc = mfn(f)->fn.sbfn(mfn(f)->closure, frame);
             mu_dec(f);
             return rc;
         }
 
-        case MFN_SCOPED: {
+        case MU_FN_SCOPED: {
             mu_t c = mu_inc(mfn(f)->fn.code);
             mu_t scope = mu_tbl_create(mu_code_getlocals(c));
             mu_tbl_settail(scope, mu_fn_getclosure(f));

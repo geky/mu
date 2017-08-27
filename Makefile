@@ -6,7 +6,7 @@ BUILD = build
 CC = gcc
 SIZE = size
 
-DIR += . mu linenoise
+DIR += . mu linenoise dis
 SRC += $(foreach dir,$(DIR),$(wildcard $(dir)/*.c))
 OBJ := $(SRC:%.c=$(BUILD)/%.o)
 DEP := $(SRC:%.c=$(BUILD)/%.d)
@@ -20,6 +20,7 @@ CFLAGS += -O3 -DMU_FAST
 else # default to SMALL
 CFLAGS += -Os -DMU_SMALL
 endif
+CFLAGS += -I.
 CFLAGS += -std=c99 -pedantic
 CFLAGS += -Wall -Winline
 

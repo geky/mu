@@ -28,7 +28,6 @@
 // Flags for Mu options
 //#define MU_DEBUG
 #define MU_MALLOC
-//#define MU_DISASSEMBLE
 //#define MU_COMPUTED_GOTO
 
 

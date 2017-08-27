@@ -55,12 +55,11 @@ mu_t mu_buf_lookup(mu_t b, mu_t k);
 mu_t mu_buf_vformat(const char *f, va_list args);
 mu_t mu_buf_format(const char *f, ...);
 
-// Resizes buffers into new buffers
-// mu_buf_expand may end up with extra space
+// Resizes buffer by creating a copy
 void mu_buf_resize(mu_t *b, muint_t n);
-void mu_buf_expand(mu_t *b, muint_t n);
 
 // Appending to buffers with amortized doubling
+void mu_buf_push(mu_t *b, muint_t *i, muint_t n);
 void mu_buf_pushdata(mu_t *b, muint_t *i, const void *s, muint_t n);
 mu_inline void mu_buf_pushcstr(mu_t *b, muint_t *i, const char *s);
 mu_inline void mu_buf_pushchr(mu_t *b, muint_t *i, char s);
