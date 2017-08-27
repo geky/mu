@@ -108,7 +108,7 @@ mu_pure mu_t name(void) {                                                   \
     extern mu_t mu_tbl_initlist(struct mtbl *,                              \
             mu_t (*const *)(void), muint_t);                                \
     if (!ref) {                                                             \
-        ref = mu_tbl_initlist(&inst, def, sizeof def / sizeof(def[0]));     \
+        ref = mu_tbl_initlist(&inst, def, sizeof(def) / sizeof(def[0]));    \
     }                                                                       \
                                                                             \
     return ref;                                                             \
@@ -124,7 +124,7 @@ mu_pure mu_t name(void) {                                                   \
             mu_t (*const (*)[2])(void), muint_t);                           \
     if (!ref) {                                                             \
         ref = mu_tbl_initpairs(&inst, 0,                                    \
-                def, sizeof def / sizeof(def[0]));                          \
+                def, sizeof(def) / sizeof(def[0]));                         \
     }                                                                       \
                                                                             \
     return ref;                                                             \
@@ -140,7 +140,7 @@ mu_pure mu_t name(void) {                                                   \
             mu_t (*const (*)[2])(void), muint_t);                           \
     if (!ref) {                                                             \
         ref = mu_tbl_initpairs(&inst, tail,                                 \
-                def, sizeof def / sizeof(def[0]));                          \
+                def, sizeof(def) / sizeof(def[0]));                         \
     }                                                                       \
                                                                             \
     return ref;                                                             \

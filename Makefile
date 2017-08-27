@@ -6,11 +6,11 @@ BUILD = build
 CC = gcc
 SIZE = size
 
-DIR += . mu linenoise dis
+DIR += . mu linenoise
 SRC += $(foreach dir,$(DIR),$(wildcard $(dir)/*.c))
-OBJ := $(SRC:%.c=$(BUILD)/%.o)
-DEP := $(SRC:%.c=$(BUILD)/%.d)
-ASM := $(SRC:%.c=$(BUILD)/%.s)
+OBJ += $(SRC:%.c=$(BUILD)/%.o)
+DEP += $(SRC:%.c=$(BUILD)/%.d)
+ASM += $(SRC:%.c=$(BUILD)/%.s)
 
 ifdef DEBUG
 CFLAGS += -O0 -g3 -DMU_DEBUG
@@ -25,6 +25,12 @@ CFLAGS += -std=c99 -pedantic
 CFLAGS += -Wall -Winline
 
 LFLAGS += -lm
+
+ifdef MU_NO_DIS
+CFLAGS += -DMU_NO_DIS
+else
+DIR += dis
+endif
 
 
 all: $(TARGET)

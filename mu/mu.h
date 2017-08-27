@@ -220,8 +220,8 @@ extern mu_pure mu_t name(void);
 #define MU_TAN_KEY      mu_tan_key_def()
 #define MU_ATAN_KEY     mu_atan_key_def()
 
-#define MU_AND_KEY     mu_and_key_def()
-#define MU_OR_KEY      mu_or_key_def()
+#define MU_AND_KEY      mu_and_key_def()
+#define MU_OR_KEY       mu_or_key_def()
 #define MU_XOR_KEY      mu_xor_key_def()
 #define MU_DIFF_KEY     mu_diff_key_def()
 #define MU_SHL_KEY      mu_shl_key_def()

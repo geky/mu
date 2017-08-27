@@ -150,7 +150,7 @@ mu_inline mu_t mu_fn_getclosure(mu_t m) {
 #define MU_DEF_BFN(name, args, bfn)                                         \
 mu_pure mu_t name(void) {                                                   \
     static const struct mfn inst = {                                        \
-            0, args, MU_FN_BUILTIN, 0, {bfn}};                                \
+            0, args, MU_FN_BUILTIN, 0, {bfn}};                              \
     return (mu_t)((muint_t)&inst + MTFN);                                   \
 }
 
@@ -158,11 +158,14 @@ mu_pure mu_t name(void) {                                                   \
 mu_pure mu_t name(void) {                                                   \
     static mu_t ref = 0;                                                    \
     static struct mfn inst = {                                              \
-            0, args, MU_FN_BUILTIN | MU_FN_SCOPED, 0, {sbfn}};                  \
+            0, args, MU_FN_BUILTIN | MU_FN_SCOPED, 0, {sbfn}};              \
                                                                             \
     if (!ref) {                                                             \
         mu_t (*closuredef)(void) = closure;                                 \
-        inst.closure = closuredef();                                        \
+        if (closuredef) {                                                   \
+            inst.closure = closuredef();                                    \
+        }                                                                   \
+                                                                            \
         ref = (mu_t)((muint_t)&inst + MTFN);                                \
     }                                                                       \
                                                                             \

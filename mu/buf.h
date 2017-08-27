@@ -171,7 +171,10 @@ mu_pure mu_t name(void) {                                                   \
                                                                             \
     if (!ref) {                                                             \
         mu_t (*taildef)(void) = tail;                                       \
-        inst.tail = taildef();                                              \
+        if (taildef) {                                                      \
+            inst.tail = taildef();                                          \
+        }                                                                   \
+                                                                            \
         ref = (mu_t)((muint_t)&inst + MTDBUF);                              \
     }                                                                       \
                                                                             \
