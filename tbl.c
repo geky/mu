@@ -459,10 +459,11 @@ mu_t mu_tbl_pairs(mu_t t) {
 // Table creating functions
 mu_t mu_tbl_initlist(struct mtbl *t, mu_t (*const *def)(void), muint_t n) {
     mu_t m = (mu_t)((muint_t)t + MTTBL);
-    //mu_tbl_listexpand(m, n);
 
     for (muint_t i = 0; i < n; i++) {
-        mu_tbl_insert(m, mu_num_fromuint(i), def[i]());
+        if (def[i]) {
+            mu_tbl_insert(m, mu_num_fromuint(i), def[i]());
+        }
     }
 
     return (mu_t)((muint_t)t + MTRTBL);
@@ -471,13 +472,14 @@ mu_t mu_tbl_initlist(struct mtbl *t, mu_t (*const *def)(void), muint_t n) {
 mu_t mu_tbl_initpairs(struct mtbl *t, mu_t (*tail)(void),
             mu_t (*const (*def)[2])(void), muint_t n) {
     mu_t m = (mu_t)((muint_t)t + MTTBL);
-    //mu_tbl_pairsexpand(m, n);
     if (tail) {
         mu_tbl_settail(m, tail());
     }
 
     for (muint_t i = 0; i < n; i++) {
-        mu_tbl_insert(m, def[i][0](), def[i][1]());
+        if (def[i][0] && def[i][1]) {
+            mu_tbl_insert(m, def[i][0](), def[i][1]());
+        }
     }
 
     return (mu_t)((muint_t)t + MTRTBL);
