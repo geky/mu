@@ -81,106 +81,6 @@ mint_t mu_patch(void *p, mint_t nj) {
 }
 
 
-// Disassemble bytecode for debugging and introspection
-// currently outputs to stdout
-static const char *const op_names[16] = {
-    [MU_OP_IMM]    = "imm",
-    [MU_OP_FN]     = "fn",
-    [MU_OP_TBL]    = "tbl",
-    [MU_OP_MOVE]   = "move",
-    [MU_OP_DUP]    = "dup",
-    [MU_OP_DROP]   = "drop",
-    [MU_OP_LOOKUP] = "lookup",
-    [MU_OP_LOOKDN] = "lookdn",
-    [MU_OP_INSERT] = "insert",
-    [MU_OP_ASSIGN] = "assign",
-    [MU_OP_JUMP]   = "jump",
-    [MU_OP_JTRUE]  = "jtrue",
-    [MU_OP_JFALSE] = "jfalse",
-    [MU_OP_CALL]   = "call",
-    [MU_OP_TCALL]  = "tcall",
-    [MU_OP_RET]    = "ret",
-};
-
-void mu_dis(mu_t c) {
-    mu_t *imms = mu_code_getimms(c);
-    const uint16_t *pc = mu_code_getbcode(c);
-    const uint16_t *end = pc + mu_code_getbcodelen(c)/2;
-
-    mu_printf("-- dis 0x%wx --", c);
-    mu_printf("regs: %qu, locals: %qu, args: 0x%bx",
-            mu_code_getregs(c),
-            mu_code_getlocals(c),
-            mu_code_getargs(c));
-
-    if (mu_code_getimmslen(c) > 0) {
-        mu_printf("imms:");
-        for (muint_t i = 0; i < mu_code_getimmslen(c); i++) {
-            mu_printf("%wx (%r)", imms[i], mu_inc(imms[i]));
-        }
-    }
-
-    mu_printf("bcode:");
-    while (pc < end) {
-        mop_t op = pc[0] >> 12;
-
-        if (op == MU_OP_DROP) {
-            mu_printf("%bx%bx      %s r%d",
-                    pc[0] >> 8, 0xff & pc[0], op_names[op],
-                    0xf & (pc[0] >> 8));
-            pc += 1;
-        } else if (op >= MU_OP_RET && op <= MU_OP_DROP) {
-            mu_printf("%bx%bx      %s r%d, 0x%bx",
-                    pc[0] >> 8, 0xff & pc[0], op_names[op],
-                    0xf & (pc[0] >> 8), 0xff & pc[0]);
-            pc += 1;
-        } else if (op >= MU_OP_LOOKDN && op <= MU_OP_ASSIGN) {
-            mu_printf("%bx%bx      %s r%d, r%d[r%d]",
-                    pc[0] >> 8, 0xff & pc[0], op_names[op],
-                    0xf & (pc[0] >> 8), 0xf & (pc[0] >> 4), 0xf & pc[0]);
-            pc += 1;
-        } else if (op == MU_OP_IMM && (0xff & pc[0]) == 0xff) {
-            mu_printf("%bx%bx%bx%bx  %s r%d, %u (%r)",
-                    pc[0] >> 8, 0xff & pc[0],
-                    pc[1] >> 8, 0xff & pc[1], op_names[op],
-                    0xf & (pc[0] >> 8), pc[1],
-                    mu_inc(imms[pc[1]]));
-            pc += 2;
-        } else if (op == MU_OP_IMM) {
-            mu_printf("%bx%bx      %s r%d, %u (%r)",
-                    pc[0] >> 8, 0xff & pc[0], op_names[op],
-                    0xf & (pc[0] >> 8), 0x7f & pc[0],
-                    mu_inc(imms[0x7f & pc[0]]));
-            pc += 1;
-        } else if (op >= MU_OP_IMM && op <= MU_OP_TBL
-                && (0xff & pc[0]) == 0xff) {
-            mu_printf("%bx%bx%bx%bx  %s r%d, %u",
-                    pc[0] >> 8, 0xff & pc[0],
-                    pc[1] >> 8, 0xff & pc[1], op_names[op],
-                    0xf & (pc[0] >> 8), pc[1]);
-            pc += 2;
-        } else if (op >= MU_OP_IMM && op <= MU_OP_TBL) {
-            mu_printf("%bx%bx      %s r%d, %u",
-                    pc[0] >> 8, 0xff & pc[0], op_names[op],
-                    0xf & (pc[0] >> 8), 0x7f & pc[0]);
-            pc += 1;
-        } else if (op >= MU_OP_JFALSE && op <= MU_OP_JUMP
-                && (0xff & pc[0]) == 0xff) {
-            mu_printf("%bx%bx%bx%bx  %s r%d, %d",
-                    pc[0] >> 8, 0xff & pc[0],
-                    pc[1] >> 8, 0xff & pc[1], op_names[op],
-                    0xf & (pc[0] >> 8), (int16_t)pc[1]);
-            pc += 2;
-        } else if (op >= MU_OP_JFALSE && op <= MU_OP_JUMP) {
-            mu_printf("%bx%bx      %s r%d, %d",
-                    pc[0] >> 8, 0xff & pc[0], op_names[op],
-                    0xf & (pc[0] >> 8), (int16_t)(pc[0] << 8) >> 8);
-            pc += 1;
-        }
-    }
-}
-
-
 // Virtual machine dispatch macros
 #ifdef MU_COMPUTED_GOTO
 #define VM_DISPATCH(pc)                                                     \
@@ -271,10 +171,6 @@ mcnt_t mu_exec(mu_t c, mu_t scope, mu_t *frame) {
     // Allocate temporary variables
     const uint16_t *pc;
     mu_t *imms;
-
-#ifdef MU_DISASSEMBLE
-    mu_dis(c);
-#endif
 
 reenter:
     {   // Setup the registers and scope
