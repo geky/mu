@@ -350,7 +350,7 @@ static void mu_num_base_ipart(mu_t *s, muint_t *i, mu_t n, mu_t base) {
 
     while (mu_num_cmp(n, mu_num_fromuint(0)) > 0) {
         mu_t d = mu_num_mod(n, base);
-        mu_buf_pushchr(s, i, mu_num_toascii(mu_num_getuint(d)));
+        mu_buf_pushc(s, i, mu_num_toascii(mu_num_getuint(d)));
         n = mu_num_idiv(n, base);
     }
 
@@ -377,12 +377,12 @@ static void mu_num_base_fpart(mu_t *s, muint_t *i, mu_t n,
         }
 
         if (digit == mu_num_fromint(-1)) {
-            mu_buf_pushchr(s, i, '.');
+            mu_buf_pushc(s, i, '.');
         }
 
         mu_t p = mu_num_pow(base, digit);
         mu_t d = mu_num_idiv(n, p);
-        mu_buf_pushchr(s, i, mu_num_toascii(mu_num_getuint(d)));
+        mu_buf_pushc(s, i, mu_num_toascii(mu_num_getuint(d)));
 
         n = mu_num_mod(n, p);
         digit = mu_num_sub(digit, mu_num_fromuint(1));
@@ -403,7 +403,7 @@ static mu_t mu_num_base(mu_t n, char c, mu_t base, char expc, mu_t expbase) {
 
         if (mu_num_cmp(n, mu_num_fromuint(0)) < 0) {
             n = mu_num_neg(n);
-            mu_buf_pushchr(&s, &i, '-');
+            mu_buf_pushc(&s, &i, '-');
         }
 
         if (c) {
@@ -427,11 +427,11 @@ static mu_t mu_num_base(mu_t n, char c, mu_t base, char expc, mu_t expbase) {
         mu_num_base_fpart(&s, &i, n, base, mu_num_getuint(digits) - (i-j));
 
         if (scientific) {
-            mu_buf_pushchr(&s, &i, expc);
+            mu_buf_pushc(&s, &i, expc);
 
             if (mu_num_cmp(exp, mu_num_fromuint(0)) < 0) {
                 exp = mu_num_neg(exp);
-                mu_buf_pushchr(&s, &i, '-');
+                mu_buf_pushc(&s, &i, '-');
             }
 
             mu_num_base_ipart(&s, &i, exp, mu_num_fromuint(10));

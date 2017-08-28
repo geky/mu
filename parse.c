@@ -565,7 +565,7 @@ static bool lookahead(struct mparse *p, mtok_t a, mtok_t b) {
 // Actual encoding is defered to virtual machine
 static void emit(struct mparse *p, mbyte_t byte) {
     muint_t bcount = p->bcount;
-    mu_buf_pushchr(&p->bcode, &bcount, byte);
+    mu_buf_pushc(&p->bcode, &bcount, byte);
     p->bcount = bcount;
 }
 

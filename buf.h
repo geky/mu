@@ -33,7 +33,7 @@ mu_t mu_buf_createtail(muint_t n, mdtor_t *dtor, mu_t tail);
 
 mu_inline mu_t mu_buf_fromdata(const void *s, muint_t n);
 mu_inline mu_t mu_buf_fromcstr(const char *s);
-mu_inline mu_t mu_buf_fromchr(char s);
+mu_inline mu_t mu_buf_fromc(char s);
 mu_t mu_buf_frommu(mu_t s);
 
 // Buffer access
@@ -62,7 +62,7 @@ void mu_buf_resize(mu_t *b, muint_t n);
 void mu_buf_push(mu_t *b, muint_t *i, muint_t n);
 void mu_buf_pushdata(mu_t *b, muint_t *i, const void *s, muint_t n);
 mu_inline void mu_buf_pushcstr(mu_t *b, muint_t *i, const char *s);
-mu_inline void mu_buf_pushchr(mu_t *b, muint_t *i, char s);
+mu_inline void mu_buf_pushc(mu_t *b, muint_t *i, char s);
 void mu_buf_pushmu(mu_t *b, muint_t *i, mu_t s);
 void mu_buf_vpushf(mu_t *b, muint_t *i, const char *f, va_list args);
 void mu_buf_pushf(mu_t *b, muint_t *i, const char *fmt, ...);
@@ -79,7 +79,7 @@ mu_inline mu_t mu_buf_fromcstr(const char *s) {
     return mu_buf_fromdata(s, strlen(s));
 }
 
-mu_inline mu_t mu_buf_fromchr(char s) {
+mu_inline mu_t mu_buf_fromc(char s) {
     return mu_buf_fromdata(&s, 1);
 }
 
@@ -125,7 +125,7 @@ mu_inline void mu_buf_pushcstr(mu_t *b, muint_t *i, const char *c) {
     mu_buf_pushdata(b, i, c, strlen(c));
 }
 
-mu_inline void mu_buf_pushchr(mu_t *b, muint_t *i, char c) {
+mu_inline void mu_buf_pushc(mu_t *b, muint_t *i, char c) {
     mu_buf_pushdata(b, i, &c, 1);
 }
 
