@@ -213,6 +213,7 @@ static void mu_tbl_listexpand(mu_t t, mlen_t len) {
 
     mtbl(t)->npw2 = mu_tbl_listnpw2(len);
     mtbl(t)->array = mu_alloc(mu_tbl_size(t)*sizeof(mu_t));
+    memset(mtbl(t)->array, 0, mu_tbl_size(t)*sizeof(mu_t));
 
     memcpy(mtbl(t)->array, oldarray, oldcount*sizeof(mu_t));
     mu_dealloc(oldarray, oldsize*sizeof(mu_t));
@@ -258,8 +259,7 @@ void mu_tbl_insert(mu_t t, mu_t k, mu_t v) {
     if (mu_tbl_islist(t)) {
         muint_t i = mu_num_getuint(k) & mask;
 
-        if (k == mu_num_fromuint(i) &&
-                i < mu_tbl_count(t) && mtbl(t)->array[i]) {
+        if (k == mu_num_fromuint(i) && mtbl(t)->array[i]) {
             // replace old value
             mu_t oldv = mtbl(t)->array[i];
             mtbl(t)->array[i] = v;
@@ -273,9 +273,9 @@ void mu_tbl_insert(mu_t t, mu_t k, mu_t v) {
         } else {
             mu_checklen((muint_t)mtbl(t)->len + 1 <= (mlen_t)-1, "table");
 
-            if (!(k == mu_num_fromuint(i) && i >= mu_tbl_count(t))) {
+            if (k != mu_num_fromuint(i)) {
                 muint_t i = mu_num_getuint(k) & (2*mask+1);
-                if (k == mu_num_fromuint(i) && i >= mu_tbl_count(t)) {
+                if (k == mu_num_fromuint(i)) {
                     // just needs bigger list
                     mu_tbl_listexpand(t, i+1);
                     mu_tbl_insert(t, k, v);
@@ -291,8 +291,6 @@ void mu_tbl_insert(mu_t t, mu_t k, mu_t v) {
             // new value fits
             mtbl(t)->array[i] = v;
             mtbl(t)->len += 1;
-            memset(&mtbl(t)->array[mtbl(t)->len-1], 0,
-                    (i - (mtbl(t)->len-1))*sizeof(mu_t));
             mtbl(t)->nils += i - (mtbl(t)->len-1);
             return;
         }
@@ -350,8 +348,7 @@ void mu_tbl_assign(mu_t head, mu_t k, mu_t v) {
         if (mu_tbl_islist(t)) {
             muint_t i = mu_num_getuint(k) & mask;
 
-            if (k == mu_num_fromuint(i) &&
-                    i < mu_tbl_count(t) && mtbl(t)->array[i]) {
+            if (k == mu_num_fromuint(i) && mtbl(t)->array[i]) {
                 mu_checkconst(!ro, "table");
 
                 // replace old value
@@ -557,9 +554,9 @@ void mu_tbl_push(mu_t t, mu_t p, mint_t i) {
         mu_checklen((muint_t)mtbl(t)->len + 1 <= (mlen_t)-1, "table");
 
         if (mu_tbl_islist(t)) {
-            mu_tbl_listexpand(t, i+1);
+            mu_tbl_listexpand(t, mu_tbl_count(t)+1);
         } else {
-            mu_tbl_pairsexpand(t, i+1);
+            mu_tbl_pairsexpand(t, mu_tbl_count(t)+1);
         }
     }
 

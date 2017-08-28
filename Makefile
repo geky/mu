@@ -6,7 +6,7 @@ BUILD = build
 CC = gcc
 SIZE = size
 
-DIR += . mu linenoise
+DIR += . mu repl
 SRC += $(foreach dir,$(DIR),$(wildcard $(dir)/*.c))
 OBJ += $(SRC:%.c=$(BUILD)/%.o)
 DEP += $(SRC:%.c=$(BUILD)/%.d)
