@@ -28,7 +28,7 @@ mu_t mu_str_intern(mu_t buf, muint_t n);
 // Conversion operations
 mu_t mu_str_fromdata(const void *s, muint_t n);
 mu_inline mu_t mu_str_fromcstr(const char *s);
-mu_inline mu_t mu_str_fromchr(char s);
+mu_inline mu_t mu_str_fromc(char s);
 mu_t mu_str_frommu(mu_t m);
 
 // String access functions
@@ -61,7 +61,7 @@ mu_inline mu_t mu_str_fromcstr(const char *s) {
     return mu_str_fromdata(s, strlen(s));
 }
 
-mu_inline mu_t mu_str_fromchr(char s) {
+mu_inline mu_t mu_str_fromc(char s) {
     return mu_str_fromdata(&s, 1);
 }
 

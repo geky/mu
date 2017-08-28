@@ -879,7 +879,7 @@ static void mu_tbl_repr_nested(mu_t t, mu_t *s, muint_t *n, mu_t depth) {
         }
     }
 
-    mu_buf_pushchr(s, n, '[');
+    mu_buf_pushc(s, n, '[');
 
     mu_t k, v;
     for (muint_t i = 0; mu_tbl_next(t, &i, &k, &v);) {
@@ -902,7 +902,7 @@ static void mu_tbl_repr_nested(mu_t t, mu_t *s, muint_t *n, mu_t depth) {
         *n -= 2;
     }
 
-    mu_buf_pushchr(s, n, ']');
+    mu_buf_pushc(s, n, ']');
 }
 
 mu_t mu_tbl_repr(mu_t t, mu_t depth) {

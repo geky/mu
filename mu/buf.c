@@ -200,7 +200,7 @@ static mbyte_t mu_buf_toascii(muint_t c) {
 
 static void mu_buf_append_unsigned(mu_t *b, muint_t *i, muint_t u) {
     if (u == 0) {
-        mu_buf_pushchr(b, i, '0');
+        mu_buf_pushc(b, i, '0');
         return;
     }
 
@@ -223,7 +223,7 @@ static void mu_buf_append_unsigned(mu_t *b, muint_t *i, muint_t u) {
 
 static void mu_buf_append_signed(mu_t *b, muint_t *i, mint_t d) {
     if (d < 0) {
-        mu_buf_pushchr(b, i, '-');
+        mu_buf_pushc(b, i, '-');
         d = -d;
     }
 
@@ -234,7 +234,7 @@ static void mu_buf_append_hex(mu_t *b, muint_t *i, muint_t x, int n) {
     n = n ? n : sizeof(unsigned);
 
     for (muint_t j = 0; j < 2*n; j++) {
-        mu_buf_pushchr(b, i, mu_buf_toascii((x >> 4*(2*n-j-1)) & 0xf));
+        mu_buf_pushc(b, i, mu_buf_toascii((x >> 4*(2*n-j-1)) & 0xf));
     }
 }
 
@@ -259,7 +259,7 @@ static mu_t (*const mu_attr_names[8])(void) = {
 void mu_buf_vpushf(mu_t *b, muint_t *i, const char *f, va_list args) {
     while (*f) {
         if (*f != '%') {
-            mu_buf_pushchr(b, i, *f++);
+            mu_buf_pushc(b, i, *f++);
             continue;
         }
         f++;
@@ -274,7 +274,7 @@ void mu_buf_vpushf(mu_t *b, muint_t *i, const char *f, va_list args) {
 
         switch (*f++) {
             case '%': {
-                mu_buf_pushchr(b, i, '%');
+                mu_buf_pushc(b, i, '%');
             } break;
 
             case 'm': {
@@ -324,7 +324,7 @@ void mu_buf_vpushf(mu_t *b, muint_t *i, const char *f, va_list args) {
 
             case 'c': {
                 muint_t u = mu_buf_va_uint(args, size);
-                mu_buf_pushchr(b, i, u);
+                mu_buf_pushc(b, i, u);
             } break;
 
             default: {

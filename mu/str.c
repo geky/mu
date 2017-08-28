@@ -305,7 +305,7 @@ mu_t mu_str_parsen(const mbyte_t **ppos, const mbyte_t *end) {
                  mu_str_fromascii(pos[7]) < 2 &&
                  mu_str_fromascii(pos[8]) < 2 &&
                  mu_str_fromascii(pos[9]) < 2)) {
-                mu_buf_pushchr(&b, &n,
+                mu_buf_pushc(&b, &n,
                         mu_str_fromascii(pos[2])*2*2*2*2*2*2*2 +
                         mu_str_fromascii(pos[3])*2*2*2*2*2*2 +
                         mu_str_fromascii(pos[4])*2*2*2*2*2 +
@@ -319,7 +319,7 @@ mu_t mu_str_parsen(const mbyte_t **ppos, const mbyte_t *end) {
                 (mu_str_fromascii(pos[2]) < 8 &&
                  mu_str_fromascii(pos[3]) < 8 &&
                  mu_str_fromascii(pos[4]) < 8)) {
-                mu_buf_pushchr(&b, &n,
+                mu_buf_pushc(&b, &n,
                         mu_str_fromascii(pos[2])*8*8 +
                         mu_str_fromascii(pos[3])*8 +
                         mu_str_fromascii(pos[4]));
@@ -328,7 +328,7 @@ mu_t mu_str_parsen(const mbyte_t **ppos, const mbyte_t *end) {
                        (mu_str_fromascii(pos[2]) < 10 &&
                         mu_str_fromascii(pos[3]) < 10 &&
                         mu_str_fromascii(pos[4]) < 10)) {
-                mu_buf_pushchr(&b, &n,
+                mu_buf_pushc(&b, &n,
                         mu_str_fromascii(pos[2])*10*10 +
                         mu_str_fromascii(pos[3])*10 +
                         mu_str_fromascii(pos[4]));
@@ -336,33 +336,33 @@ mu_t mu_str_parsen(const mbyte_t **ppos, const mbyte_t *end) {
             } else if (pos[1] == 'x' && pos < end-3 &&
                        (mu_str_fromascii(pos[2]) < 16 &&
                         mu_str_fromascii(pos[3]) < 16)) {
-                mu_buf_pushchr(&b, &n,
+                mu_buf_pushc(&b, &n,
                         mu_str_fromascii(pos[2])*16 +
                         mu_str_fromascii(pos[3]));
                 pos += 4;
             } else if (pos[1] == '\\') {
-                mu_buf_pushchr(&b, &n, '\\'); pos += 2;
+                mu_buf_pushc(&b, &n, '\\'); pos += 2;
             } else if (pos[1] == '\'') {
-                mu_buf_pushchr(&b, &n, '\''); pos += 2;
+                mu_buf_pushc(&b, &n, '\''); pos += 2;
             } else if (pos[1] == '\"') {
-                mu_buf_pushchr(&b, &n, '\"'); pos += 2;
+                mu_buf_pushc(&b, &n, '\"'); pos += 2;
             } else if (pos[1] == 'f') {
-                mu_buf_pushchr(&b, &n, '\f'); pos += 2;
+                mu_buf_pushc(&b, &n, '\f'); pos += 2;
             } else if (pos[1] == 'n') {
-                mu_buf_pushchr(&b, &n, '\n'); pos += 2;
+                mu_buf_pushc(&b, &n, '\n'); pos += 2;
             } else if (pos[1] == 'r') {
-                mu_buf_pushchr(&b, &n, '\r'); pos += 2;
+                mu_buf_pushc(&b, &n, '\r'); pos += 2;
             } else if (pos[1] == 't') {
-                mu_buf_pushchr(&b, &n, '\t'); pos += 2;
+                mu_buf_pushc(&b, &n, '\t'); pos += 2;
             } else if (pos[1] == 'v') {
-                mu_buf_pushchr(&b, &n, '\v'); pos += 2;
+                mu_buf_pushc(&b, &n, '\v'); pos += 2;
             } else if (pos[1] == '0') {
-                mu_buf_pushchr(&b, &n, '\0'); pos += 2;
+                mu_buf_pushc(&b, &n, '\0'); pos += 2;
             } else {
-                mu_buf_pushchr(&b, &n, '\\'); pos += 1;
+                mu_buf_pushc(&b, &n, '\\'); pos += 1;
             }
         } else {
-            mu_buf_pushchr(&b, &n, *pos++);
+            mu_buf_pushc(&b, &n, *pos++);
         }
     }
 
@@ -397,7 +397,7 @@ mu_t mu_str_repr(mu_t m) {
     mu_t b = mu_buf_create(2 + mu_str_getlen(m));
     muint_t n = 0;
 
-    mu_buf_pushchr(&b, &n, '\'');
+    mu_buf_pushc(&b, &n, '\'');
 
     for (; pos < end; pos++) {
         if (*pos < ' ' || *pos > '~' ||
@@ -412,11 +412,11 @@ mu_t mu_str_repr(mu_t m) {
             else if (*pos == '\0') mu_buf_pushf(&b, &n, "\\0");
             else                   mu_buf_pushf(&b, &n, "\\x%bx", *pos);
         } else {
-            mu_buf_pushchr(&b, &n, *pos);
+            mu_buf_pushc(&b, &n, *pos);
         }
     }
 
-    mu_buf_pushchr(&b, &n, '\'');
+    mu_buf_pushc(&b, &n, '\'');
     return mu_str_intern(b, n);
 }
 
@@ -487,7 +487,7 @@ static mcnt_t mu_replace_bfn(mu_t *frame) {
         }
 
         if (!match || mlen == 0) {
-            mu_buf_pushchr(&d, &n, sb[i]);
+            mu_buf_pushc(&d, &n, sb[i]);
             i += 1;
         }
     }
